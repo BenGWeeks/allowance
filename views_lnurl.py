@@ -32,25 +32,24 @@ from .models import CreateAllowanceData
 
 @allowance_ext.get("/api/v1/allowance", status_code=HTTPStatus.OK)
 async def api_allowances(
-    req: Request,
     all_wallets: bool = Query(False),
-    wallet: WalletTypeInfo = Depends(get_key_type),
+    wallet = Depends(require_invoice_key),
 ):
     wallet_ids = [wallet.wallet.id]
     if all_wallets:
         user = await get_user(wallet.wallet.user)
         wallet_ids = user.wallet_ids if user else []
     return [
-        eightball.dict() for eightball in await get_allowances(wallet_ids, req)
+        allowance.dict() for allowance in await get_allowances(wallet_ids)
     ]
 
 ## Get a single record
 
 @allowance_ext.get("/api/v1/allowance/{allowance_id}", status_code=HTTPStatus.OK)
 async def api_allowance(
-    req: Request, allowance_id: str, WalletTypeInfo=Depends(get_key_type)
+    allowance_id: str, wallet = Depends(require_invoice_key)
 ):
-    allowance = await get_allowance(allowance_id, req)
+    allowance = await get_allowance(allowance_id)
     if not allowance:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
@@ -61,45 +60,41 @@ async def api_allowance(
 
 @allowance_ext.put("/api/v1/allowance/{allowance_id}")
 async def api_allowance_update(
-    req: Request,
     data: CreateAllowanceData,
     allowance_id: str,
-    wallet: WalletTypeInfo = Depends(get_key_type),
+    wallet = Depends(require_admin_key),
 ):
     if not allowance_id:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
         )
-    allowance = await get_allowance(allowance_id, req)
+    allowance = await get_allowance(allowance_id)
     assert allowance, "Allowance couldn't be retrieved"
 
     if wallet.wallet.id != allowance.wallet:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN, detail="Not your allowance."
         )
-    allowance = await update_allowance(
-        allowance_id=allowance_id, **data.dict(), req=req
-    )
+    data.id = allowance_id
+    allowance = await update_allowance(data)
     return allowance.dict()
 
 ## Create a new record
 
 @allowance_ext.post("/api/v1/allowance", status_code=HTTPStatus.CREATED)
-async def api_eightball_create(
-    req: Request,
+async def api_allowance_create(
     data: CreateAllowanceData,
-    wallet: WalletTypeInfo = Depends(require_admin_key),
+    wallet = Depends(require_admin_key),
 ):
-    allowance = await create_allowance(
-        wallet_id=wallet.wallet.id, data=data, req=req
-    )
+    data.wallet = data.wallet or wallet.wallet.id
+    allowance = await create_allowance(data)
     return allowance.dict()
 
 ## Delete a record
 
 @allowance_ext.delete("/api/v1/allowance/{allowance_id}")
 async def api_allowance_delete(
-    allowance_id: str, wallet: WalletTypeInfo = Depends(require_admin_key)
+    allowance_id: str, wallet = Depends(require_admin_key)
 ):
     allowance = await get_allowance(allowance_id)
 

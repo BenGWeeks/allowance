@@ -81,10 +81,8 @@ async def api_allowance_update(
             status_code=HTTPStatus.FORBIDDEN, detail="Not your Allowance."
         )
 
-    for key, value in data.dict().items():
-        setattr(allowance, key, value)
-
-    return await update_allowance(allowance)
+    data.id = allowance_id
+    return await update_allowance(data)
 
 
 ## Create a new record
