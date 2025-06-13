@@ -2,6 +2,7 @@ from http import HTTPStatus
 
 from fastapi import APIRouter, Depends, Query, Request
 from lnbits.core.crud import get_user
+
 # from lnbits.core.models import WalletTypeInfo  # Not available in LNbits v1.0
 from lnbits.core.services import create_invoice
 from lnbits.decorators import (
@@ -20,7 +21,7 @@ from .crud import (
     get_allowances,
     update_allowance,
 )
-from .models import CreateAllowanceData, Allowance
+from .models import Allowance, CreateAllowanceData
 
 allowance_api_router = APIRouter()
 
@@ -33,7 +34,7 @@ allowance_api_router = APIRouter()
 @allowance_api_router.get("/api/v1/allowance", status_code=HTTPStatus.OK)
 async def api_allowances(
     all_wallets: bool = Query(False),
-    wallet = Depends(get_wallet_for_key),
+    wallet=Depends(get_wallet_for_key),
 ):
     wallet_ids = [wallet.id]
     if all_wallets:
@@ -66,7 +67,7 @@ async def api_allowance(allowance_id: str):
 async def api_allowance_update(
     data: CreateAllowanceData,
     allowance_id: str,
-    wallet = Depends(get_wallet_for_key),
+    wallet=Depends(get_wallet_for_key),
 ):
     if not allowance_id:
         raise HTTPException(
@@ -93,7 +94,7 @@ async def api_allowance_update(
 async def api_allowance_create(
     request: Request,
     data: CreateAllowanceData,
-    wallet = Depends(require_admin_key),
+    wallet=Depends(require_admin_key),
 ):
     data.id = urlsafe_short_hash()
     data.wallet = data.wallet or wallet.id
@@ -105,7 +106,7 @@ async def api_allowance_create(
 
 @allowance_api_router.delete("/api/v1/allowance/{allowance_id}")
 async def api_allowance_delete(
-    allowance_id: str, wallet = Depends(require_admin_key)
+    allowance_id: str, wallet=Depends(require_admin_key)
 ):
     allowance = await get_allowance(allowance_id)
 

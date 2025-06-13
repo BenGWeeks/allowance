@@ -1,10 +1,8 @@
-from http import HTTPStatus
 import json
+from http import HTTPStatus
 
 import httpx
 from fastapi import Depends, Query, Request
-from loguru import logger
-from starlette.exceptions import HTTPException
 from lnbits.core.crud import get_user
 from lnbits.decorators import (
     check_admin,
@@ -12,14 +10,16 @@ from lnbits.decorators import (
     require_admin_key,
     require_invoice_key,
 )
+from loguru import logger
+from starlette.exceptions import HTTPException
 
 from . import allowance_ext
 from .crud import (
     create_allowance,
-    update_allowance,
     delete_allowance,
     get_allowance,
     get_allowances,
+    update_allowance,
 )
 from .models import CreateAllowanceData
 
