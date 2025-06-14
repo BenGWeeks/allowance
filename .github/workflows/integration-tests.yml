@@ -63,8 +63,9 @@ jobs:
         
     - name: Copy allowance extension
       run: |
-        mkdir -p lnbits/lnbits/extensions/allowance/
-        cp -r . lnbits/lnbits/extensions/allowance/
+        mkdir -p lnbits/lnbits/extensions/allowance
+        # Use rsync to copy while excluding problematic directories
+        rsync -a --exclude='lnbits/' --exclude='.git/' --exclude='pgdata/' --exclude='node_modules/' --exclude='.github/' . lnbits/lnbits/extensions/allowance/
         
     - name: Start LNBits
       run: |
@@ -149,8 +150,9 @@ jobs:
         
     - name: Copy allowance extension
       run: |
-        mkdir -p lnbits/lnbits/extensions/allowance/
-        cp -r . lnbits/lnbits/extensions/allowance/
+        mkdir -p lnbits/lnbits/extensions/allowance
+        # Use rsync to copy while excluding problematic directories
+        rsync -a --exclude='lnbits/' --exclude='.git/' --exclude='pgdata/' --exclude='node_modules/' --exclude='.github/' . lnbits/lnbits/extensions/allowance/
         
     - name: Start LNBits
       run: |
@@ -251,8 +253,9 @@ jobs:
         
     - name: Copy allowance extension
       run: |
-        mkdir -p lnbits/lnbits/extensions/allowance/
-        cp -r . lnbits/lnbits/extensions/allowance/
+        mkdir -p lnbits/lnbits/extensions/allowance
+        # Use rsync to copy while excluding problematic directories
+        rsync -a --exclude='lnbits/' --exclude='.git/' --exclude='pgdata/' --exclude='node_modules/' --exclude='.github/' . lnbits/lnbits/extensions/allowance/
         
     - name: Start LNBits
       run: |
@@ -344,8 +347,9 @@ jobs:
         
     - name: Copy allowance extension
       run: |
-        mkdir -p lnbits/lnbits/extensions/allowance/
-        cp -r . lnbits/lnbits/extensions/allowance/
+        mkdir -p lnbits/lnbits/extensions/allowance
+        # Use rsync to copy while excluding problematic directories
+        rsync -a --exclude='lnbits/' --exclude='.git/' --exclude='pgdata/' --exclude='node_modules/' --exclude='.github/' . lnbits/lnbits/extensions/allowance/
         
     - name: Start LNBits
       run: |
