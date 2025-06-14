@@ -76,7 +76,7 @@ async def api_allowance_update(
     allowance = await get_allowance(allowance_id)
     assert allowance, "Allowance couldn't be retrieved"
 
-    if wallet.id != allowance.wallet:
+    if wallet.wallet.id != allowance.wallet:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN, detail="Not your Allowance."
         )
@@ -97,7 +97,7 @@ async def api_allowance_create(
     wallet = Depends(require_admin_key),
 ):
     data.id = urlsafe_short_hash()
-    data.wallet = data.wallet or wallet.id
+    data.wallet = data.wallet or wallet.wallet.id
     return await create_allowance(data)
 
 
@@ -115,13 +115,13 @@ async def api_allowance_delete(
             status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
         )
 
-    if allowance.wallet != wallet.id:
+    if allowance.wallet != wallet.wallet.id:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN, detail="Not your Allowance."
         )
 
     await delete_allowance(allowance_id)
-    return "", HTTPStatus.NO_CONTENT
+    return {"message": "Allowance deleted"}
 
 
 # ANY OTHER ENDPOINTS YOU NEED
