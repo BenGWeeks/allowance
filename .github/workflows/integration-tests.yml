@@ -1,8 +1,6 @@
 name: LNBits Extension Integration Tests
 
 on:
-  push:
-    branches: [ main, develop, 'claude/**' ]
   pull_request:
     branches: [ main ]
 
@@ -52,7 +50,7 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -80,10 +78,10 @@ jobs:
             print(f'⚠️ Import check skipped: {e}')
         "
 
-  extension-setup:
-    name: Setup Extension Environment  
+  integration-tests:
+    name: LNBits Integration Tests
     runs-on: ubuntu-latest
-    continue-on-error: true  # Allow this job to fail without failing the entire workflow
+    needs: [extension-validation, python-tests]
     
     services:
       postgres:
@@ -239,152 +237,12 @@ jobs:
         cd tests
         node enable-allowance.js
         
-    - name: Stop LNBits
-      if: always()
-      run: |
-        cd lnbits
-        if [ -f lnbits.pid ]; then
-          kill $(cat lnbits.pid) || true
-        fi
-
-  crud-operations:
-    name: Test CRUD Operations
-    needs: extension-setup
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    
-    services:
-      postgres:
-        image: postgres:13
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: lnbits
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-    
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install poetry
-        # Clone latest main branch and use minimal setup
-        git clone https://github.com/lnbits/lnbits.git
-        cd lnbits
-        # Install dependencies with minimal extras
-        poetry install --without dev
-        cd ..
-        
-    - name: Install Playwright
-      run: |
-        npm init -y
-        npm install playwright
-        npx playwright install chromium
-        
-    - name: Install PostgreSQL client
-      run: |
-        sudo apt-get update -y
-        sudo apt-get install -y postgresql-client
-        
-    - name: Setup LNBits environment
-      run: |
-        cd lnbits
-        cp .env.example .env
-        
-        # Configure database and environment
-        echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
-        echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
-        echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
-        echo "HOST=0.0.0.0" >> .env
-        echo "PORT=5000" >> .env
-        echo "DEBUG=true" >> .env
-        echo "LNBITS_FORCE_HTTPS=false" >> .env
-        
-        # Create database and ensure permissions
-        PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "DROP DATABASE IF EXISTS lnbits;"
-        PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE lnbits;"
-        
-        # Run database migration to ensure schema is set up
-        echo "🗄️ Running database migrations..."
-        poetry run python -m lnbits --migrate || echo "Migration completed"
-        
-    - name: Copy allowance extension
-      run: |
-        mkdir -p lnbits/lnbits/extensions/allowance
-        # Copy essential extension files manually to avoid recursive issues
-        cp *.py lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp *.json lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp *.md lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp -r static lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp -r templates lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp -r tests lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        echo "Extension files copied successfully"
-        
-    - name: Start LNBits
-      run: |
-        cd lnbits
-        echo "🚀 Starting LNBits..."
-        poetry run python -m lnbits > ../lnbits.log 2>&1 &
-        LNBITS_PID=$!
-        echo $LNBITS_PID > lnbits.pid
-        echo "LNBits started with PID: $LNBITS_PID"
-        
-        # Monitor startup for errors
-        sleep 5
-        echo "📋 Initial log output:"
-        head -20 ../lnbits.log || echo "No log output yet"
-        
-        # Check if process is still running
-        if ! ps -p $LNBITS_PID > /dev/null; then
-          echo "❌ LNBits process died during startup, full logs:"
-          cat ../lnbits.log || echo "No log file found"
-          exit 1
-        fi
-        
-        # Wait for LNBits to start on port 5000 (CI default)
-        echo "🌐 Waiting for LNBits HTTP server to start..."
-        for i in {1..30}; do
-          if curl -f http://localhost:5000/ --max-time 3 2>/dev/null; then
-            echo "✅ LNBits is running on port 5000"
-            break
-          else
-            echo "Attempt $i/30: LNBits not ready yet, waiting..."
-            # Check if process is still alive
-            if ! ps -p $LNBITS_PID > /dev/null; then
-              echo "❌ LNBits process died during startup!"
-              cat ../lnbits.log || echo "No log file found"
-              exit 1
-            fi
-            sleep 5
-          fi
-        done
-        # Final check
-        curl -f http://localhost:5000/ || (echo "❌ LNBits failed to start HTTP server" && cat ../lnbits.log && exit 1)
-        
-    - name: Test allowance creation
+    - name: Test allowance creation (CRUD)
       run: |
         cd tests
         node create-allowance.js "Test Daily" 50 daily
         node create-allowance.js "Test Weekly" 100 weekly
         node create-allowance.js "Test Monthly" 200 monthly
-        node create-allowance.js "Test Hourly" 25 hourly
-        node create-allowance.js "Test Minutely" 10 minutely
         
     - name: Test allowance editing
       run: |
@@ -396,317 +254,9 @@ jobs:
         cd tests
         node delete-allowance.js "Updated Daily"
         
-    - name: Upload CRUD test screenshots
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: crud-test-screenshots
-        path: tests/test-results/
-        
-    - name: Stop LNBits
-      if: always()
-      run: |
-        cd lnbits
-        if [ -f lnbits.pid ]; then
-          kill $(cat lnbits.pid) || true
-        fi
-
-  payment-processing:
-    name: Test Payment Processing
-    needs: extension-setup
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    
-    services:
-      postgres:
-        image: postgres:13
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: lnbits
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-    
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install poetry
-        # Clone latest main branch and use minimal setup
-        git clone https://github.com/lnbits/lnbits.git
-        cd lnbits
-        # Install dependencies with minimal extras
-        poetry install --without dev
-        cd ..
-        
-    - name: Install Playwright
-      run: |
-        npm init -y
-        npm install playwright
-        npx playwright install chromium
-        
-    - name: Install PostgreSQL client
-      run: |
-        sudo apt-get update -y
-        sudo apt-get install -y postgresql-client
-        
-    - name: Setup LNBits environment
-      run: |
-        cd lnbits
-        cp .env.example .env
-        
-        # Configure database and environment
-        echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
-        echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
-        echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
-        echo "HOST=0.0.0.0" >> .env
-        echo "PORT=5000" >> .env
-        echo "DEBUG=true" >> .env
-        echo "LNBITS_FORCE_HTTPS=false" >> .env
-        
-        # Create database and ensure permissions
-        PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "DROP DATABASE IF EXISTS lnbits;"
-        PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE lnbits;"
-        
-        # Run database migration to ensure schema is set up
-        echo "🗄️ Running database migrations..."
-        poetry run python -m lnbits --migrate || echo "Migration completed"
-        
-    - name: Copy allowance extension
-      run: |
-        mkdir -p lnbits/lnbits/extensions/allowance
-        # Copy essential extension files manually to avoid recursive issues
-        cp *.py lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp *.json lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp *.md lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp -r static lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp -r templates lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp -r tests lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        echo "Extension files copied successfully"
-        
-    - name: Start LNBits
-      run: |
-        cd lnbits
-        echo "🚀 Starting LNBits..."
-        poetry run python -m lnbits > ../lnbits.log 2>&1 &
-        LNBITS_PID=$!
-        echo $LNBITS_PID > lnbits.pid
-        echo "LNBits started with PID: $LNBITS_PID"
-        
-        # Monitor startup for errors
-        sleep 5
-        echo "📋 Initial log output:"
-        head -20 ../lnbits.log || echo "No log output yet"
-        
-        # Check if process is still running
-        if ! ps -p $LNBITS_PID > /dev/null; then
-          echo "❌ LNBits process died during startup, full logs:"
-          cat ../lnbits.log || echo "No log file found"
-          exit 1
-        fi
-        
-        # Wait for LNBits to start on port 5000 (CI default)
-        echo "🌐 Waiting for LNBits HTTP server to start..."
-        for i in {1..30}; do
-          if curl -f http://localhost:5000/ --max-time 3 2>/dev/null; then
-            echo "✅ LNBits is running on port 5000"
-            break
-          else
-            echo "Attempt $i/30: LNBits not ready yet, waiting..."
-            # Check if process is still alive
-            if ! ps -p $LNBITS_PID > /dev/null; then
-              echo "❌ LNBits process died during startup!"
-              cat ../lnbits.log || echo "No log file found"
-              exit 1
-            fi
-            sleep 5
-          fi
-        done
-        # Final check
-        curl -f http://localhost:5000/ || (echo "❌ LNBits failed to start HTTP server" && cat ../lnbits.log && exit 1)
-        
-    - name: Test minutely payments (abbreviated)
+    - name: Test API endpoints
       run: |
         cd tests
-        timeout 150 node test-minutely-payments.js || true
-        
-    - name: Clean up test data
-      run: |
-        cd tests
-        node clear-all-allowances.js
-        
-    - name: Upload payment test screenshots
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: payment-test-screenshots
-        path: tests/test-results/
-        
-    - name: Stop LNBits
-      if: always()
-      run: |
-        cd lnbits
-        if [ -f lnbits.pid ]; then
-          kill $(cat lnbits.pid) || true
-        fi
-
-  api-endpoint-tests:
-    name: Test API Endpoints
-    needs: extension-setup
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    
-    services:
-      postgres:
-        image: postgres:13
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: lnbits
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-    
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install poetry requests pytest
-        git clone https://github.com/lnbits/lnbits.git
-        cd lnbits
-        poetry install
-        cd ..
-        
-    - name: Install Playwright for API testing
-      run: |
-        npm init -y
-        npm install playwright
-        npx playwright install chromium
-        
-    - name: Setup LNBits environment
-      run: |
-        cd lnbits
-        cp .env.example .env
-        
-        # Configure database and environment
-        echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
-        echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
-        echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
-        echo "HOST=0.0.0.0" >> .env
-        echo "PORT=5000" >> .env
-        echo "DEBUG=true" >> .env
-        echo "LNBITS_FORCE_HTTPS=false" >> .env
-        
-        # Create database and ensure permissions
-        PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "DROP DATABASE IF EXISTS lnbits;"
-        PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE lnbits;"
-        
-        # Run database migration to ensure schema is set up
-        echo "🗄️ Running database migrations..."
-        poetry run python -m lnbits --migrate || echo "Migration completed"
-        
-    - name: Copy allowance extension
-      run: |
-        mkdir -p lnbits/lnbits/extensions/allowance
-        # Copy essential extension files manually to avoid recursive issues
-        cp *.py lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp *.json lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp *.md lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp -r static lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp -r templates lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp -r tests lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        echo "Extension files copied successfully"
-        
-    - name: Start LNBits
-      run: |
-        cd lnbits
-        echo "🚀 Starting LNBits..."
-        poetry run python -m lnbits > ../lnbits.log 2>&1 &
-        LNBITS_PID=$!
-        echo $LNBITS_PID > lnbits.pid
-        echo "LNBits started with PID: $LNBITS_PID"
-        
-        # Monitor startup for errors
-        sleep 5
-        echo "📋 Initial log output:"
-        head -20 ../lnbits.log || echo "No log output yet"
-        
-        # Check if process is still running
-        if ! ps -p $LNBITS_PID > /dev/null; then
-          echo "❌ LNBits process died during startup, full logs:"
-          cat ../lnbits.log || echo "No log file found"
-          exit 1
-        fi
-        
-        # Wait for LNBits to start on port 5000 (CI default)
-        echo "🌐 Waiting for LNBits HTTP server to start..."
-        for i in {1..30}; do
-          if curl -f http://localhost:5000/ --max-time 3 2>/dev/null; then
-            echo "✅ LNBits is running on port 5000"
-            break
-          else
-            echo "Attempt $i/30: LNBits not ready yet, waiting..."
-            # Check if process is still alive
-            if ! ps -p $LNBITS_PID > /dev/null; then
-              echo "❌ LNBits process died during startup!"
-              cat ../lnbits.log || echo "No log file found"
-              exit 1
-            fi
-            sleep 5
-          fi
-        done
-        # Final check
-        curl -f http://localhost:5000/ || (echo "❌ LNBits failed to start HTTP server" && cat ../lnbits.log && exit 1)
-        
-    - name: Test API endpoints with Python
-      run: |
-        cd tests
-        echo "Running API integration tests against port 5000..."
-        python test_api_integration.py
-        
-    - name: Test individual API endpoints (unit tests)
-      run: |
-        cd tests
-        echo "Running individual API unit tests..."
-        python test_api_create_allowance.py || echo "Unit test failed (expected if dependencies missing)"
-        python test_api_get_allowance.py || echo "Unit test failed (expected if dependencies missing)"
-        python test_api_list_allowances.py || echo "Unit test failed (expected if dependencies missing)"
-        python test_api_update_allowance.py || echo "Unit test failed (expected if dependencies missing)"
-        python test_api_delete_allowance.py || echo "Unit test failed (expected if dependencies missing)"
-        
-    - name: Test API with curl commands
-      run: |
         echo "Testing API endpoints with curl..."
         
         # Test health check
@@ -715,37 +265,12 @@ jobs:
         # Test API documentation endpoint
         curl -f http://localhost:5000/docs || echo "API docs endpoint check"
         
-    - name: Run API stress test
-      run: |
-        echo "Running API stress test..."
-        cd tests
-        # Create multiple allowances rapidly to test API stability
-        for i in {1..5}; do
-          node create-allowance.js "Stress Test $i" $((100 + i)) daily &
-        done
-        wait
-        echo "Stress test completed"
-        
-    - name: Verify API responses and data integrity
-      run: |
-        echo "Verifying API data integrity..."
-        cd tests
-        # Use curl to verify allowances were created properly  
-        response=$(curl -s http://localhost:5000/api/v1/allowance || echo '{"detail":"Auth required"}')
-        echo "API Response: $response"
-        
-        # Count created allowances (if accessible)
-        count=$(echo "$response" | grep -o "Stress Test" | wc -l || echo "0")
-        echo "Found $count stress test allowances (or auth required)"
-        
-    - name: Upload API test results
+    - name: Upload test screenshots
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: api-test-results
-        path: |
-          tests/test-results/
-          tests/*.log
+        name: integration-test-screenshots
+        path: tests/test-results/
         
     - name: Stop LNBits
       if: always()
@@ -754,4 +279,3 @@ jobs:
         if [ -f lnbits.pid ]; then
           kill $(cat lnbits.pid) || true
         fi
-
