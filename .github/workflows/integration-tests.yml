@@ -208,18 +208,32 @@ jobs:
         
         echo "⏳ Waiting for LNBits to initialize..."
         # Monitor the log in real-time for the first few seconds
-        sleep 5
-        echo "📋 Initial log output:"
-        head -20 ../lnbits.log || echo "No log output yet"
+        sleep 3
+        echo "📋 Initial log output (after 3 seconds):"
+        if [ -f ../lnbits.log ]; then
+          cat ../lnbits.log
+        else
+          echo "❌ No log file created yet"
+        fi
+        
+        # Check if process is still alive after 3 seconds
+        if ! ps -p $LNBITS_PID > /dev/null; then
+          echo "❌ LNBits process died within 3 seconds! Full logs:"
+          cat ../lnbits.log 2>/dev/null || echo "No log file found"
+          exit 1
+        fi
         
         # Wait more and check again
-        sleep 10
+        sleep 7
+        echo "📋 Log output after 10 seconds total:"
+        cat ../lnbits.log 2>/dev/null || echo "No log file found"
+        
         echo "📋 Checking LNBits process status..."
         if ps -p $LNBITS_PID > /dev/null; then
           echo "✅ LNBits process is running"
         else
-          echo "❌ LNBits process died, full logs:"
-          cat ../lnbits.log || echo "No log file found"
+          echo "❌ LNBits process died during startup! Full logs:"
+          cat ../lnbits.log 2>/dev/null || echo "No log file found"
           exit 1
         fi
         
