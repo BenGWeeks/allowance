@@ -1,0 +1,37 @@
+name: Basic Extension Tests
+
+on:
+  push:
+    branches: [ claude/* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Validate extension files
+      run: |
+        echo "🔍 Checking extension files..."
+        ls -la
+        
+        # Check required files
+        for file in manifest.json views.py models.py crud.py __init__.py; do
+          if [[ -f "$file" ]]; then
+            echo "✅ $file exists"
+          else
+            echo "❌ $file missing"
+            exit 1
+          fi
+        done
+        
+        # Validate JSON
+        python3 -c "import json; json.load(open('manifest.json'))"
+        echo "✅ manifest.json is valid"
+        
+        # Basic Python syntax check
+        python3 -c "import ast; [ast.parse(open(f).read()) for f in ['views.py', 'models.py', 'crud.py', '__init__.py']]"
+        echo "✅ Python files have valid syntax"
+        
+        echo "🎉 Basic validation passed!"
