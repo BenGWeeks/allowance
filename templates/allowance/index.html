@@ -219,8 +219,11 @@
               filled
               dense
               v-model="formDialog.data.currency"
-              :options="['sats', 'USD', 'EUR']"
+              :options="currencies"
+              :display-value="formDialog.data.currency || 'sats'"
               label="Currency"
+              :hint="'Converted to satoshis at payment. ' + (formDialog.data.currency && fiatRates[formDialog.data.currency] ? `Currently 1 ${formDialog.data.currency} = ${fiatRates[formDialog.data.currency]} sat` : '')"
+              @input="updateFiatRate"
             ></q-select>
           </div>
         </div>

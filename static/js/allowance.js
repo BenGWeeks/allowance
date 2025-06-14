@@ -6,6 +6,8 @@ window.app = Vue.createApp({
   data() {
     return {
       allowances: [],
+      currencies: [],
+      fiatRates: {},
       allowanceTable: {
         columns: [
           {name: 'id', align: 'left', label: 'ID', field: 'id'},
@@ -335,6 +337,20 @@ window.app = Vue.createApp({
       navigator.clipboard.writeText(text)
       this.$q.notify({message: 'Copied to clipboard', type: 'positive'})
     },
+    updateFiatRate(currency) {
+      if (currency && currency !== 'sats' && currency !== 'satoshis') {
+        LNbits.api
+          .request('GET', '/allowance/api/v1/rate/' + currency, null)
+          .then(response => {
+            let rates = _.clone(this.fiatRates)
+            rates[currency] = response.data.rate
+            this.fiatRates = rates
+          })
+          .catch(err => {
+            LNbits.utils.notifyApiError(err)
+          })
+      }
+    },
     toggleActive() {
       console.log('🔄 Manual toggle called - before:', this.formDialog.data.active)
       this.formDialog.data.active = !this.formDialog.data.active
@@ -371,5 +387,17 @@ window.app = Vue.createApp({
     if (this.g?.user?.wallets?.length) {
       this.getAllowances()
     }
+    
+    // Fetch available currencies
+    LNbits.api
+      .request('GET', '/allowance/api/v1/currencies')
+      .then(response => {
+        this.currencies = ['sats', ...response.data]
+      })
+      .catch(err => {
+        LNbits.utils.notifyApiError(err)
+        // Fallback to basic currencies if API fails
+        this.currencies = ['sats', 'USD', 'EUR']
+      })
   }
 })
