@@ -63,6 +63,7 @@ jobs:
         
     - name: Copy allowance extension
       run: |
+        mkdir -p lnbits/lnbits/extensions/allowance/
         cp -r . lnbits/lnbits/extensions/allowance/
         
     - name: Start LNBits
@@ -148,6 +149,7 @@ jobs:
         
     - name: Copy allowance extension
       run: |
+        mkdir -p lnbits/lnbits/extensions/allowance/
         cp -r . lnbits/lnbits/extensions/allowance/
         
     - name: Start LNBits
@@ -249,6 +251,7 @@ jobs:
         
     - name: Copy allowance extension
       run: |
+        mkdir -p lnbits/lnbits/extensions/allowance/
         cp -r . lnbits/lnbits/extensions/allowance/
         
     - name: Start LNBits
@@ -341,6 +344,7 @@ jobs:
         
     - name: Copy allowance extension
       run: |
+        mkdir -p lnbits/lnbits/extensions/allowance/
         cp -r . lnbits/lnbits/extensions/allowance/
         
     - name: Start LNBits
