@@ -118,7 +118,8 @@ jobs:
           -e LNBITS_ALLOWED_USERS_ONLY=false \
           lnbits/lnbits:latest
         
-        # Copy extension files immediately after container start
+        # Create extensions directory and copy extension files
+        docker exec lnbits mkdir -p /app/lnbits/extensions/allowance
         docker cp /tmp/allowance-extension/. lnbits:/app/lnbits/extensions/allowance/
         
         # Restart container to load extension
