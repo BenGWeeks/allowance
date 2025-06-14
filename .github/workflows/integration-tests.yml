@@ -82,6 +82,20 @@ jobs:
     name: LNBits Integration Tests
     runs-on: ubuntu-latest
     needs: [extension-validation, python-tests]
+    
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: lnbits
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
 
     steps:
     - uses: actions/checkout@v4
@@ -91,42 +105,75 @@ jobs:
       with:
         node-version: '18'
         
-    - name: Prepare extension files
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install LNBits
       run: |
-        echo "📦 Preparing allowance extension files..."
+        echo "📦 Installing LNBits directly..."
         
-        # Create temp directory with only extension files
-        mkdir -p /tmp/allowance-extension
-        cp *.py *.json /tmp/allowance-extension/ 2>/dev/null || true
-        cp -r static /tmp/allowance-extension/ 2>/dev/null || true
-        cp -r templates /tmp/allowance-extension/ 2>/dev/null || true
+        # Install Poetry
+        pip install poetry
         
-        echo "📋 Extension files prepared:"
-        ls -la /tmp/allowance-extension/
+        # Clone LNBits
+        git clone https://github.com/lnbits/lnbits.git lnbits-app
+        cd lnbits-app
         
-    - name: Start LNBits with pre-installed extension
+        # Install dependencies
+        poetry install --without dev
+        
+        # Setup environment
+        cp .env.example .env
+        echo "LNBITS_BACKEND_WALLET_CLASS=FakeWallet" >> .env
+        echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
+        echo "HOST=0.0.0.0" >> .env
+        echo "PORT=5001" >> .env
+        echo "DEBUG=true" >> .env
+        echo "LNBITS_FORCE_HTTPS=false" >> .env
+        
+        cd ..
+        
+    - name: Install allowance extension
       run: |
-        echo "🐳 Starting LNBits with pre-installed allowance extension..."
+        echo "📦 Installing allowance extension..."
         
-        # Start LNBits container
-        docker run -d \
-          --name lnbits \
-          -p 5001:5000 \
-          -e LNBITS_BACKEND_WALLET_CLASS=FakeWallet \
-          -e LNBITS_DATA_FOLDER=/data \
-          -e LNBITS_ADMIN_UI=true \
-          -e LNBITS_ALLOWED_USERS_ONLY=false \
-          lnbits/lnbits:latest
+        # Copy extension to LNBits extensions directory
+        mkdir -p lnbits-app/lnbits/extensions/allowance
+        cp *.py *.json lnbits-app/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp -r static lnbits-app/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp -r templates lnbits-app/lnbits/extensions/allowance/ 2>/dev/null || true
         
-        # Create extensions directory and copy extension files
-        docker exec lnbits mkdir -p /app/lnbits/extensions/allowance
-        docker cp /tmp/allowance-extension/. lnbits:/app/lnbits/extensions/allowance/
+        echo "📋 Extension files installed:"
+        ls -la lnbits-app/lnbits/extensions/allowance/
         
-        # Restart container to load extension
-        echo "🔄 Restarting container to load extension..."
-        docker restart lnbits
+    - name: Start LNBits
+      run: |
+        cd lnbits-app
         
-        echo "⏳ Waiting for LNBits to be ready..."
+        # Export environment variables
+        export LNBITS_BACKEND_WALLET_CLASS=FakeWallet
+        export LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits
+        export HOST=0.0.0.0
+        export PORT=5001
+        export DEBUG=true
+        export LNBITS_FORCE_HTTPS=false
+        
+        # Run migrations
+        echo "🔄 Running database migrations..."
+        poetry run python -m lnbits --migrate
+        
+        # Start LNBits
+        echo "🚀 Starting LNBits..."
+        poetry run python -m lnbits &
+        LNBITS_PID=$!
+        echo $LNBITS_PID > ../lnbits.pid
+        
+        cd ..
+        
+        # Wait for LNBits to be ready
+        echo "⏳ Waiting for LNBits to start..."
         for i in {1..30}; do
           if curl -f http://localhost:5001/ --max-time 3 2>/dev/null; then
             echo "✅ LNBits is ready!"
@@ -138,19 +185,11 @@ jobs:
         
         # Final check
         if ! curl -f http://localhost:5001/ --max-time 5; then
-          echo "❌ LNBits Docker container failed to start"
-          echo "📋 Container logs:"
-          docker logs lnbits
+          echo "❌ LNBits failed to start"
+          echo "📋 Process status:"
+          ps -p $LNBITS_PID || echo "Process died"
           exit 1
         fi
-        
-        # Verify extension files
-        echo "📋 Verifying extension installation:"
-        docker exec lnbits ls -la /app/lnbits/extensions/allowance/
-        docker exec lnbits cat /app/lnbits/extensions/allowance/manifest.json || echo "manifest.json not found"
-        
-        # Clean up temp files
-        rm -rf /tmp/allowance-extension
         
     - name: Install Playwright
       run: |
@@ -206,6 +245,7 @@ jobs:
     - name: Stop LNBits
       if: always()
       run: |
-        echo "🛑 Stopping LNBits Docker container..."
-        docker stop lnbits || true
-        docker rm lnbits || true
+        echo "🛑 Stopping LNBits..."
+        if [ -f lnbits.pid ]; then
+          kill $(cat lnbits.pid) || true
+        fi
