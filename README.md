@@ -78,22 +78,63 @@ Tests assume:
 - Admin credentials: `ben.weeks` / `zUYmy&05&uZ$3kmf*^T8`
 - Fresh database for superuser creation test
 
+### Code Quality & CI/CD
+
+#### Local Development Testing
+
+Before pushing changes, run local quality checks to ensure GitHub Actions CI will pass:
+
+```bash
+# Quick test script
+python3 -m venv .test-venv
+source .test-venv/bin/activate
+pip install black mypy ruff pydantic fastapi
+
+# Run all linting checks
+black --check *.py          # Code formatting
+ruff check *.py             # Modern Python linting  
+mypy --ignore-missing-imports *.py  # Type checking
+
+# Clean up
+rm -rf .test-venv
+```
+
+#### GitHub Actions Pipeline
+
+The repository includes comprehensive automated testing:
+
+- **Code Quality**: Black, Ruff, MyPy, Pyright
+- **Dependency Management**: Poetry with proper Python version constraints
+- **End-to-End Testing**: Playwright browser automation
+- **Integration Testing**: Full LNBits environment with PostgreSQL
+
+#### Configuration Files
+
+- `pyproject.toml` - Python dependencies and tool configuration
+- `.github/workflows/` - CI/CD pipeline definitions
+- `.gitignore` - Excludes data/, temp/, and test results
+
 ### Repository Structure
 
 ```
 allowance/
-├── tests/                    # Playwright test scripts
+├── .github/workflows/       # CI/CD pipeline configuration
+├── tests/                   # Playwright E2E test scripts
 │   ├── create-admin-account.js
 │   ├── login-test.js
 │   ├── enable-allowance.js
 │   ├── create-allowance.js
 │   └── run_test.sh
-├── static/js/               # Vue.js frontend
-├── templates/allowance/     # HTML templates
-├── crud.py                  # Database operations
-├── views.py                 # Frontend routes
-├── views_api.py            # API endpoints
-└── manifest.json           # Extension manifest
+├── static/js/              # Vue.js frontend
+├── templates/allowance/    # HTML templates
+├── crud.py                 # Database operations
+├── views.py                # Frontend routes
+├── views_api.py           # API endpoints
+├── models.py              # Pydantic data models
+├── tasks.py               # Background task processing
+├── migrations.py          # Database schema
+├── pyproject.toml         # Python dependencies & tool config
+└── manifest.json          # Extension manifest
 ```
 
 ### Recent Improvements
