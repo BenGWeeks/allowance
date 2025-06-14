@@ -91,12 +91,6 @@ jobs:
       with:
         node-version: '18'
         
-    - name: Install Playwright
-      run: |
-        npm init -y
-        npm install playwright
-        npx playwright install chromium
-        
     - name: Start LNBits with Docker
       run: |
         echo "🐳 Starting LNBits with Docker (like black-panther setup)..."
@@ -139,6 +133,12 @@ jobs:
         echo "✅ Extension copied to container"
         echo "📋 Checking copied files:"
         docker exec lnbits ls -la /app/lnbits/extensions/allowance/
+        
+    - name: Install Playwright
+      run: |
+        npm init -y
+        npm install playwright
+        npx playwright install chromium
         
     - name: Create admin account
       run: |
