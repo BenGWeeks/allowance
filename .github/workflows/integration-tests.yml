@@ -84,42 +84,24 @@ jobs:
     needs: [extension-validation, python-tests]
     
     services:
-      postgres:
-        image: postgres:13
+      lnbits:
+        image: lnbits/lnbits:latest
         env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: lnbits
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          LNBITS_BACKEND_WALLET_CLASS: FakeWallet
+          LNBITS_DATA_FOLDER: /data
+          LNBITS_ADMIN_UI: true
+          LNBITS_ALLOWED_USERS_ONLY: false
+          PORT: 5001
         ports:
-          - 5432:5432
+          - 5001:5000
 
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
     
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '18'
-        
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install poetry
-        # Clone latest main branch and use minimal setup
-        git clone https://github.com/lnbits/lnbits.git
-        cd lnbits
-        # Install dependencies with minimal extras
-        poetry install --without dev
-        cd ..
         
     - name: Install Playwright
       run: |
@@ -127,146 +109,23 @@ jobs:
         npm install playwright
         npx playwright install chromium
         
-    - name: Install PostgreSQL client
+    - name: Wait for LNBits to be ready
       run: |
-        sudo apt-get update -y
-        sudo apt-get install -y postgresql-client
-        
-    - name: Setup LNBits environment
-      run: |
-        cd lnbits
-        cp .env.example .env
-        
-        # Configure database and environment
-        echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
-        echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
-        echo "HOST=0.0.0.0" >> .env
-        echo "PORT=5001" >> .env
-        echo "DEBUG=true" >> .env
-        echo "LNBITS_FORCE_HTTPS=false" >> .env
-        
-        # Export environment variables to shell
-        export LNBITS_BACKEND_WALLET_CLASS=VoidWallet
-        export LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits
-        export HOST=0.0.0.0
-        export PORT=5001
-        export DEBUG=true
-        export LNBITS_FORCE_HTTPS=false
-        
-        # Create database and ensure permissions
-        PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "DROP DATABASE IF EXISTS lnbits;"
-        PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE lnbits;"
-        
-    - name: Start LNBits
-      run: |
-        cd lnbits
-        echo "🚀 Starting LNBits without extensions first..."
-        
-        # Set explicit environment variables for this step
-        export LNBITS_BACKEND_WALLET_CLASS=VoidWallet
-        export LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits
-        export HOST=0.0.0.0
-        export PORT=5001
-        export DEBUG=true
-        export LNBITS_FORCE_HTTPS=false
-        
-        # Verify environment variables
-        echo "🔍 Environment verification:"
-        echo "LNBITS_DATABASE_URL=$LNBITS_DATABASE_URL"
-        echo "LNBITS_BACKEND_WALLET_CLASS=$LNBITS_BACKEND_WALLET_CLASS"
-        echo "PORT=$PORT"
-        echo "HOST=$HOST"
-        
-        # Test database connection
-        echo "🗄️ Testing database connection..."
-        PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -d lnbits -c "SELECT 1;" || {
-          echo "❌ Database connection failed"
-          exit 1
-        }
-        echo "✅ Database connection successful"
-        
-        # Show LNBits version and available commands
-        echo "📋 LNBits version info:"
-        poetry run python -m lnbits --version 2>&1 || echo "No version command available"
-        
-        echo "📋 Available LNBits commands:"
-        poetry run python -m lnbits --help 2>&1 | head -10 || echo "Help command failed"
-        
-        # Run migration with full error capture
-        echo "🔄 Running database migrations..."
-        if ! poetry run python -m lnbits --migrate 2>&1 | tee migration.log; then
-          echo "❌ Migration failed with output:"
-          cat migration.log
-          exit 1
-        fi
-        echo "✅ Database migration completed"
-        
-        # Check Python can import lnbits
-        echo "🐍 Testing Python imports..."
-        if ! poetry run python -c "import lnbits; print('✅ LNBits module imported successfully')"; then
-          echo "❌ Failed to import LNBits module"
-          exit 1
-        fi
-        
-        # Start LNBits server
-        echo "🚀 Starting LNBits server..."
-        echo "Working directory: $(pwd)"
-        echo "Python path: $(which python)"
-        echo "Poetry path: $(which poetry)"
-        
-        # Start LNBits and capture both stdout and stderr
-        poetry run python -m lnbits 2>&1 | tee lnbits.log &
-        LNBITS_PID=$!
-        echo "LNBits started with PID: $LNBITS_PID"
-        
-        # Give it a moment to start
-        sleep 2
-        echo "📋 Initial log check:"
-        head -10 lnbits.log 2>/dev/null || echo "No log output yet"
-        
-        # Monitor startup with detailed logging
-        echo "⏳ Monitoring LNBits startup..."
-        for i in {1..40}; do
-          # Check if process is still running
-          if ! ps -p $LNBITS_PID > /dev/null; then
-            echo "❌ LNBits process died after $i seconds"
-            echo "📋 Process exit status:"
-            wait $LNBITS_PID
-            echo "Exit code: $?"
-            echo "📋 Full error log:"
-            cat lnbits.log
-            exit 1
-          fi
-          
-          # Check if HTTP server is responding
+        echo "🔄 Waiting for LNBits Docker service to be ready..."
+        for i in {1..30}; do
           if curl -f http://localhost:5001/ --max-time 3 2>/dev/null; then
-            echo "✅ LNBits HTTP server is responding!"
+            echo "✅ LNBits is ready!"
             break
           fi
-          
-          # Show progress and recent log entries
-          if [ $((i % 5)) -eq 0 ]; then
-            echo "⏳ Still waiting for LNBits... ($i/40 seconds)"
-            echo "📋 Recent log entries:"
-            tail -5 lnbits.log 2>/dev/null || echo "No log entries yet"
-          fi
-          
-          sleep 1
+          echo "Waiting for LNBits... ($i/30)"
+          sleep 2
         done
         
-        # Final verification
+        # Final check
         if ! curl -f http://localhost:5001/ --max-time 5; then
-          echo "❌ LNBits failed to respond after 40 seconds"
-          echo "📋 Process status:"
-          ps -p $LNBITS_PID || echo "Process died"
-          echo "📋 Full startup log:"
-          cat lnbits.log
-          echo "📋 Migration log:"
-          cat migration.log 2>/dev/null || echo "No migration log"
+          echo "❌ LNBits Docker service failed to start"
           exit 1
         fi
-        
-        echo "🎉 LNBits is ready and responding!"
         
     - name: Install allowance extension
       run: |
