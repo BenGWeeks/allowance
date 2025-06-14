@@ -4,6 +4,8 @@
 
 This is an LNBits extension that allows you to setup recurring transfers between wallets.
 
+✅ CI/CD Status: Tests configured and working
+
 ### Installation
 
 Install and enable the "Allowance" extension either through the official LNbits manifest (**not yet vetted**) or by adding https://raw.githubusercontent.com/bengweeks/allowance/main/manifest.json to `Server`/ `Server` / `Extension Sources`.
