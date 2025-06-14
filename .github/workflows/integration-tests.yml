@@ -210,9 +210,19 @@ jobs:
         
         # Start LNBits server
         echo "🚀 Starting LNBits server..."
+        echo "Working directory: $(pwd)"
+        echo "Python path: $(which python)"
+        echo "Poetry path: $(which poetry)"
+        
+        # Start LNBits and capture both stdout and stderr
         poetry run python -m lnbits 2>&1 | tee lnbits.log &
         LNBITS_PID=$!
         echo "LNBits started with PID: $LNBITS_PID"
+        
+        # Give it a moment to start
+        sleep 2
+        echo "📋 Initial log check:"
+        head -10 lnbits.log 2>/dev/null || echo "No log output yet"
         
         # Monitor startup with detailed logging
         echo "⏳ Monitoring LNBits startup..."
