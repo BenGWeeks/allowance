@@ -60,12 +60,20 @@ jobs:
         echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
         echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
         echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
+        echo "HOST=0.0.0.0" >> .env
+        echo "PORT=5000" >> .env
         
     - name: Copy allowance extension
       run: |
         mkdir -p lnbits/lnbits/extensions/allowance
-        # Use rsync to copy while excluding problematic directories
-        rsync -a --exclude='lnbits/' --exclude='.git/' --exclude='pgdata/' --exclude='node_modules/' --exclude='.github/' . lnbits/lnbits/extensions/allowance/
+        # Copy essential extension files manually to avoid recursive issues
+        cp *.py lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp *.json lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp *.md lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp -r static lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp -r templates lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp -r tests lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        echo "Extension files copied successfully"
         
     - name: Start LNBits
       run: |
@@ -73,7 +81,19 @@ jobs:
         poetry run python -m lnbits &
         echo $! > lnbits.pid
         sleep 30
-        curl --retry 10 --retry-delay 3 --retry-connrefused http://localhost:5000/
+        # Wait for LNBits to start on port 5000 (CI default)
+        echo "Waiting for LNBits to start on port 5000..."
+        for i in {1..30}; do
+          if curl -f http://localhost:5000/ --max-time 3 2>/dev/null; then
+            echo "✅ LNBits is running on port 5000"
+            break
+          else
+            echo "Attempt $i/30: LNBits not ready yet, waiting..."
+            sleep 5
+          fi
+        done
+        # Final check
+        curl -f http://localhost:5000/ || (echo "❌ LNBits failed to start" && exit 1)
         
     - name: Create admin account
       run: |
@@ -147,12 +167,20 @@ jobs:
         echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
         echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
         echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
+        echo "HOST=0.0.0.0" >> .env
+        echo "PORT=5000" >> .env
         
     - name: Copy allowance extension
       run: |
         mkdir -p lnbits/lnbits/extensions/allowance
-        # Use rsync to copy while excluding problematic directories
-        rsync -a --exclude='lnbits/' --exclude='.git/' --exclude='pgdata/' --exclude='node_modules/' --exclude='.github/' . lnbits/lnbits/extensions/allowance/
+        # Copy essential extension files manually to avoid recursive issues
+        cp *.py lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp *.json lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp *.md lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp -r static lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp -r templates lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp -r tests lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        echo "Extension files copied successfully"
         
     - name: Start LNBits
       run: |
@@ -160,7 +188,19 @@ jobs:
         poetry run python -m lnbits &
         echo $! > lnbits.pid
         sleep 30
-        curl --retry 10 --retry-delay 3 --retry-connrefused http://localhost:5000/
+        # Wait for LNBits to start on port 5000 (CI default)
+        echo "Waiting for LNBits to start on port 5000..."
+        for i in {1..30}; do
+          if curl -f http://localhost:5000/ --max-time 3 2>/dev/null; then
+            echo "✅ LNBits is running on port 5000"
+            break
+          else
+            echo "Attempt $i/30: LNBits not ready yet, waiting..."
+            sleep 5
+          fi
+        done
+        # Final check
+        curl -f http://localhost:5000/ || (echo "❌ LNBits failed to start" && exit 1)
         
     - name: Test allowance creation
       run: |
@@ -250,12 +290,20 @@ jobs:
         echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
         echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
         echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
+        echo "HOST=0.0.0.0" >> .env
+        echo "PORT=5000" >> .env
         
     - name: Copy allowance extension
       run: |
         mkdir -p lnbits/lnbits/extensions/allowance
-        # Use rsync to copy while excluding problematic directories
-        rsync -a --exclude='lnbits/' --exclude='.git/' --exclude='pgdata/' --exclude='node_modules/' --exclude='.github/' . lnbits/lnbits/extensions/allowance/
+        # Copy essential extension files manually to avoid recursive issues
+        cp *.py lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp *.json lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp *.md lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp -r static lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp -r templates lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp -r tests lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        echo "Extension files copied successfully"
         
     - name: Start LNBits
       run: |
@@ -263,7 +311,19 @@ jobs:
         poetry run python -m lnbits &
         echo $! > lnbits.pid
         sleep 30
-        curl --retry 10 --retry-delay 3 --retry-connrefused http://localhost:5000/
+        # Wait for LNBits to start on port 5000 (CI default)
+        echo "Waiting for LNBits to start on port 5000..."
+        for i in {1..30}; do
+          if curl -f http://localhost:5000/ --max-time 3 2>/dev/null; then
+            echo "✅ LNBits is running on port 5000"
+            break
+          else
+            echo "Attempt $i/30: LNBits not ready yet, waiting..."
+            sleep 5
+          fi
+        done
+        # Final check
+        curl -f http://localhost:5000/ || (echo "❌ LNBits failed to start" && exit 1)
         
     - name: Test minutely payments (abbreviated)
       run: |
@@ -344,12 +404,20 @@ jobs:
         echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
         echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
         echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
+        echo "HOST=0.0.0.0" >> .env
+        echo "PORT=5000" >> .env
         
     - name: Copy allowance extension
       run: |
         mkdir -p lnbits/lnbits/extensions/allowance
-        # Use rsync to copy while excluding problematic directories
-        rsync -a --exclude='lnbits/' --exclude='.git/' --exclude='pgdata/' --exclude='node_modules/' --exclude='.github/' . lnbits/lnbits/extensions/allowance/
+        # Copy essential extension files manually to avoid recursive issues
+        cp *.py lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp *.json lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp *.md lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp -r static lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp -r templates lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp -r tests lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
+        echo "Extension files copied successfully"
         
     - name: Start LNBits
       run: |
@@ -357,7 +425,19 @@ jobs:
         poetry run python -m lnbits &
         echo $! > lnbits.pid
         sleep 30
-        curl --retry 10 --retry-delay 3 --retry-connrefused http://localhost:5000/
+        # Wait for LNBits to start on port 5000 (CI default)
+        echo "Waiting for LNBits to start on port 5000..."
+        for i in {1..30}; do
+          if curl -f http://localhost:5000/ --max-time 3 2>/dev/null; then
+            echo "✅ LNBits is running on port 5000"
+            break
+          else
+            echo "Attempt $i/30: LNBits not ready yet, waiting..."
+            sleep 5
+          fi
+        done
+        # Final check
+        curl -f http://localhost:5000/ || (echo "❌ LNBits failed to start" && exit 1)
         
     - name: Test API endpoints with Python
       run: |
