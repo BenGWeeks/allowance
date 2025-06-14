@@ -84,9 +84,40 @@ The extension includes comprehensive Playwright test scripts in `/tests/`:
 - Vue app mounting following LNURLP pattern
 - Form validation with required field defaults
 
+### Repository Structure
+The repository follows a clean structure with proper .gitignore patterns:
+
+```
+allowance/
+├── tests/                    # Playwright test scripts
+│   ├── create-admin-account.js
+│   ├── login-test.js
+│   ├── enable-allowance.js
+│   ├── create-allowance.js
+│   ├── run_test.sh
+│   └── test-results/        # Generated screenshots (ignored)
+├── static/js/               # Vue.js frontend
+├── templates/allowance/     # HTML templates
+├── crud.py                  # Database operations
+├── views.py                 # Frontend routes
+├── views_api.py            # API endpoints
+└── manifest.json           # Extension manifest
+```
+
 ### Git Best Practices
 - Don't commit broken code - use `git stash` instead
 - Name test files descriptively following action-based conventions
 - All tests use proper exit codes (0 for success, 1 for failure)
+- Repository excludes temporary files (data/, temp/, test results, screenshots)
+- Clean commit history with descriptive messages
+
+### API Authentication Fix
+Fixed critical authentication issue in `views_api.py`:
+- Changed `wallet.id` to `wallet.wallet.id` for proper wallet ID access
+- Fixed 403 Forbidden errors when creating/editing allowances
+- Improved delete endpoint to return proper JSON response
+
+### Development Environment
+- Make sure you are working on the dev docker of lnbits (running on port 5001), not the production version (running on port 5000).
 
 - When looking for best practice of how to create an extension, look at https://github.com/lnbits/lnbits/tree/main/lnbits/extensions/lnurlp (do not download it, just look at the source)
