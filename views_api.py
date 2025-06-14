@@ -76,7 +76,7 @@ async def api_allowance_update(
     allowance = await get_allowance(allowance_id)
     assert allowance, "Allowance couldn't be retrieved"
 
-    if wallet.wallet.id != allowance.wallet:
+    if wallet.id != allowance.wallet:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN, detail="Not your Allowance."
         )
@@ -97,7 +97,7 @@ async def api_allowance_create(
     wallet = Depends(require_admin_key),
 ):
     data.id = urlsafe_short_hash()
-    data.wallet = data.wallet or wallet.wallet.id
+    data.wallet = data.wallet or wallet.id
     return await create_allowance(data)
 
 
@@ -115,23 +115,19 @@ async def api_allowance_delete(
             status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
         )
 
-    if allowance.wallet != wallet.wallet.id:
+    if allowance.wallet != wallet.id:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN, detail="Not your Allowance."
         )
 
     await delete_allowance(allowance_id)
-    return {"message": "Allowance deleted"}
+    return "", HTTPStatus.NO_CONTENT
 
 
 # ANY OTHER ENDPOINTS YOU NEED
 
-## Currency endpoints for dynamic currency support
-
-@allowance_api_router.get("/api/v1/currencies")
-async def api_list_currencies_available():
-    return list(currencies.keys())
-
+## Currency exchange rate endpoint for dynamic currency support
+## (currencies list comes from core LNBits /api/v1/currencies)
 
 @allowance_api_router.get("/api/v1/rate/{currency}", status_code=HTTPStatus.OK)
 async def api_check_fiat_rate(currency):
