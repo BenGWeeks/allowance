@@ -8,7 +8,6 @@ window.app = Vue.createApp({
       allowances: [],
       allowanceTable: {
         columns: [
-          {name: 'id', align: 'left', label: 'ID', field: 'id'},
           {name: 'name', align: 'left', label: 'Description', field: 'name'},
           {name: 'amount', align: 'right', label: 'Amount', field: 'amount'},
           {name: 'lightning_address', align: 'left', label: 'Recipient', field: 'lightning_address'},

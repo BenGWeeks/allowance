@@ -48,21 +48,7 @@
           <template v-slot:body="props">
             <q-tr :props="props">
               <q-td v-for="col in props.cols" :key="col.name" :props="props">
-                <span v-if="col.name == 'id'">
-                  <q-btn
-                    flat
-                    size="xs"
-                    color="grey"
-                    dense
-                    @click="copyText(col.value)"
-                    icon="content_copy"
-                    class="q-mr-sm"
-                  >
-                    <q-tooltip>Copy ID</q-tooltip>
-                  </q-btn>
-                  <span v-text="col.value"></span>
-                </span>
-                <span v-else-if="col.name == 'amount'">
+                <span v-if="col.name == 'amount'">
                   <span v-text="col.value"></span> <span>{% raw %}{{ props.row.currency || 'sats' }}{% endraw %}</span>
                   <span v-if="props.row.frequency_type == 'per_second'" class="text-caption text-grey">
                     (every 10 seconds, 6 payments total)
@@ -77,6 +63,17 @@
                 <span v-else v-text="col.value"></span>
               </q-td>
               <q-td auto-width>
+                <q-btn
+                  flat
+                  dense
+                  size="xs"
+                  @click="copyText(props.row.id)"
+                  icon="content_copy"
+                  color="grey"
+                  class="q-mr-xs"
+                >
+                  <q-tooltip>Copy ID</q-tooltip>
+                </q-btn>
                 <q-btn
                   flat
                   dense
