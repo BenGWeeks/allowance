@@ -1,4 +1,4 @@
-name: Allowance Extension Tests
+name: LNBits Extension Integration Tests
 
 on:
   push:
@@ -7,7 +7,8 @@ on:
     branches: [ main ]
 
 jobs:
-  test:
+  lnbits-integration-tests:
+    name: LNBits Extension Integration Tests
     runs-on: ubuntu-latest
     
     services:
