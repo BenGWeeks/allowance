@@ -3,6 +3,8 @@ name: LNBits Extension Integration Tests
 on:
   pull_request:
     branches: [ main ]
+  push:
+    branches: [ claude/* ]
 
 jobs:
   extension-validation:
