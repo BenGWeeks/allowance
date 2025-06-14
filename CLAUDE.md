@@ -2,21 +2,36 @@
 
 ## LNBits Extension Development Learnings
 
-### Vue.js Integration Issues
+### Vue.js Integration Issues (RESOLVED)
 1. **localStorage Error**: The persistent `Cannot read properties of undefined (reading 'localStorage')` error comes from LNBits' bundle.min.js, specifically when windowMixin tries to access `this.$q.localStorage` during Vue app initialization.
+   - **Solution**: Follow LNURLP pattern exactly - use `el: '#vue'` WITHOUT `.mount('#vue')` call
 
 2. **Vue 3 vs Vue 2**: LNBits uses Vue 3 (confirmed by "Vue is not a constructor" error when trying Vue 2 syntax).
 
-3. **App Mounting**: The Vue app must be mounted with `.mount('#vue')` - without this, the form submission handlers don't work.
+3. **App Mounting**: LNBits has an automatic mounting system. Do NOT call `.mount('#vue')` manually.
+   - **Correct Pattern**: 
+   ```javascript
+   window.app = Vue.createApp({
+     el: '#vue',
+     mixins: [window.windowMixin],
+     // ... rest of app
+   })  // NO .mount() call!
+   ```
 
 4. **windowMixin Required**: The windowMixin is essential for LNBits extensions - it provides access to user data, wallets, and Quasar utilities.
 
-### Form Submission Issues
-1. **@submit.prevent Required**: Quasar forms need `@submit.prevent="saveAllowance"` to prevent default form submission.
+### Form Submission Issues (RESOLVED)
+1. **@submit.prevent vs @click**: Use `@click="saveAllowance"` on the submit button instead of form @submit
+   - **Working Pattern**: `<q-btn @click="saveAllowance">Create Allowance</q-btn>`
 
-2. **Validation Blocking**: Empty validation errors `[ '', '', '', '', '', '' ]` suggest Quasar validation is blocking form submission but not providing proper error messages.
+2. **Validation Blocking**: Missing required fields cause silent validation failures
+   - **Solution**: Always provide default values for required fields in `openCreateDialog()`
+   - **Critical Fix**: Default `frequency_type` was missing, causing all submissions to fail
 
-3. **Active Toggle Issue**: The Active toggle mysteriously switches to OFF when the form is submitted, indicating potential data binding issues.
+3. **Edit Form Issues**: 
+   - **Problem**: Clicking "Update Allowance" would only toggle Active state instead of saving
+   - **Root Cause**: Missing `start_date` field in form data mapping
+   - **Solution**: Ensure all fields are properly mapped in `openUpdateDialog()`
 
 ### Testing Suite
 The extension includes comprehensive Playwright test scripts in `/tests/`:
@@ -63,8 +78,11 @@ The extension includes comprehensive Playwright test scripts in `/tests/`:
 ✅ All core functionality working:
 - Admin account creation and login
 - Extension enabling via UI
-- Allowance creation through forms
+- Allowance creation through forms (POST requests successful)
+- Allowance editing through forms (PUT requests successful)
 - Proper error handling and exit codes
+- Vue app mounting following LNURLP pattern
+- Form validation with required field defaults
 
 ### Git Best Practices
 - Don't commit broken code - use `git stash` instead
