@@ -140,7 +140,6 @@ jobs:
         # Configure database and environment
         echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
         echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
-        echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
         echo "HOST=0.0.0.0" >> .env
         echo "PORT=5001" >> .env
         echo "DEBUG=true" >> .env
@@ -149,7 +148,6 @@ jobs:
         # Export environment variables to shell
         export LNBITS_BACKEND_WALLET_CLASS=VoidWallet
         export LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits
-        export LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance
         export HOST=0.0.0.0
         export PORT=5001
         export DEBUG=true
@@ -158,10 +156,6 @@ jobs:
         # Create database and ensure permissions
         PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "DROP DATABASE IF EXISTS lnbits;"
         PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE lnbits;"
-        
-        # Run database migration to ensure schema is set up
-        echo "🗄️ Running database migrations..."
-        poetry run python -m lnbits --migrate || echo "Migration completed"
         
     - name: Copy allowance extension
       run: |
@@ -178,67 +172,103 @@ jobs:
     - name: Start LNBits
       run: |
         cd lnbits
-        echo "🚀 Starting LNBits with simplified approach..."
+        echo "🚀 Starting LNBits without extensions first..."
         
-        # Set environment variables for this shell session
-        set -a  # automatically export all variables
-        source .env
-        set +a
+        # Set explicit environment variables for this step
+        export LNBITS_BACKEND_WALLET_CLASS=VoidWallet
+        export LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits
+        export HOST=0.0.0.0
+        export PORT=5001
+        export DEBUG=true
+        export LNBITS_FORCE_HTTPS=false
         
-        # Verify critical environment variables
+        # Verify environment variables
         echo "🔍 Environment verification:"
         echo "LNBITS_DATABASE_URL=$LNBITS_DATABASE_URL"
         echo "LNBITS_BACKEND_WALLET_CLASS=$LNBITS_BACKEND_WALLET_CLASS"
         echo "PORT=$PORT"
+        echo "HOST=$HOST"
         
-        # Test database connection first
+        # Test database connection
         echo "🗄️ Testing database connection..."
         PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -d lnbits -c "SELECT 1;" || {
           echo "❌ Database connection failed"
           exit 1
         }
+        echo "✅ Database connection successful"
         
-        # Run migration explicitly and capture output
+        # Show LNBits version and available commands
+        echo "📋 LNBits version info:"
+        poetry run python -m lnbits --version 2>&1 || echo "No version command available"
+        
+        echo "📋 Available LNBits commands:"
+        poetry run python -m lnbits --help 2>&1 | head -10 || echo "Help command failed"
+        
+        # Run migration with full error capture
         echo "🔄 Running database migrations..."
-        poetry run python -m lnbits --migrate 2>&1 | tee migration.log || {
-          echo "❌ Migration failed"
+        if ! poetry run python -m lnbits --migrate 2>&1 | tee migration.log; then
+          echo "❌ Migration failed with output:"
           cat migration.log
           exit 1
-        }
+        fi
+        echo "✅ Database migration completed"
         
-        # Start LNBits with explicit error handling
+        # Check Python can import lnbits
+        echo "🐍 Testing Python imports..."
+        if ! poetry run python -c "import lnbits; print('✅ LNBits module imported successfully')"; then
+          echo "❌ Failed to import LNBits module"
+          exit 1
+        fi
+        
+        # Start LNBits server
         echo "🚀 Starting LNBits server..."
-        poetry run python -m lnbits > lnbits.log 2>&1 &
+        poetry run python -m lnbits 2>&1 | tee lnbits.log &
         LNBITS_PID=$!
-        echo "LNBits PID: $LNBITS_PID"
+        echo "LNBits started with PID: $LNBITS_PID"
         
-        # Monitor startup
-        for i in {1..30}; do
+        # Monitor startup with detailed logging
+        echo "⏳ Monitoring LNBits startup..."
+        for i in {1..40}; do
+          # Check if process is still running
           if ! ps -p $LNBITS_PID > /dev/null; then
             echo "❌ LNBits process died after $i seconds"
-            echo "📋 Error log:"
+            echo "📋 Process exit status:"
+            wait $LNBITS_PID
+            echo "Exit code: $?"
+            echo "📋 Full error log:"
             cat lnbits.log
             exit 1
           fi
           
-          if curl -f http://localhost:5001/ --max-time 2 2>/dev/null; then
-            echo "✅ LNBits is ready!"
+          # Check if HTTP server is responding
+          if curl -f http://localhost:5001/ --max-time 3 2>/dev/null; then
+            echo "✅ LNBits HTTP server is responding!"
             break
           fi
           
-          echo "Waiting for LNBits... ($i/30)"
-          sleep 2
+          # Show progress and recent log entries
+          if [ $((i % 5)) -eq 0 ]; then
+            echo "⏳ Still waiting for LNBits... ($i/40 seconds)"
+            echo "📋 Recent log entries:"
+            tail -5 lnbits.log 2>/dev/null || echo "No log entries yet"
+          fi
+          
+          sleep 1
         done
         
         # Final verification
         if ! curl -f http://localhost:5001/ --max-time 5; then
-          echo "❌ LNBits failed to respond"
+          echo "❌ LNBits failed to respond after 40 seconds"
           echo "📋 Process status:"
           ps -p $LNBITS_PID || echo "Process died"
-          echo "📋 Full log:"
+          echo "📋 Full startup log:"
           cat lnbits.log
+          echo "📋 Migration log:"
+          cat migration.log 2>/dev/null || echo "No migration log"
           exit 1
         fi
+        
+        echo "🎉 LNBits is ready and responding!"
         
     - name: Create admin account
       run: |
