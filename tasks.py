@@ -1,15 +1,14 @@
 import asyncio
 from datetime import datetime, timedelta
-from typing import List
 
 from lnbits.core.models import Payment
-from lnbits.core.services import pay_invoice, websocket_updater
+from lnbits.core.services import websocket_updater
 from lnbits.helpers import get_current_extension_name
 from lnbits.tasks import register_invoice_listener
 from loguru import logger
 
 from .crud import get_all_active_allowances, get_allowance, update_allowance
-from .models import Allowance
+from .models import CreateAllowanceData
 
 #######################################
 ########## RUN YOUR TASKS HERE ########
@@ -17,12 +16,14 @@ from .models import Allowance
 
 # The usual task is to listen to invoices related to this extension
 
+
 async def wait_for_paid_invoices():
     invoice_queue = asyncio.Queue()
     register_invoice_listener(invoice_queue, get_current_extension_name())
     while True:
         payment = await invoice_queue.get()
         await on_invoice_paid(payment)
+
 
 # Do somethhing when an invoice related top this extension is paid
 
@@ -43,7 +44,8 @@ async def on_invoice_paid(payment: Payment) -> None:
         total = allowance.total + payment.amount
 
     allowance.total = total
-    await update_allowance(allowance)
+    update_data = CreateAllowanceData(**allowance.dict())
+    await update_allowance(update_data)
 
     # here we could send some data to a websocket on
     # wss://<your-lnbits>/api/v1/ws/<allowance_id> and then listen to it on
@@ -67,11 +69,11 @@ async def check_and_process_allowances():
     while True:
         try:
             logger.info("🔄 Checking allowances for scheduled payments...")
-            
+
             # Get all active allowances
             allowances = await get_all_active_allowances()
             current_time = datetime.utcnow()
-            
+
             for allowance in allowances:
                 # Skip inactive allowances
                 if not getattr(allowance, "active", True):
@@ -82,7 +84,8 @@ async def check_and_process_allowances():
                     if current_time > allowance.end_date:
                         logger.info(f"⏰ Allowance {allowance.name} has expired")
                         allowance.active = False
-                        await update_allowance(allowance)
+                        update_data = CreateAllowanceData(**allowance.dict())
+                        await update_allowance(update_data)
                         continue
 
                 # Check if payment is due
@@ -130,7 +133,8 @@ async def check_and_process_allowances():
                                 days=365
                             )
 
-                        await update_allowance(allowance)
+                        update_data = CreateAllowanceData(**allowance.dict())
+                        await update_allowance(update_data)
                         logger.info(
                             f"✅ Next payment scheduled for: "
                             f"{allowance.next_payment_date}"
@@ -138,12 +142,12 @@ async def check_and_process_allowances():
 
                     except Exception as e:
                         logger.error(
-                            f"❌ Error processing allowance {allowance.name}: {str(e)}"
+                            f"❌ Error processing allowance {allowance.name}: {e!s}"
                         )
-            
+
         except Exception as e:
-            logger.error(f"❌ Error in allowance scheduler: {str(e)}")
-        
+            logger.error(f"❌ Error in allowance scheduler: {e!s}")
+
         # Check every 10 seconds
         await asyncio.sleep(10)
 

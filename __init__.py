@@ -54,9 +54,9 @@ def allowance_start():
 
 
 __all__ = [
-    "db",
     "allowance_ext",
-    "allowance_static_files",
     "allowance_start",
+    "allowance_static_files",
     "allowance_stop",
+    "db",
 ]

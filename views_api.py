@@ -10,8 +10,7 @@ from lnbits.decorators import (
     require_invoice_key,
 )
 from lnbits.helpers import urlsafe_short_hash
-from lnbits.utils.exchange_rates import currencies, get_fiat_rate_satoshis
-from lnurl import encode as lnurl_encode
+from lnbits.utils.exchange_rates import get_fiat_rate_satoshis
 from starlette.exceptions import HTTPException
 
 from .crud import (
@@ -21,7 +20,7 @@ from .crud import (
     get_allowances,
     update_allowance,
 )
-from .models import CreateAllowanceData, Allowance
+from .models import CreateAllowanceData
 
 allowance_api_router = APIRouter()
 
@@ -30,6 +29,7 @@ allowance_api_router = APIRouter()
 #######################################
 
 ## Get all the records belonging to the user
+
 
 @allowance_api_router.get("/api/v1/allowance", status_code=HTTPStatus.OK)
 async def api_allowances(
@@ -84,7 +84,8 @@ async def api_allowance_update(
     for key, value in data.dict().items():
         setattr(allowance, key, value)
 
-    return await update_allowance(allowance)
+    update_data = CreateAllowanceData(**allowance.dict())
+    return await update_allowance(update_data)
 
 
 ## Create a new record
@@ -128,6 +129,7 @@ async def api_allowance_delete(
 
 ## Currency exchange rate endpoint for dynamic currency support
 ## (currencies list comes from core LNBits /api/v1/currencies)
+
 
 @allowance_api_router.get("/api/v1/rate/{currency}", status_code=HTTPStatus.OK)
 async def api_check_fiat_rate(currency: str):
