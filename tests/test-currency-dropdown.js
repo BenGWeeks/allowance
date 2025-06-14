@@ -1,16 +1,23 @@
 const { chromium } = require('playwright');
-const fs = require('fs');
-const path = require('path');
+
+/**
+ * Test to verify currency dropdown is populated with full list of currencies
+ * 
+ * This test:
+ * 1. Tests the LNbits core /api/v1/currencies endpoint directly
+ * 2. Opens the allowance create form and checks currency dropdown
+ * 3. Opens the allowance edit form and checks currency dropdown
+ * 4. Verifies more than basic currencies (sats, USD, EUR) are available
+ * 5. Provides detailed logging for debugging
+ */
 
 (async () => {
-  console.log('🎯 Testing currency dropdown population...');
+  console.log('🌍 Starting Currency Dropdown Verification Test...');
   
   const browser = await chromium.launch({ headless: true, slowMo: 500 });
   const page = await browser.newPage();
 
   try {
-    console.log('🚀 Starting currency dropdown test...');
-    
     // Listen for console errors and network requests
     page.on('console', msg => {
       if (msg.type() === 'error') {
@@ -22,23 +29,64 @@ const path = require('path');
       console.log('💥 Page error:', error.message);
     });
     
-    // Monitor currency API requests
+    // Monitor currency-related API calls
+    const apiRequests = [];
     page.on('request', request => {
-      if (request.url().includes('/api/v1/currencies')) {
-        console.log('📤 Currency API request:', request.url(), request.method());
+      if (request.url().includes('/currencies') || request.url().includes('/rate/')) {
+        apiRequests.push({
+          method: request.method(),
+          url: request.url(),
+          timestamp: new Date().toISOString()
+        });
+        console.log(`📤 API Request: ${request.method()} ${request.url()}`);
       }
     });
     
     page.on('response', response => {
-      if (response.url().includes('/api/v1/currencies')) {
-        console.log(`📥 Currency API response: ${response.status()} ${response.url()}`);
+      if (response.url().includes('/currencies') || response.url().includes('/rate/')) {
+        console.log(`📥 API Response: ${response.status()} ${response.url()}`);
+      }
+    });
+
+    // Step 1: Test the currencies API endpoint directly
+    console.log('📝 Step 1: Testing LNbits core currencies API endpoint...');
+    
+    await page.goto('http://localhost:5001/');
+    await page.waitForLoadState('networkidle');
+    
+    // Test the endpoint directly via browser
+    const apiTestResult = await page.evaluate(async () => {
+      try {
+        const response = await fetch('/api/v1/currencies');
+        const data = await response.json();
+        return {
+          status: response.status,
+          statusText: response.statusText,
+          dataType: typeof data,
+          isArray: Array.isArray(data),
+          length: Array.isArray(data) ? data.length : 'N/A',
+          sample: Array.isArray(data) ? data.slice(0, 10) : data,
+          error: null
+        };
+      } catch (error) {
+        return {
+          status: 'fetch_failed',
+          error: error.message
+        };
       }
     });
     
-    // Step 1: Login first
-    console.log('📝 Step 1: Logging in as admin...');
-    await page.goto('http://localhost:5001/');
-    await page.waitForLoadState('networkidle');
+    console.log('🔍 Direct API test result:', JSON.stringify(apiTestResult, null, 2));
+    
+    if (apiTestResult.status === 200) {
+      console.log(`✅ API working - found ${apiTestResult.length} currencies`);
+      console.log(`📋 Sample currencies:`, apiTestResult.sample);
+    } else {
+      console.log(`❌ API failed with status: ${apiTestResult.status}`);
+    }
+
+    // Step 2: Login
+    console.log('📝 Step 2: Logging in...');
     
     // Check if we need to switch to login screen
     const createAccountVisible = await page.locator('text=Create Account').first().isVisible();
@@ -52,238 +100,262 @@ const path = require('path');
     await page.fill('input[type="password"]', 'zUYmy&05&uZ$3kmf*^T8');
     await page.click('button:has-text("LOGIN")');
     await page.waitForTimeout(3000);
-    
-    // Step 2: Navigate to allowance extension
-    console.log('📝 Step 2: Navigating to allowance extension...');
+
+    // Step 3: Navigate to allowance extension
+    console.log('📝 Step 3: Navigating to allowance extension...');
     await page.goto('http://localhost:5001/allowance/');
     await page.waitForTimeout(3000);
-    
-    // Step 3: Test currency API directly first
-    console.log('📝 Step 3: Testing currency API directly...');
-    
-    // Test core LNBits currencies endpoint
-    const coreApiResponse = await page.evaluate(async () => {
-      try {
-        const response = await fetch('/api/v1/currencies');
-        const data = await response.json();
-        return { success: true, data: data, status: response.status };
-      } catch (error) {
-        return { success: false, error: error.message };
-      }
-    });
-    
-    console.log('🌍 Core LNBits currencies API result:', JSON.stringify(coreApiResponse, null, 2));
-    
-    // Test extension currencies endpoint
-    const extensionApiResponse = await page.evaluate(async () => {
-      try {
-        const response = await fetch('/allowance/api/v1/currencies');
-        const data = await response.json();
-        return { success: true, data: data, status: response.status };
-      } catch (error) {
-        return { success: false, error: error.message };
-      }
-    });
-    
-    console.log('🔌 Extension currencies API result:', JSON.stringify(extensionApiResponse, null, 2));
-    
-    // Step 4: Check Vue app currencies data
-    console.log('📝 Step 4: Checking Vue app currencies...');
-    
-    // Wait for Vue app to load
-    await page.waitForTimeout(2000);
-    
-    const vueAppCurrencies = await page.evaluate(() => {
-      try {
-        if (window.app && window.app.currencies) {
-          return {
-            success: true,
-            currencies: window.app.currencies,
-            currencyCount: window.app.currencies.length
-          };
-        }
-        return { success: false, error: 'Vue app or currencies not found' };
-      } catch (error) {
-        return { success: false, error: error.message };
-      }
-    });
-    
-    console.log('⚛️ Vue app currencies:', JSON.stringify(vueAppCurrencies, null, 2));
-    
-    // Step 5: Open the allowance form and check dropdown
-    console.log('📝 Step 5: Opening allowance form to test dropdown...');
+
+    // Step 4: Test currency dropdown in CREATE form
+    console.log('📝 Step 4: Testing currency dropdown in CREATE form...');
     
     const newAllowanceButton = page.locator('button:has-text("New Allowance")');
-    
     if (await newAllowanceButton.isVisible()) {
       await newAllowanceButton.click();
       await page.waitForTimeout(2000);
       
-      // Step 6: Check currency dropdown options
-      console.log('📝 Step 6: Analyzing currency dropdown options...');
-      
-      // Wait for form to load
+      // Wait for form to load and Vue app to initialize
       await page.waitForSelector('.q-select', { timeout: 10000 });
       
-      // Find the currency dropdown
-      const currencySelect = page.locator('.q-select').filter({ hasText: 'Currency' });
-      
-      if (await currencySelect.isVisible()) {
-        // Click to open the dropdown
-        await currencySelect.click();
-        await page.waitForTimeout(1000);
-        
-        // Get all dropdown options
-        const dropdownOptions = await page.locator('.q-item').allTextContents();
-        console.log('📋 Currency dropdown options:', dropdownOptions);
-        
-        // Count the options
-        const optionCount = dropdownOptions.length;
-        console.log(`📊 Total currency options found: ${optionCount}`);
-        
-        // Check if we have more than just the basic 3 currencies
-        const hasBasicOnly = optionCount <= 3 && 
-                            dropdownOptions.some(opt => opt.includes('sats') || opt.includes('USD') || opt.includes('EUR'));
-        
-        const hasExtendedCurrencies = optionCount > 3;
-        
-        console.log(`🔍 Analysis:`);
-        console.log(`  - Basic currencies only (sats/USD/EUR): ${hasBasicOnly ? '✅' : '❌'}`);
-        console.log(`  - Extended currencies (>3 options): ${hasExtendedCurrencies ? '✅' : '❌'}`);
-        
-        // Take screenshot of the dropdown
-        await page.screenshot({ 
-          path: '/mnt/raid1/GitHub/allowance/tests/test-results/currency-dropdown-open.png', 
-          fullPage: true 
-        });
-        
-        // Test specific currencies that should be available from LNBits core
-        const expectedCurrencies = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY'];
-        const foundCurrencies = [];
-        const missingCurrencies = [];
-        
-        for (const currency of expectedCurrencies) {
-          const found = dropdownOptions.some(opt => opt.includes(currency));
-          if (found) {
-            foundCurrencies.push(currency);
-          } else {
-            missingCurrencies.push(currency);
+      // Check Vue currencies data
+      const vueCreateCurrencies = await page.evaluate(() => {
+        try {
+          // Try to access Vue app instance
+          const vueEl = document.querySelector('#vue');
+          if (vueEl && vueEl.__vue_app__) {
+            const app = vueEl.__vue_app__;
+            if (app._instance && app._instance.ctx && app._instance.ctx.currencies) {
+              return {
+                found: true,
+                length: app._instance.ctx.currencies.length,
+                currencies: app._instance.ctx.currencies.slice(0, 20), // First 20 for debugging
+                allCurrencies: app._instance.ctx.currencies
+              };
+            }
           }
+          
+          // Fallback: try window.app
+          if (window.app && window.app.currencies) {
+            return {
+              found: true,
+              source: 'window.app',
+              length: window.app.currencies.length,
+              currencies: window.app.currencies.slice(0, 20),
+              allCurrencies: window.app.currencies
+            };
+          }
+          
+          return { found: false, error: 'No Vue instance or currencies data found' };
+        } catch (error) {
+          return { found: false, error: error.message };
         }
+      });
+      
+      console.log('🔍 Vue currencies in CREATE form:', JSON.stringify({
+        found: vueCreateCurrencies.found,
+        length: vueCreateCurrencies.length,
+        sample: vueCreateCurrencies.currencies
+      }, null, 2));
+      
+      // Click on currency dropdown to open it
+      const currencySelect = page.locator('.q-select').filter({ hasText: 'Currency' });
+      await currencySelect.click();
+      await page.waitForTimeout(1000);
+      
+      // Get all dropdown options
+      const createDropdownOptions = await page.locator('.q-item').allTextContents();
+      console.log('📋 CREATE form dropdown options:', createDropdownOptions);
+      console.log(`📊 CREATE form: Found ${createDropdownOptions.length} currency options`);
+      
+      // Check if we have more than the basic 3 currencies
+      const hasMoreThanBasic = createDropdownOptions.length > 3;
+      const hasBasicCurrencies = ['sats', 'USD', 'EUR'].every(currency => 
+        createDropdownOptions.some(option => option.includes(currency))
+      );
+      
+      console.log(`✅ Has basic currencies (sats, USD, EUR): ${hasBasicCurrencies}`);
+      console.log(`✅ Has more than 3 options: ${hasMoreThanBasic}`);
+      
+      // Close dropdown by pressing Escape
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(500);
+      
+      // Close create dialog
+      await page.locator('button:has-text("Cancel")').click();
+      await page.waitForTimeout(1000);
+      
+      // Store create form results
+      const createFormResults = {
+        vueData: vueCreateCurrencies,
+        dropdownOptions: createDropdownOptions,
+        hasMoreThanBasic: hasMoreThanBasic,
+        hasBasicCurrencies: hasBasicCurrencies
+      };
+
+      // Step 5: Test currency dropdown in EDIT form (if allowances exist)
+      console.log('📝 Step 5: Testing currency dropdown in EDIT form...');
+      
+      const allowanceRows = page.locator('.q-table tbody tr');
+      const rowCount = await allowanceRows.count();
+      
+      if (rowCount > 0) {
+        console.log(`📋 Found ${rowCount} existing allowances`);
         
-        console.log(`✅ Found currencies: ${foundCurrencies.join(', ')}`);
-        console.log(`❌ Missing currencies: ${missingCurrencies.join(', ')}`);
+        // Click edit on first allowance
+        const firstEditButton = allowanceRows.first().locator('button:has([class*="edit"]), button:has([name="edit"]), .q-btn:has(.q-icon[aria-label="edit"])').first();
+        await firstEditButton.click();
+        await page.waitForTimeout(2000);
         
-        // Close dropdown
-        await page.keyboard.press('Escape');
-        await page.waitForTimeout(500);
-        
-        // Step 7: Test selecting a currency and verify exchange rate fetch
-        if (foundCurrencies.length > 0) {
-          console.log('📝 Step 7: Testing currency selection and rate fetch...');
-          
-          const testCurrency = foundCurrencies[0];
-          console.log(`🧪 Testing with currency: ${testCurrency}`);
-          
-          // Open dropdown again
-          await currencySelect.click();
-          await page.waitForTimeout(1000);
-          
-          // Select the test currency
-          await page.click(`.q-item:has-text("${testCurrency}")`);
-          await page.waitForTimeout(2000);
-          
-          // Check if exchange rate was fetched
-          const rateInfo = await page.evaluate((currency) => {
-            try {
-              if (window.app && window.app.fiatRates) {
+        // Check Vue currencies data in edit form
+        const vueEditCurrencies = await page.evaluate(() => {
+          try {
+            const vueEl = document.querySelector('#vue');
+            if (vueEl && vueEl.__vue_app__) {
+              const app = vueEl.__vue_app__;
+              if (app._instance && app._instance.ctx && app._instance.ctx.currencies) {
                 return {
-                  success: true,
-                  rate: window.app.fiatRates[currency],
-                  allRates: window.app.fiatRates
+                  found: true,
+                  length: app._instance.ctx.currencies.length,
+                  currencies: app._instance.ctx.currencies.slice(0, 20)
                 };
               }
-              return { success: false, error: 'Vue app or fiatRates not found' };
-            } catch (error) {
-              return { success: false, error: error.message };
             }
-          }, testCurrency);
-          
-          console.log(`💱 Exchange rate info for ${testCurrency}:`, JSON.stringify(rateInfo, null, 2));
-          
-          // Check if the hint shows the exchange rate
-          const amountInput = page.locator('input[type="number"]');
-          await amountInput.fill('100');
-          await page.waitForTimeout(1000);
-          
-          const hint = await page.locator('.q-field__bottom').textContent();
-          console.log('💰 Amount field hint:', hint);
-          
-          const hasExchangeRateHint = hint && hint.includes('sats');
-          console.log(`🔄 Exchange rate hint displayed: ${hasExchangeRateHint ? '✅' : '❌'}`);
-        }
+            
+            if (window.app && window.app.currencies) {
+              return {
+                found: true,
+                source: 'window.app',
+                length: window.app.currencies.length,
+                currencies: window.app.currencies.slice(0, 20)
+              };
+            }
+            
+            return { found: false, error: 'No Vue instance or currencies data found' };
+          } catch (error) {
+            return { found: false, error: error.message };
+          }
+        });
         
-        // Final assessment
-        console.log('\n🎯 CURRENCY DROPDOWN TEST RESULTS:');
+        console.log('🔍 Vue currencies in EDIT form:', JSON.stringify({
+          found: vueEditCurrencies.found,
+          length: vueEditCurrencies.length,
+          sample: vueEditCurrencies.currencies
+        }, null, 2));
+        
+        // Click on currency dropdown in edit form
+        const editCurrencySelect = page.locator('.q-select').filter({ hasText: 'Currency' });
+        await editCurrencySelect.click();
+        await page.waitForTimeout(1000);
+        
+        // Get all dropdown options in edit form
+        const editDropdownOptions = await page.locator('.q-item').allTextContents();
+        console.log('📋 EDIT form dropdown options:', editDropdownOptions);
+        console.log(`📊 EDIT form: Found ${editDropdownOptions.length} currency options`);
+        
+        const editHasMoreThanBasic = editDropdownOptions.length > 3;
+        const editHasBasicCurrencies = ['sats', 'USD', 'EUR'].every(currency => 
+          editDropdownOptions.some(option => option.includes(currency))
+        );
+        
+        console.log(`✅ EDIT - Has basic currencies: ${editHasBasicCurrencies}`);
+        console.log(`✅ EDIT - Has more than 3 options: ${editHasMoreThanBasic}`);
+        
+        // Close dropdown and dialog
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(500);
+        await page.locator('button:has-text("Cancel")').click();
+        await page.waitForTimeout(1000);
+        
+        // Store edit form results
+        const editFormResults = {
+          vueData: vueEditCurrencies,
+          dropdownOptions: editDropdownOptions,
+          hasMoreThanBasic: editHasMoreThanBasic,
+          hasBasicCurrencies: editHasBasicCurrencies
+        };
+        
+        // Final evaluation
+        console.log('\n🎯 FINAL TEST RESULTS:');
         console.log('='.repeat(50));
         
-        if (hasExtendedCurrencies) {
-          console.log('✅ SUCCESS! Currency dropdown shows extended currency list');
-          console.log(`   Found ${optionCount} currency options`);
-          console.log(`   Available currencies: ${dropdownOptions.join(', ')}`);
-          
-          // Take success screenshot
-          await page.screenshot({ 
-            path: '/mnt/raid1/GitHub/allowance/tests/test-results/currency-test-success.png', 
-            fullPage: true 
-          });
-          
-          // Close form and exit successfully
-          await page.keyboard.press('Escape');
-          console.log('🎉 CURRENCY DROPDOWN TEST PASSED! 🎉');
+        console.log(`📊 LNbits API Status: ${apiTestResult.status === 200 ? '✅ Working' : '❌ Failed'}`);
+        console.log(`📊 API Currency Count: ${apiTestResult.length || 'Unknown'}`);
+        
+        console.log(`📊 CREATE Form Vue Data: ${createFormResults.vueData.found ? '✅ Found' : '❌ Missing'}`);
+        console.log(`📊 CREATE Form Currency Count: ${createFormResults.vueData.length || 'Unknown'}`);
+        console.log(`📊 CREATE Form Dropdown Options: ${createFormResults.dropdownOptions.length}`);
+        console.log(`📊 CREATE Form Has Full List: ${createFormResults.hasMoreThanBasic ? '✅ Yes' : '❌ No'}`);
+        
+        console.log(`📊 EDIT Form Vue Data: ${editFormResults.vueData.found ? '✅ Found' : '❌ Missing'}`);
+        console.log(`📊 EDIT Form Currency Count: ${editFormResults.vueData.length || 'Unknown'}`);
+        console.log(`📊 EDIT Form Dropdown Options: ${editFormResults.dropdownOptions.length}`);
+        console.log(`📊 EDIT Form Has Full List: ${editFormResults.hasMoreThanBasic ? '✅ Yes' : '❌ No'}`);
+        
+        console.log('\n📋 All API Requests Made:');
+        apiRequests.forEach(req => {
+          console.log(`   ${req.method} ${req.url}`);
+        });
+        
+        // Determine overall test result
+        const apiWorking = apiTestResult.status === 200 && apiTestResult.length > 3;
+        const createFormWorking = createFormResults.hasMoreThanBasic;
+        const editFormWorking = editFormResults.hasMoreThanBasic;
+        
+        const testPassed = apiWorking && createFormWorking && editFormWorking;
+        
+        if (testPassed) {
+          console.log('\n🎉 CURRENCY DROPDOWN TEST PASSED! 🎉');
+          console.log('✅ API is working and returns full currency list');
+          console.log('✅ CREATE form shows full currency list in dropdown');
+          console.log('✅ EDIT form shows full currency list in dropdown');
+          await page.screenshot({ path: 'tests/test-results/currency-dropdown-success.png', fullPage: true });
           process.exit(0);
-          
         } else {
-          console.log('❌ FAILURE! Currency dropdown only shows basic currencies');
-          console.log(`   Only found ${optionCount} currency options: ${dropdownOptions.join(', ')}`);
-          console.log('   Expected: Full list of currencies from LNBits core API');
+          console.log('\n❌ CURRENCY DROPDOWN TEST FAILED!');
+          console.log(`❌ API working: ${apiWorking}`);
+          console.log(`❌ CREATE form working: ${createFormWorking}`);
+          console.log(`❌ EDIT form working: ${editFormWorking}`);
           
-          // Take failure screenshot
-          await page.screenshot({ 
-            path: '/mnt/raid1/GitHub/allowance/tests/test-results/currency-test-failure.png', 
-            fullPage: true 
-          });
+          if (!apiWorking) {
+            console.log('🔧 Issue: LNbits core /api/v1/currencies endpoint is not returning expected data');
+          }
+          if (!createFormWorking) {
+            console.log('🔧 Issue: CREATE form currency dropdown only shows basic currencies');
+          }
+          if (!editFormWorking) {
+            console.log('🔧 Issue: EDIT form currency dropdown only shows basic currencies');
+          }
           
-          // Close form
-          await page.keyboard.press('Escape');
-          console.log('💥 CURRENCY DROPDOWN TEST FAILED! 💥');
+          await page.screenshot({ path: 'tests/test-results/currency-dropdown-failed.png', fullPage: true });
           process.exit(1);
         }
         
       } else {
-        console.log('❌ Currency dropdown not found');
-        await page.screenshot({ 
-          path: '/mnt/raid1/GitHub/allowance/tests/test-results/currency-dropdown-not-found.png', 
-          fullPage: true 
-        });
-        process.exit(1);
+        console.log('⚠️ No allowances found for edit form testing');
+        console.log('🎯 Testing CREATE form only...');
+        
+        const testPassed = apiTestResult.status === 200 && createFormResults.hasMoreThanBasic;
+        
+        if (testPassed) {
+          console.log('\n🎉 CURRENCY DROPDOWN TEST PASSED (CREATE ONLY)! 🎉');
+          process.exit(0);
+        } else {
+          console.log('\n❌ CURRENCY DROPDOWN TEST FAILED!');
+          console.log(`❌ API working: ${apiTestResult.status === 200}`);
+          console.log(`❌ CREATE form working: ${createFormResults.hasMoreThanBasic}`);
+          process.exit(1);
+        }
       }
       
     } else {
       console.log('❌ New Allowance button not found');
-      await page.screenshot({ 
-        path: '/mnt/raid1/GitHub/allowance/tests/test-results/new-allowance-button-not-found.png', 
-        fullPage: true 
-      });
+      await page.screenshot({ path: 'tests/test-results/currency-dropdown-no-button.png', fullPage: true });
       process.exit(1);
     }
     
   } catch (error) {
-    console.error('💥 Error:', error.message);
-    await page.screenshot({ 
-      path: '/mnt/raid1/GitHub/allowance/tests/test-results/currency-test-error.png', 
-      fullPage: true 
-    });
+    console.error('💥 Currency dropdown test error:', error.message);
+    await page.screenshot({ path: 'tests/test-results/currency-dropdown-error.png', fullPage: true });
     process.exit(1);
   } finally {
     await browser.close();
