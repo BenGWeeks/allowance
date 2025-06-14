@@ -110,6 +110,11 @@ jobs:
       with:
         python-version: '3.10'
         
+    - name: Install PostgreSQL client
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y postgresql-client
+        
     - name: Install LNBits
       run: |
         echo "📦 Installing LNBits directly..."
@@ -164,30 +169,61 @@ jobs:
         echo "🔄 Running database migrations..."
         poetry run python -m lnbits --migrate
         
-        # Start LNBits
-        echo "🚀 Starting LNBits..."
-        poetry run python -m lnbits &
+        # Test database connection first
+        echo "🗄️ Testing database connection..."
+        PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -d lnbits -c "SELECT 1;" || {
+          echo "❌ Database connection failed"
+          exit 1
+        }
+        
+        # Test LNBits import
+        echo "🐍 Testing LNBits import..."
+        poetry run python -c "import lnbits; print('✅ LNBits import successful')" || {
+          echo "❌ LNBits import failed"
+          exit 1
+        }
+        
+        # Start LNBits with logging
+        echo "🚀 Starting LNBits with error capture..."
+        poetry run python -m lnbits > ../lnbits.log 2>&1 &
         LNBITS_PID=$!
         echo $LNBITS_PID > ../lnbits.pid
+        echo "LNBits started with PID: $LNBITS_PID"
         
         cd ..
         
-        # Wait for LNBits to be ready
-        echo "⏳ Waiting for LNBits to start..."
+        # Monitor startup with log output
+        echo "⏳ Monitoring LNBits startup..."
         for i in {1..30}; do
+          if ! ps -p $LNBITS_PID > /dev/null; then
+            echo "❌ LNBits process died after $i seconds"
+            echo "📋 Error log:"
+            cat lnbits.log 2>/dev/null || echo "No log file found"
+            exit 1
+          fi
+          
           if curl -f http://localhost:5001/ --max-time 3 2>/dev/null; then
             echo "✅ LNBits is ready!"
             break
           fi
-          echo "Waiting for LNBits... ($i/30)"
-          sleep 2
+          
+          # Show recent log entries every 5 seconds
+          if [ $((i % 5)) -eq 0 ]; then
+            echo "⏳ Still waiting for LNBits... ($i/30)"
+            echo "📋 Recent log entries:"
+            tail -5 lnbits.log 2>/dev/null || echo "No log entries yet"
+          fi
+          
+          sleep 1
         done
         
-        # Final check
+        # Final check with full error details
         if ! curl -f http://localhost:5001/ --max-time 5; then
-          echo "❌ LNBits failed to start"
+          echo "❌ LNBits failed to start after 30 seconds"
           echo "📋 Process status:"
           ps -p $LNBITS_PID || echo "Process died"
+          echo "📋 Full startup log:"
+          cat lnbits.log 2>/dev/null || echo "No log file found"
           exit 1
         fi
         
