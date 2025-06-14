@@ -340,14 +340,15 @@ window.app = Vue.createApp({
     updateFiatRate(currency) {
       if (currency && currency !== 'sats' && currency !== 'satoshis') {
         LNbits.api
-          .request('GET', '/allowance/api/v1/rate/' + currency, null)
+          .request('GET', '/api/v1/rate/' + currency, null)
           .then(response => {
             let rates = _.clone(this.fiatRates)
             rates[currency] = response.data.rate
             this.fiatRates = rates
+            console.log(`💱 Rate for ${currency}: 1 ${currency} = ${response.data.rate} sats`)
           })
           .catch(err => {
-            LNbits.utils.notifyApiError(err)
+            console.error(`Failed to get rate for ${currency}:`, err)
           })
       }
     },
@@ -383,19 +384,26 @@ window.app = Vue.createApp({
       return date.toISOString()
     }
   },
+  watch: {
+    'formDialog.data.currency': function(newVal) {
+      if (newVal) {
+        this.updateFiatRate(newVal)
+      }
+    }
+  },
   created() {
     if (this.g?.user?.wallets?.length) {
       this.getAllowances()
     }
     
-    // Fetch available currencies
+    // Fetch available currencies from LNbits global endpoint
     LNbits.api
-      .request('GET', '/allowance/api/v1/currencies')
+      .request('GET', '/api/v1/currencies')
       .then(response => {
         this.currencies = ['sats', ...response.data]
       })
       .catch(err => {
-        LNbits.utils.notifyApiError(err)
+        console.error('Failed to fetch currencies:', err)
         // Fallback to basic currencies if API fails
         this.currencies = ['sats', 'USD', 'EUR']
       })

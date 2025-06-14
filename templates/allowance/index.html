@@ -211,6 +211,7 @@
               :rules="[val => val > 0 || 'Amount must be greater than 0']"
               min="1"
               step="1"
+              :hint="formDialog.data.currency && formDialog.data.currency !== 'sats' && fiatRates[formDialog.data.currency] ? `${formDialog.data.amount || 0} ${formDialog.data.currency} = ${Math.round((formDialog.data.amount || 0) * fiatRates[formDialog.data.currency])} sats (actual conversion calculated at the time of sending)` : ''"
             >
             </q-input>
           </div>
@@ -222,8 +223,10 @@
               :options="currencies"
               :display-value="formDialog.data.currency || 'sats'"
               label="Currency"
-              :hint="'Converted to satoshis at payment. ' + (formDialog.data.currency && fiatRates[formDialog.data.currency] ? `Currently 1 ${formDialog.data.currency} = ${fiatRates[formDialog.data.currency]} sat` : '')"
-              @input="updateFiatRate"
+              @update:model-value="updateFiatRate"
+              :options-dense="true"
+              :virtual-scroll-slice-size="500"
+              :popup-content-style="{ maxHeight: '200px' }"
             ></q-select>
           </div>
         </div>
