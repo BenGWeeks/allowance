@@ -127,12 +127,30 @@ jobs:
       run: |
         echo "📦 Installing allowance extension to Docker container..."
         
-        # Copy extension files to the running container
-        docker cp . lnbits:/app/lnbits/extensions/allowance/
+        # Copy only essential extension files to the running container
+        # Avoid copying tests/, .git/, lnbits/, node_modules/, etc.
+        
+        # Create temp directory with only extension files
+        mkdir -p /tmp/allowance-extension
+        cp *.py *.json /tmp/allowance-extension/ 2>/dev/null || true
+        cp -r static /tmp/allowance-extension/ 2>/dev/null || true
+        cp -r templates /tmp/allowance-extension/ 2>/dev/null || true
+        
+        # Copy the clean extension to container
+        docker cp /tmp/allowance-extension/. lnbits:/app/lnbits/extensions/allowance/
+        
+        # Clean up temp directory
+        rm -rf /tmp/allowance-extension
         
         echo "✅ Extension copied to container"
         echo "📋 Checking copied files:"
         docker exec lnbits ls -la /app/lnbits/extensions/allowance/
+        
+        echo "📋 Checking essential extension files:"
+        docker exec lnbits ls -la /app/lnbits/extensions/allowance/ | grep -E "\.(py|json)$"
+        
+        echo "📋 Checking manifest.json content:"
+        docker exec lnbits cat /app/lnbits/extensions/allowance/manifest.json || echo "manifest.json not found"
         
         # Restart container to load the new extension
         echo "🔄 Restarting LNBits to load extension..."
