@@ -6,7 +6,7 @@ from loguru import logger
 from .crud import db
 from .tasks import check_and_process_allowances, wait_for_paid_invoices
 from .views import allowance_generic_router
-from .views_api_minimal import allowance_api_router
+from .views_api import allowance_api_router
 
 # from .views_lnurl import allowance_lnurl_router  # Disabled - has invalid decorators
 
