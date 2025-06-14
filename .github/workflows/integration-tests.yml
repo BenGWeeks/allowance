@@ -134,6 +134,21 @@ jobs:
         echo "📋 Checking copied files:"
         docker exec lnbits ls -la /app/lnbits/extensions/allowance/
         
+        # Restart container to load the new extension
+        echo "🔄 Restarting LNBits to load extension..."
+        docker restart lnbits
+        
+        # Wait for container to be ready again
+        echo "⏳ Waiting for LNBits to restart..."
+        for i in {1..30}; do
+          if curl -f http://localhost:5001/ --max-time 3 2>/dev/null; then
+            echo "✅ LNBits is ready after restart!"
+            break
+          fi
+          echo "Waiting for restart... ($i/30)"
+          sleep 2
+        done
+        
     - name: Install Playwright
       run: |
         npm init -y
