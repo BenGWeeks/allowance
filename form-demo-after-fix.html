@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Allowance Form - After Fix</title>
+    <link href="https://cdn.jsdelivr.net/npm/quasar@2.12.0/dist/quasar.prod.css" rel="stylesheet" type="text/css">
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+            font-family: 'Roboto', sans-serif;
+        }
+        .demo-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 80vh;
+        }
+        .q-card {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 32px 24px;
+            width: 500px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+        }
+        .q-input, .q-select {
+            margin-bottom: 16px;
+            background: #333;
+            border-radius: 4px;
+            padding: 12px;
+        }
+        .q-input input, .q-select select {
+            background: transparent;
+            border: none;
+            color: white;
+            width: 100%;
+            font-size: 14px;
+        }
+        .q-input label, .q-select label {
+            color: #aaa;
+            font-size: 12px;
+            margin-bottom: 4px;
+            display: block;
+        }
+        .row {
+            display: flex;
+            gap: 12px;
+        }
+        .col {
+            flex: 1;
+        }
+        .col-auto {
+            width: 100px;
+        }
+        .q-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 16px 0;
+        }
+        .toggle-switch {
+            width: 40px;
+            height: 20px;
+            background: #4caf50;
+            border-radius: 10px;
+            position: relative;
+        }
+        .toggle-handle {
+            width: 18px;
+            height: 18px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 1px;
+            right: 1px;
+        }
+        .button-row {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 24px;
+        }
+        .q-btn {
+            padding: 8px 16px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .q-btn--flat {
+            background: transparent;
+            color: #aaa;
+        }
+        .q-btn--primary {
+            background: #1976d2;
+            color: white;
+        }
+        .demo-note {
+            text-align: center;
+            background: #0d7377;
+            color: white;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-note">
+        ✅ AFTER FIX: Form without "Create Allowance" heading - cleaner and more compact!
+    </div>
+    
+    <div class="demo-container">
+        <div class="q-card">
+            <!-- HEADING REMOVED - Form starts directly with inputs -->
+            
+            <div class="q-input">
+                <label>Description *</label>
+                <input type="text" value="Pocket money" placeholder="e.g., Weekly allowance for Alice">
+            </div>
+            
+            <div class="q-select">
+                <label>Wallet *</label>
+                <select>
+                    <option>LNbits wallet</option>
+                </select>
+            </div>
+            
+            <div class="q-input">
+                <label>Lightning Address *</label>
+                <input type="text" value="muddledsmell08@walletofsatoshi.com" placeholder="alice@getalby.com">
+            </div>
+            
+            <div class="row">
+                <div class="col">
+                    <div class="q-input">
+                        <label>Amount *</label>
+                        <input type="number" value="100" min="1" step="1">
+                    </div>
+                </div>
+                <div class="col-auto">
+                    <div class="q-select">
+                        <label>Currency</label>
+                        <select>
+                            <option>sats</option>
+                            <option>USD</option>
+                            <option>EUR</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="q-select">
+                <label>Frequency *</label>
+                <select>
+                    <option>Weekly</option>
+                    <option>Daily</option>
+                    <option>Monthly</option>
+                </select>
+            </div>
+            
+            <div class="row">
+                <div class="col">
+                    <div class="q-input">
+                        <label>Start Date *</label>
+                        <input type="date" value="2025-06-13">
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="q-input">
+                        <label>End Date (Optional)</label>
+                        <input type="date">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="q-toggle">
+                <span>Active</span>
+                <div class="toggle-switch">
+                    <div class="toggle-handle"></div>
+                </div>
+            </div>
+            
+            <div class="button-row">
+                <button class="q-btn q-btn--flat">Cancel</button>
+                <button class="q-btn q-btn--primary">Create Allowance</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
