@@ -169,6 +169,8 @@ jobs:
         echo "🗄️ Testing PostgreSQL connection..."
         PGPASSWORD=postgres psql -h localhost -U postgres -d lnbits -c "SELECT version();" || {
           echo "❌ Database connection failed"
+          echo "🔍 Checking PostgreSQL service status..."
+          pg_isready -h localhost -p 5432 || echo "PostgreSQL service not ready"
           exit 1
         }
         
