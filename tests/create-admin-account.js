@@ -1,7 +1,7 @@
 const { chromium } = require('playwright');
 
 (async () => {
-  const browser = await chromium.launch({ headless: false, slowMo: 1000 });
+  const browser = await chromium.launch({ headless: true, slowMo: 1000 });
   const page = await browser.newPage();
 
   try {
