@@ -1,0 +1,21 @@
+name: Simple Test
+
+on:
+  push:
+    branches: [ claude/* ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Simple test
+      run: |
+        echo "✅ Workflow is running!"
+        echo "✅ Repository: ${{ github.repository }}"
+        echo "✅ Branch: ${{ github.ref }}"
+        echo "✅ Commit: ${{ github.sha }}"
+        ls -la
+        echo "✅ Simple test completed!"
