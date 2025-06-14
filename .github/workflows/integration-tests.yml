@@ -58,6 +58,8 @@ jobs:
         cd lnbits
         cp .env.example .env
         echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
+        # Create database first
+        PGPASSWORD=postgres createdb -h localhost -p 5432 -U postgres lnbits || echo "Database might already exist"
         echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
         echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
         echo "HOST=0.0.0.0" >> .env
@@ -199,6 +201,8 @@ jobs:
         cd lnbits
         cp .env.example .env
         echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
+        # Create database first
+        PGPASSWORD=postgres createdb -h localhost -p 5432 -U postgres lnbits || echo "Database might already exist"
         echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
         echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
         echo "HOST=0.0.0.0" >> .env
@@ -322,6 +326,8 @@ jobs:
         cd lnbits
         cp .env.example .env
         echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
+        # Create database first
+        PGPASSWORD=postgres createdb -h localhost -p 5432 -U postgres lnbits || echo "Database might already exist"
         echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
         echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
         echo "HOST=0.0.0.0" >> .env
@@ -436,6 +442,8 @@ jobs:
         cd lnbits
         cp .env.example .env
         echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
+        # Create database first
+        PGPASSWORD=postgres createdb -h localhost -p 5432 -U postgres lnbits || echo "Database might already exist"
         echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
         echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
         echo "HOST=0.0.0.0" >> .env
