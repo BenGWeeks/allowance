@@ -157,18 +157,6 @@ jobs:
         PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "DROP DATABASE IF EXISTS lnbits;"
         PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE lnbits;"
         
-    - name: Copy allowance extension
-      run: |
-        mkdir -p lnbits/lnbits/extensions/allowance
-        # Copy essential extension files manually to avoid recursive issues
-        cp *.py lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp *.json lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp *.md lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp -r static lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp -r templates lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp -r tests lnbits/lnbits/extensions/allowance/ 2>/dev/null || true
-        echo "Extension files copied successfully"
-        
     - name: Start LNBits
       run: |
         cd lnbits
@@ -269,6 +257,17 @@ jobs:
         fi
         
         echo "🎉 LNBits is ready and responding!"
+        
+    - name: Install allowance extension
+      run: |
+        echo "📦 Installing allowance extension to running LNBits..."
+        
+        # Copy the entire extension directory
+        cp -r . lnbits/lnbits/extensions/allowance/
+        
+        echo "✅ Extension copied successfully"
+        echo "📋 Checking copied files:"
+        ls -la lnbits/lnbits/extensions/allowance/
         
     - name: Create admin account
       run: |
