@@ -142,7 +142,7 @@ jobs:
         echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
         echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
         echo "HOST=0.0.0.0" >> .env
-        echo "PORT=5000" >> .env
+        echo "PORT=5001" >> .env
         echo "DEBUG=true" >> .env
         echo "LNBITS_FORCE_HTTPS=false" >> .env
         
@@ -151,7 +151,7 @@ jobs:
         export LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits
         export LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance
         export HOST=0.0.0.0
-        export PORT=5000
+        export PORT=5001
         export DEBUG=true
         export LNBITS_FORCE_HTTPS=false
         
@@ -178,101 +178,65 @@ jobs:
     - name: Start LNBits
       run: |
         cd lnbits
-        echo "🚀 Starting LNBits..."
-        echo "Environment check:"
-        poetry --version
-        python --version
-        ls -la .env
-        echo "Environment variables:"
-        cat .env
+        echo "🚀 Starting LNBits with simplified approach..."
         
-        # Export environment variables for this step
-        export LNBITS_BACKEND_WALLET_CLASS=VoidWallet
-        export LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits
-        export LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance
-        export HOST=0.0.0.0
-        export PORT=5000
-        export DEBUG=true
-        export LNBITS_FORCE_HTTPS=false
+        # Set environment variables for this shell session
+        set -a  # automatically export all variables
+        source .env
+        set +a
         
-        echo "Exported environment variables:"
+        # Verify critical environment variables
+        echo "🔍 Environment verification:"
         echo "LNBITS_DATABASE_URL=$LNBITS_DATABASE_URL"
         echo "LNBITS_BACKEND_WALLET_CLASS=$LNBITS_BACKEND_WALLET_CLASS"
+        echo "PORT=$PORT"
         
-        echo "🔄 Testing LNBits startup first..."
-        # Test basic Python import before starting the service
-        echo "Testing Python import..."
-        poetry run python -c "import lnbits; print('✅ LNBits import successful')" 2>&1 || echo "❌ LNBits import failed"
+        # Test database connection first
+        echo "🗄️ Testing database connection..."
+        PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -d lnbits -c "SELECT 1;" || {
+          echo "❌ Database connection failed"
+          exit 1
+        }
         
-        # Test migration command output
-        echo "Testing migration command..."
-        poetry run python -m lnbits --help 2>&1 | head -5 || echo "❌ LNBits command failed"
+        # Run migration explicitly and capture output
+        echo "🔄 Running database migrations..."
+        poetry run python -m lnbits --migrate 2>&1 | tee migration.log || {
+          echo "❌ Migration failed"
+          cat migration.log
+          exit 1
+        }
         
-        echo "🔄 Starting LNBits process with improved error capture..."
-        # Start LNBits with unbuffered output and better logging
-        poetry run python -u -m lnbits 2>&1 | tee ../lnbits.log &
+        # Start LNBits with explicit error handling
+        echo "🚀 Starting LNBits server..."
+        poetry run python -m lnbits > lnbits.log 2>&1 &
         LNBITS_PID=$!
-        echo $LNBITS_PID > lnbits.pid
-        echo "LNBits started with PID: $LNBITS_PID"
+        echo "LNBits PID: $LNBITS_PID"
         
-        echo "⏳ Waiting for LNBits to initialize..."
-        # Monitor the log in real-time for the first few seconds
-        sleep 1
-        echo "📋 Log output after 1 second:"
-        cat ../lnbits.log 2>/dev/null || echo "No log output yet"
-        
-        sleep 2
-        echo "📋 Log output after 3 seconds total:"
-        cat ../lnbits.log 2>/dev/null || echo "No log output yet"
-        
-        # Check if process is still alive after 3 seconds
-        if ! ps -p $LNBITS_PID > /dev/null; then
-          echo "❌ LNBits process died within 3 seconds!"
-          echo "📋 Full log contents:"
-          cat ../lnbits.log 2>/dev/null || echo "No log file found"
-          echo "📋 Process exit status:"
-          wait $LNBITS_PID
-          echo "Exit code: $?"
-          exit 1
-        fi
-        
-        # Wait more and check again
-        sleep 7
-        echo "📋 Log output after 10 seconds total:"
-        cat ../lnbits.log 2>/dev/null || echo "No log file found"
-        
-        echo "📋 Checking LNBits process status..."
-        if ps -p $LNBITS_PID > /dev/null; then
-          echo "✅ LNBits process is running"
-        else
-          echo "❌ LNBits process died during startup! Full logs:"
-          cat ../lnbits.log 2>/dev/null || echo "No log file found"
-          exit 1
-        fi
-        
-        echo "🌐 Waiting for HTTP server to be ready..."
-        for i in {1..24}; do
-          if curl -f http://localhost:5000/ --max-time 3 2>/dev/null; then
-            echo "✅ LNBits HTTP server is ready!"
-            break
-          else
-            echo "Attempt $i/24: HTTP server not ready yet..."
-            if ! ps -p $LNBITS_PID > /dev/null; then
-              echo "❌ LNBits process died during startup!"
-              cat ../lnbits.log
-              exit 1
-            fi
-            sleep 5
+        # Monitor startup
+        for i in {1..30}; do
+          if ! ps -p $LNBITS_PID > /dev/null; then
+            echo "❌ LNBits process died after $i seconds"
+            echo "📋 Error log:"
+            cat lnbits.log
+            exit 1
           fi
+          
+          if curl -f http://localhost:5001/ --max-time 2 2>/dev/null; then
+            echo "✅ LNBits is ready!"
+            break
+          fi
+          
+          echo "Waiting for LNBits... ($i/30)"
+          sleep 2
         done
         
-        # Final check
-        if ! curl -f http://localhost:5000/ --max-time 3; then
-          echo "❌ LNBits failed to start HTTP server"
+        # Final verification
+        if ! curl -f http://localhost:5001/ --max-time 5; then
+          echo "❌ LNBits failed to respond"
           echo "📋 Process status:"
-          ps -p $LNBITS_PID || echo "Process not running"
-          echo "📋 LNBits logs:"
-          cat ../lnbits.log
+          ps -p $LNBITS_PID || echo "Process died"
+          echo "📋 Full log:"
+          cat lnbits.log
           exit 1
         fi
         
@@ -309,10 +273,10 @@ jobs:
         echo "Testing API endpoints with curl..."
         
         # Test health check
-        curl -f http://localhost:5000/api/v1/allowance || echo "Health check failed (expected - needs auth)"
+        curl -f http://localhost:5001/api/v1/allowance || echo "Health check failed (expected - needs auth)"
         
         # Test API documentation endpoint
-        curl -f http://localhost:5000/docs || echo "API docs endpoint check"
+        curl -f http://localhost:5001/docs || echo "API docs endpoint check"
         
     - name: Upload test screenshots
       uses: actions/upload-artifact@v4
