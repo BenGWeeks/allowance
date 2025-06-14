@@ -44,9 +44,11 @@ def allowance_start():
 
     task = create_permanent_unique_task("ext_allowance", wait_for_paid_invoices)
     scheduled_tasks.append(task)
-    
+
     # Start the allowance payment scheduler
-    scheduler_task = create_permanent_unique_task("ext_allowance_scheduler", check_and_process_allowances)
+    scheduler_task = create_permanent_unique_task(
+        "ext_allowance_scheduler", check_and_process_allowances
+    )
     scheduled_tasks.append(scheduler_task)
     logger.info("🚀 Started allowance payment scheduler")
 

@@ -21,7 +21,9 @@ async def m001_initial(db):
             next_payment_date TIMESTAMP NOT NULL,
             memo TEXT,
             active BOOLEAN DEFAULT TRUE,
-            end_date TIMESTAMP
+            end_date TIMESTAMP,
+            lnurlpay TEXT, -- LNURL pay string for compatibility
+            total INTEGER DEFAULT 0 -- Total amount processed
         );
     """
     )
