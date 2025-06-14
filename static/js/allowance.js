@@ -390,22 +390,56 @@ window.app = Vue.createApp({
         this.updateFiatRate(newVal)
       }
     }
+    },
+    // Move currency loading to a separate method for better control
+    loadCurrencies() {
+      console.log('🔄 Loading currencies...')
+      
+      // First try the core LNbits endpoint (no auth needed)
+      LNbits.api
+        .request('GET', '/api/v1/currencies')
+        .then(response => {
+          console.log('✅ Core currencies API response:', response.data)
+          if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+            this.currencies = ['sats', ...response.data]
+            console.log(`✅ Loaded ${this.currencies.length} currencies from core API`)
+          } else {
+            throw new Error('Invalid response format or empty currency list')
+          }
+        })
+        .catch(err => {
+          console.warn('⚠️ Core currencies API failed:', err)
+          console.log('🔄 Trying extension currencies endpoint...')
+          
+          // Fallback to extension's own currency endpoint
+          LNbits.api
+            .request('GET', '/allowance/api/v1/currencies')
+            .then(response => {
+              console.log('✅ Extension currencies API response:', response.data)
+              if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+                this.currencies = ['sats', ...response.data]
+                console.log(`✅ Loaded ${this.currencies.length} currencies from extension API`)
+              } else {
+                throw new Error('Invalid response format or empty currency list')
+              }
+            })
+            .catch(extensionErr => {
+              console.error('❌ Both currency APIs failed:', {
+                coreError: err,
+                extensionError: extensionErr
+              })
+              // Final fallback to basic currencies
+              this.currencies = ['sats', 'USD', 'EUR']
+              console.log('⚡ Using fallback currencies:', this.currencies)
+            })
+        })
+    }
   },
   created() {
     if (this.g?.user?.wallets?.length) {
       this.getAllowances()
     }
     
-    // Fetch available currencies from LNbits global endpoint
-    LNbits.api
-      .request('GET', '/api/v1/currencies')
-      .then(response => {
-        this.currencies = ['sats', ...response.data]
-      })
-      .catch(err => {
-        console.error('Failed to fetch currencies:', err)
-        // Fallback to basic currencies if API fails
-        this.currencies = ['sats', 'USD', 'EUR']
-      })
+    this.loadCurrencies()
   }
 })
