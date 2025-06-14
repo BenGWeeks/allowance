@@ -53,13 +53,18 @@ jobs:
         npm install playwright
         npx playwright install chromium
         
+    - name: Install PostgreSQL client
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y postgresql-client
+        
     - name: Setup LNBits environment
       run: |
         cd lnbits
         cp .env.example .env
         echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
-        # Create database first
-        PGPASSWORD=postgres createdb -h localhost -p 5432 -U postgres lnbits || echo "Database might already exist"
+        # Create database using psql
+        PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE lnbits;" || echo "Database might already exist"
         echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
         echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
         echo "HOST=0.0.0.0" >> .env
@@ -196,13 +201,18 @@ jobs:
         npm install playwright
         npx playwright install chromium
         
+    - name: Install PostgreSQL client
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y postgresql-client
+        
     - name: Setup LNBits environment
       run: |
         cd lnbits
         cp .env.example .env
         echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
-        # Create database first
-        PGPASSWORD=postgres createdb -h localhost -p 5432 -U postgres lnbits || echo "Database might already exist"
+        # Create database using psql
+        PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE lnbits;" || echo "Database might already exist"
         echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
         echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
         echo "HOST=0.0.0.0" >> .env
@@ -321,13 +331,18 @@ jobs:
         npm install playwright
         npx playwright install chromium
         
+    - name: Install PostgreSQL client
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y postgresql-client
+        
     - name: Setup LNBits environment
       run: |
         cd lnbits
         cp .env.example .env
         echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
-        # Create database first
-        PGPASSWORD=postgres createdb -h localhost -p 5432 -U postgres lnbits || echo "Database might already exist"
+        # Create database using psql
+        PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE lnbits;" || echo "Database might already exist"
         echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
         echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
         echo "HOST=0.0.0.0" >> .env
@@ -442,8 +457,8 @@ jobs:
         cd lnbits
         cp .env.example .env
         echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
-        # Create database first
-        PGPASSWORD=postgres createdb -h localhost -p 5432 -U postgres lnbits || echo "Database might already exist"
+        # Create database using psql
+        PGPASSWORD=postgres psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE lnbits;" || echo "Database might already exist"
         echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
         echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
         echo "HOST=0.0.0.0" >> .env
