@@ -78,22 +78,56 @@ jobs:
     - name: Start LNBits
       run: |
         cd lnbits
-        poetry run python -m lnbits &
-        echo $! > lnbits.pid
-        sleep 30
-        # Wait for LNBits to start on port 5000 (CI default)
-        echo "Waiting for LNBits to start on port 5000..."
-        for i in {1..30}; do
+        echo "🚀 Starting LNBits..."
+        echo "Environment check:"
+        poetry --version
+        python --version
+        ls -la .env
+        cat .env
+        
+        echo "🔄 Starting LNBits process..."
+        poetry run python -m lnbits > ../lnbits.log 2>&1 &
+        LNBITS_PID=$!
+        echo $LNBITS_PID > lnbits.pid
+        echo "LNBits started with PID: $LNBITS_PID"
+        
+        echo "⏳ Waiting for LNBits to initialize..."
+        sleep 15
+        
+        echo "📋 Checking LNBits process status..."
+        if ps -p $LNBITS_PID > /dev/null; then
+          echo "✅ LNBits process is running"
+        else
+          echo "❌ LNBits process died, checking logs..."
+          cat ../lnbits.log
+          exit 1
+        fi
+        
+        echo "🌐 Waiting for HTTP server to be ready..."
+        for i in {1..24}; do
           if curl -f http://localhost:5000/ --max-time 3 2>/dev/null; then
-            echo "✅ LNBits is running on port 5000"
+            echo "✅ LNBits HTTP server is ready!"
             break
           else
-            echo "Attempt $i/30: LNBits not ready yet, waiting..."
+            echo "Attempt $i/24: HTTP server not ready yet..."
+            if ! ps -p $LNBITS_PID > /dev/null; then
+              echo "❌ LNBits process died during startup!"
+              cat ../lnbits.log
+              exit 1
+            fi
             sleep 5
           fi
         done
+        
         # Final check
-        curl -f http://localhost:5000/ || (echo "❌ LNBits failed to start" && exit 1)
+        if ! curl -f http://localhost:5000/ --max-time 3; then
+          echo "❌ LNBits failed to start HTTP server"
+          echo "📋 Process status:"
+          ps -p $LNBITS_PID || echo "Process not running"
+          echo "📋 LNBits logs:"
+          cat ../lnbits.log
+          exit 1
+        fi
         
     - name: Create admin account
       run: |
