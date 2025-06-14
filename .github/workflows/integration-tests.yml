@@ -132,7 +132,7 @@ jobs:
         # Setup environment
         cp .env.example .env
         echo "LNBITS_BACKEND_WALLET_CLASS=FakeWallet" >> .env
-        echo "LNBITS_DATABASE_URL=sqlite:///data/database.sqlite3" >> .env
+        echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
         echo "HOST=0.0.0.0" >> .env
         echo "PORT=5001" >> .env
         echo "DEBUG=true" >> .env
@@ -157,22 +157,24 @@ jobs:
       run: |
         cd lnbits-app
         
-        # Create data directory and export environment variables
-        mkdir -p data
+        # Export environment variables  
         export LNBITS_BACKEND_WALLET_CLASS=FakeWallet
-        export LNBITS_DATABASE_URL=sqlite:///$(pwd)/data/database.sqlite3
+        export LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits
         export HOST=0.0.0.0
         export PORT=5001
         export DEBUG=true
         export LNBITS_FORCE_HTTPS=false
         
+        # Test database connection
+        echo "🗄️ Testing PostgreSQL connection..."
+        PGPASSWORD=postgres psql -h localhost -U postgres -d lnbits -c "SELECT version();" || {
+          echo "❌ Database connection failed"
+          exit 1
+        }
+        
         # Run migrations
         echo "🔄 Running database migrations..."
         poetry run python -m lnbits --migrate
-        
-        # Test SQLite database setup
-        echo "🗄️ Testing SQLite database setup..."
-        ls -la data/ || echo "Data directory created"
         
         # Test LNBits import
         echo "🐍 Testing LNBits import..."
