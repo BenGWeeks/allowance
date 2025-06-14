@@ -91,11 +91,24 @@ jobs:
       with:
         node-version: '18'
         
-    - name: Start LNBits with Docker
+    - name: Prepare extension files
       run: |
-        echo "🐳 Starting LNBits with Docker (like black-panther setup)..."
+        echo "📦 Preparing allowance extension files..."
         
-        # Start LNBits container exactly like the working setup
+        # Create temp directory with only extension files
+        mkdir -p /tmp/allowance-extension
+        cp *.py *.json /tmp/allowance-extension/ 2>/dev/null || true
+        cp -r static /tmp/allowance-extension/ 2>/dev/null || true
+        cp -r templates /tmp/allowance-extension/ 2>/dev/null || true
+        
+        echo "📋 Extension files prepared:"
+        ls -la /tmp/allowance-extension/
+        
+    - name: Start LNBits with pre-installed extension
+      run: |
+        echo "🐳 Starting LNBits with pre-installed allowance extension..."
+        
+        # Start LNBits container
         docker run -d \
           --name lnbits \
           -p 5001:5000 \
@@ -105,7 +118,14 @@ jobs:
           -e LNBITS_ALLOWED_USERS_ONLY=false \
           lnbits/lnbits:latest
         
-        echo "🔄 Waiting for LNBits to be ready..."
+        # Copy extension files immediately after container start
+        docker cp /tmp/allowance-extension/. lnbits:/app/lnbits/extensions/allowance/
+        
+        # Restart container to load extension
+        echo "🔄 Restarting container to load extension..."
+        docker restart lnbits
+        
+        echo "⏳ Waiting for LNBits to be ready..."
         for i in {1..30}; do
           if curl -f http://localhost:5001/ --max-time 3 2>/dev/null; then
             echo "✅ LNBits is ready!"
@@ -123,49 +143,13 @@ jobs:
           exit 1
         fi
         
-    - name: Install allowance extension
-      run: |
-        echo "📦 Installing allowance extension to Docker container..."
-        
-        # Copy only essential extension files to the running container
-        # Avoid copying tests/, .git/, lnbits/, node_modules/, etc.
-        
-        # Create temp directory with only extension files
-        mkdir -p /tmp/allowance-extension
-        cp *.py *.json /tmp/allowance-extension/ 2>/dev/null || true
-        cp -r static /tmp/allowance-extension/ 2>/dev/null || true
-        cp -r templates /tmp/allowance-extension/ 2>/dev/null || true
-        
-        # Copy the clean extension to container
-        docker cp /tmp/allowance-extension/. lnbits:/app/lnbits/extensions/allowance/
-        
-        # Clean up temp directory
-        rm -rf /tmp/allowance-extension
-        
-        echo "✅ Extension copied to container"
-        echo "📋 Checking copied files:"
+        # Verify extension files
+        echo "📋 Verifying extension installation:"
         docker exec lnbits ls -la /app/lnbits/extensions/allowance/
-        
-        echo "📋 Checking essential extension files:"
-        docker exec lnbits ls -la /app/lnbits/extensions/allowance/ | grep -E "\.(py|json)$"
-        
-        echo "📋 Checking manifest.json content:"
         docker exec lnbits cat /app/lnbits/extensions/allowance/manifest.json || echo "manifest.json not found"
         
-        # Restart container to load the new extension
-        echo "🔄 Restarting LNBits to load extension..."
-        docker restart lnbits
-        
-        # Wait for container to be ready again
-        echo "⏳ Waiting for LNBits to restart..."
-        for i in {1..30}; do
-          if curl -f http://localhost:5001/ --max-time 3 2>/dev/null; then
-            echo "✅ LNBits is ready after restart!"
-            break
-          fi
-          echo "Waiting for restart... ($i/30)"
-          sleep 2
-        done
+        # Clean up temp files
+        rm -rf /tmp/allowance-extension
         
     - name: Install Playwright
       run: |
