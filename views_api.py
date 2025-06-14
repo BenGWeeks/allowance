@@ -10,6 +10,7 @@ from lnbits.decorators import (
     require_invoice_key,
 )
 from lnbits.helpers import urlsafe_short_hash
+from lnbits.utils.exchange_rates import currencies, get_fiat_rate_satoshis
 from lnurl import encode as lnurl_encode
 from starlette.exceptions import HTTPException
 
@@ -124,6 +125,18 @@ async def api_allowance_delete(
 
 
 # ANY OTHER ENDPOINTS YOU NEED
+
+## Currency exchange rate endpoint for dynamic currency support
+## (currencies list comes from core LNBits /api/v1/currencies)
+
+@allowance_api_router.get("/api/v1/rate/{currency}", status_code=HTTPStatus.OK)
+async def api_check_fiat_rate(currency):
+    try:
+        rate = await get_fiat_rate_satoshis(currency)
+    except AssertionError:
+        rate = None
+    return {"rate": rate}
+
 
 ## This endpoint creates a payment
 

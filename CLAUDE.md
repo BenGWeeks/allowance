@@ -121,3 +121,6 @@ Fixed critical authentication issue in `views_api.py`:
 - Make sure you are working on the dev docker of lnbits (running on port 5001), not the production version (running on port 5000).
 
 - When looking for best practice of how to create an extension, look at https://github.com/lnbits/lnbits/tree/main/lnbits/extensions/lnurlp (do not download it, just look at the source)
+
+### Development Environment
+- Make sure you are working on the dev docker of lnbits (running on port 5001), not the production version (running on port 5000).

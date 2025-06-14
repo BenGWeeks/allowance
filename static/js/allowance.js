@@ -6,6 +6,8 @@ window.app = Vue.createApp({
   data() {
     return {
       allowances: [],
+      currencies: [],
+      fiatRates: {},
       allowanceTable: {
         columns: [
           {name: 'id', align: 'left', label: 'ID', field: 'id'},
@@ -343,6 +345,21 @@ window.app = Vue.createApp({
       navigator.clipboard.writeText(text)
       this.$q.notify({message: 'Copied to clipboard', type: 'positive'})
     },
+    updateFiatRate(currency) {
+      if (currency && currency !== 'sats' && currency !== 'satoshis') {
+        LNbits.api
+          .request('GET', '/api/v1/rate/' + currency, null)
+          .then(response => {
+            let rates = _.clone(this.fiatRates)
+            rates[currency] = response.data.rate
+            this.fiatRates = rates
+            console.log(`💱 Rate for ${currency}: 1 ${currency} = ${response.data.rate} sats`)
+          })
+          .catch(err => {
+            console.error(`Failed to get rate for ${currency}:`, err)
+          })
+      }
+    },
     toggleActive() {
       console.log('🔄 Manual toggle called - before:', this.formDialog.data.active)
       this.formDialog.data.active = !this.formDialog.data.active
@@ -373,11 +390,62 @@ window.app = Vue.createApp({
       }
       
       return date.toISOString()
+    },
+    loadCurrencies() {
+      console.log('🌍 Loading currencies from LNbits core API...')
+      
+      // Try without authentication first (public endpoint)
+      LNbits.api
+        .request('GET', '/api/v1/currencies')
+        .then(response => {
+          console.log('✅ Currencies loaded successfully:', response.data?.length || 0, 'currencies')
+          this.currencies = ['sats', ...response.data]
+        })
+        .catch(err => {
+          console.warn('⚠️ Public currencies API failed, trying with authentication...', err.message || err)
+          
+          // Try with authentication as fallback
+          if (this.g?.user?.wallets?.[0]?.inkey) {
+            LNbits.api
+              .request('GET', '/api/v1/currencies', this.g.user.wallets[0].inkey)
+              .then(response => {
+                console.log('✅ Currencies loaded with auth:', response.data?.length || 0, 'currencies')
+                this.currencies = ['sats', ...response.data]
+              })
+              .catch(authErr => {
+                console.error('❌ Failed to fetch currencies with auth:', authErr.message || authErr)
+                console.log('💡 Falling back to basic currencies')
+                this.currencies = ['sats', 'USD', 'EUR']
+              })
+          } else {
+            console.error('❌ Failed to fetch currencies and no auth available:', err.message || err)
+            console.log('💡 Falling back to basic currencies')
+            this.currencies = ['sats', 'USD', 'EUR']
+          }
+        })
+    }
+  },
+  watch: {
+    'formDialog.data.currency': function(newVal) {
+      if (newVal) {
+        this.updateFiatRate(newVal)
+      }
     }
   },
   created() {
     if (this.g?.user?.wallets?.length) {
       this.getAllowances()
+      this.loadCurrencies()
+    } else {
+      // If user data not loaded yet, retry after a short delay
+      setTimeout(() => {
+        if (this.g?.user?.wallets?.length) {
+          this.getAllowances()
+          this.loadCurrencies()
+        } else {
+          console.warn('User data still not available, loading basic currencies only')
+          this.currencies = ['sats', 'USD', 'EUR']
+        }
+      }, 1000)
     }
   }
-})
