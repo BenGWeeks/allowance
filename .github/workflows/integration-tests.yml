@@ -82,18 +82,6 @@ jobs:
     name: LNBits Integration Tests
     runs-on: ubuntu-latest
     needs: [extension-validation, python-tests]
-    
-    services:
-      lnbits:
-        image: lnbits/lnbits:latest
-        env:
-          LNBITS_BACKEND_WALLET_CLASS: FakeWallet
-          LNBITS_DATA_FOLDER: /data
-          LNBITS_ADMIN_UI: true
-          LNBITS_ALLOWED_USERS_ONLY: false
-          PORT: 5001
-        ports:
-          - 5001:5000
 
     steps:
     - uses: actions/checkout@v4
@@ -109,9 +97,21 @@ jobs:
         npm install playwright
         npx playwright install chromium
         
-    - name: Wait for LNBits to be ready
+    - name: Start LNBits with Docker
       run: |
-        echo "🔄 Waiting for LNBits Docker service to be ready..."
+        echo "🐳 Starting LNBits with Docker (like black-panther setup)..."
+        
+        # Start LNBits container exactly like the working setup
+        docker run -d \
+          --name lnbits \
+          -p 5001:5000 \
+          -e LNBITS_BACKEND_WALLET_CLASS=FakeWallet \
+          -e LNBITS_DATA_FOLDER=/data \
+          -e LNBITS_ADMIN_UI=true \
+          -e LNBITS_ALLOWED_USERS_ONLY=false \
+          lnbits/lnbits:latest
+        
+        echo "🔄 Waiting for LNBits to be ready..."
         for i in {1..30}; do
           if curl -f http://localhost:5001/ --max-time 3 2>/dev/null; then
             echo "✅ LNBits is ready!"
@@ -123,20 +123,22 @@ jobs:
         
         # Final check
         if ! curl -f http://localhost:5001/ --max-time 5; then
-          echo "❌ LNBits Docker service failed to start"
+          echo "❌ LNBits Docker container failed to start"
+          echo "📋 Container logs:"
+          docker logs lnbits
           exit 1
         fi
         
     - name: Install allowance extension
       run: |
-        echo "📦 Installing allowance extension to running LNBits..."
+        echo "📦 Installing allowance extension to Docker container..."
         
-        # Copy the entire extension directory
-        cp -r . lnbits/lnbits/extensions/allowance/
+        # Copy extension files to the running container
+        docker cp . lnbits:/app/lnbits/extensions/allowance/
         
-        echo "✅ Extension copied successfully"
+        echo "✅ Extension copied to container"
         echo "📋 Checking copied files:"
-        ls -la lnbits/lnbits/extensions/allowance/
+        docker exec lnbits ls -la /app/lnbits/extensions/allowance/
         
     - name: Create admin account
       run: |
@@ -186,7 +188,6 @@ jobs:
     - name: Stop LNBits
       if: always()
       run: |
-        cd lnbits
-        if [ -f lnbits.pid ]; then
-          kill $(cat lnbits.pid) || true
-        fi
+        echo "🛑 Stopping LNBits Docker container..."
+        docker stop lnbits || true
+        docker rm lnbits || true
