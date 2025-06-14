@@ -117,59 +117,39 @@ Fixed critical authentication issue in `views_api.py`:
 - Fixed 403 Forbidden errors when creating/editing allowances
 - Improved delete endpoint to return proper JSON response
 
-### Code Quality and CI/CD
+### Code Quality and Testing
 
-#### Local Testing Before Push
-Before pushing changes, always run local tests to ensure CI will pass:
+#### Local Development Testing (Optional)
+For development quality checks, you can run local linting (but this is not required for CI):
 
 ```bash
-# Create virtual environment for testing
+# Optional: Quick quality check during development
 python3 -m venv .test-venv
 source .test-venv/bin/activate
-
-# Install linting tools
 pip install black mypy ruff pydantic fastapi
 
-# Run all checks
-echo "=== BLACK CHECK ===" && black --check *.py
-echo "=== RUFF CHECK ===" && ruff check *.py
-echo "=== MYPY CHECK ===" && mypy --ignore-missing-imports *.py
+# Run checks
+black --check *.py && ruff check *.py && mypy --ignore-missing-imports *.py
 
 # Clean up
 rm -rf .test-venv
 ```
 
-#### GitHub Actions CI Pipeline
-The repository includes comprehensive CI checks:
-- **Black**: Code formatting validation (88 character line length)
-- **Ruff**: Modern Python linting with import organization
-- **MyPy**: Static type checking for better code quality
-- **Pyright**: Additional type checking
-- **Bundle/Prettier**: JavaScript/CSS formatting checks
+#### GitHub Actions Testing
+Following LNBits extension best practices, we focus on **functional testing** rather than heavy linting:
 
-#### Common CI Issues and Solutions
+- **Functional Tests**: End-to-end extension testing with real LNBits environment
+- **Integration Tests**: Full Playwright browser automation testing
+- **Database Tests**: PostgreSQL integration with actual extension workflows
 
-1. **Dependency Conflicts**: 
-   - Issue: Poetry dependency resolution fails with psycopg2-binary version conflicts
-   - Solution: Use Python constraint `">=3.9,<3.13"` in pyproject.toml
-   - Remove poetry.lock to force fresh dependency resolution
+**Philosophy**: *"The easier an extension is to review, the quicker the review process"* - LNBits Guidelines
 
-2. **Type Annotation Errors**:
-   - Use `list[Type]` instead of `typing.List[Type]` for Python 3.9+
-   - Convert objects properly: `CreateAllowanceData(**allowance.dict())` for updates
-   - Add proper type hints to function parameters
-
-3. **Import Organization**:
-   - Ruff automatically fixes import ordering with `ruff check --fix`
-   - Remove unused imports to pass linting
-
-4. **Line Length**:
-   - Black enforces 88 character line limit
-   - Split long strings across multiple lines when needed
-
-#### Acceptable Warnings
-- **C901 Complexity Warning**: Background task functions can exceed complexity limits
-- This warning doesn't fail CI but indicates function could be refactored
+#### Extension Development Approach
+Following LNBits extension guidelines:
+- ✅ **Submit fully working extensions**
+- ✅ **Minimize dependencies** 
+- ✅ **Keep it simple and reviewable**
+- ✅ **Focus on functionality over tooling**
 
 ### Development Environment
 - Make sure you are working on the dev docker of lnbits (running on port 5001), not the production version (running on port 5000)

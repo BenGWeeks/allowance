@@ -78,40 +78,34 @@ Tests assume:
 - Admin credentials: `ben.weeks` / `zUYmy&05&uZ$3kmf*^T8`
 - Fresh database for superuser creation test
 
-### Code Quality & CI/CD
+### Testing & Quality
 
-#### Local Development Testing
+#### Functional Testing Focus
 
-Before pushing changes, run local quality checks to ensure GitHub Actions CI will pass:
+Following LNBits extension best practices, we prioritize **functional testing** over heavy tooling:
 
 ```bash
-# Quick test script
-python3 -m venv .test-venv
-source .test-venv/bin/activate
+# Optional development quality check
+python3 -m venv .test-venv && source .test-venv/bin/activate
 pip install black mypy ruff pydantic fastapi
-
-# Run all linting checks
-black --check *.py          # Code formatting
-ruff check *.py             # Modern Python linting  
-mypy --ignore-missing-imports *.py  # Type checking
-
-# Clean up
+black --check *.py && ruff check *.py && mypy --ignore-missing-imports *.py
 rm -rf .test-venv
 ```
 
-#### GitHub Actions Pipeline
+#### GitHub Actions Testing
 
-The repository includes comprehensive automated testing:
+- **End-to-End Testing**: Full LNBits environment with PostgreSQL
+- **Browser Automation**: Playwright testing of actual user workflows  
+- **Extension Integration**: Real extension installation and testing
 
-- **Code Quality**: Black, Ruff, MyPy, Pyright
-- **Dependency Management**: Poetry with proper Python version constraints
-- **End-to-End Testing**: Playwright browser automation
-- **Integration Testing**: Full LNBits environment with PostgreSQL
+#### LNBits Extension Philosophy
+
+*"Only submit fully working extensions. Do not add dependencies. The easier an extension is to review, the quicker the review process."* - [LNBits Guidelines](https://github.com/lnbits/lnbits-extensions)
 
 #### Configuration Files
 
-- `pyproject.toml` - Python dependencies and tool configuration
-- `.github/workflows/` - CI/CD pipeline definitions
+- `pyproject.toml` - Minimal Python dependencies
+- `.github/workflows/test.yml` - Functional testing pipeline
 - `.gitignore` - Excludes data/, temp/, and test results
 
 ### Repository Structure
