@@ -199,27 +199,40 @@ jobs:
         echo "LNBITS_DATABASE_URL=$LNBITS_DATABASE_URL"
         echo "LNBITS_BACKEND_WALLET_CLASS=$LNBITS_BACKEND_WALLET_CLASS"
         
-        echo "🔄 Starting LNBits process..."
-        # Start LNBits with better logging
-        poetry run python -m lnbits > ../lnbits.log 2>&1 &
+        echo "🔄 Testing LNBits startup first..."
+        # Test basic Python import before starting the service
+        echo "Testing Python import..."
+        poetry run python -c "import lnbits; print('✅ LNBits import successful')" 2>&1 || echo "❌ LNBits import failed"
+        
+        # Test migration command output
+        echo "Testing migration command..."
+        poetry run python -m lnbits --help 2>&1 | head -5 || echo "❌ LNBits command failed"
+        
+        echo "🔄 Starting LNBits process with improved error capture..."
+        # Start LNBits with unbuffered output and better logging
+        poetry run python -u -m lnbits 2>&1 | tee ../lnbits.log &
         LNBITS_PID=$!
         echo $LNBITS_PID > lnbits.pid
         echo "LNBits started with PID: $LNBITS_PID"
         
         echo "⏳ Waiting for LNBits to initialize..."
         # Monitor the log in real-time for the first few seconds
-        sleep 3
-        echo "📋 Initial log output (after 3 seconds):"
-        if [ -f ../lnbits.log ]; then
-          cat ../lnbits.log
-        else
-          echo "❌ No log file created yet"
-        fi
+        sleep 1
+        echo "📋 Log output after 1 second:"
+        cat ../lnbits.log 2>/dev/null || echo "No log output yet"
+        
+        sleep 2
+        echo "📋 Log output after 3 seconds total:"
+        cat ../lnbits.log 2>/dev/null || echo "No log output yet"
         
         # Check if process is still alive after 3 seconds
         if ! ps -p $LNBITS_PID > /dev/null; then
-          echo "❌ LNBits process died within 3 seconds! Full logs:"
+          echo "❌ LNBits process died within 3 seconds!"
+          echo "📋 Full log contents:"
           cat ../lnbits.log 2>/dev/null || echo "No log file found"
+          echo "📋 Process exit status:"
+          wait $LNBITS_PID
+          echo "Exit code: $?"
           exit 1
         fi
         
