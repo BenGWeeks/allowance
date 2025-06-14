@@ -7,8 +7,8 @@ on:
     branches: [ main ]
 
 jobs:
-  setup-lnbits:
-    name: Setup LNBits Environment
+  extension-setup:
+    name: Setup Extension Environment  
     runs-on: ubuntu-latest
     
     services:
@@ -65,52 +65,6 @@ jobs:
       run: |
         cp -r . lnbits/lnbits/extensions/allowance/
         
-    - name: Start LNBits and verify
-      run: |
-        cd lnbits
-        poetry run python -m lnbits &
-        echo $! > lnbits.pid
-        sleep 30
-        curl --retry 10 --retry-delay 3 --retry-connrefused http://localhost:5000/
-        
-    - name: Cache LNBits setup
-      uses: actions/cache@v3
-      with:
-        path: |
-          lnbits/
-          node_modules/
-        key: lnbits-setup-${{ runner.os }}-${{ hashFiles('**/pyproject.toml', '**/package*.json') }}
-
-  extension-setup:
-    name: Setup Extension Environment  
-    needs: setup-lnbits
-    runs-on: ubuntu-latest
-    
-    services:
-      postgres:
-        image: postgres:13
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: lnbits
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Restore LNBits setup
-      uses: actions/cache@v3
-      with:
-        path: |
-          lnbits/
-          node_modules/
-        key: lnbits-setup-${{ runner.os }}-${{ hashFiles('**/pyproject.toml', '**/package*.json') }}
-        
     - name: Start LNBits
       run: |
         cd lnbits
@@ -159,13 +113,42 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Restore LNBits setup
-      uses: actions/cache@v3
+    - name: Set up Python
+      uses: actions/setup-python@v4
       with:
-        path: |
-          lnbits/
-          node_modules/
-        key: lnbits-setup-${{ runner.os }}-${{ hashFiles('**/pyproject.toml', '**/package*.json') }}
+        python-version: '3.10'
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install poetry
+        git clone https://github.com/lnbits/lnbits.git
+        cd lnbits
+        poetry install
+        cd ..
+        
+    - name: Install Playwright
+      run: |
+        npm init -y
+        npm install playwright
+        npx playwright install chromium
+        
+    - name: Setup LNBits environment
+      run: |
+        cd lnbits
+        cp .env.example .env
+        echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
+        echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
+        echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
+        
+    - name: Copy allowance extension
+      run: |
+        cp -r . lnbits/lnbits/extensions/allowance/
         
     - name: Start LNBits
       run: |
@@ -231,13 +214,42 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Restore LNBits setup
-      uses: actions/cache@v3
+    - name: Set up Python
+      uses: actions/setup-python@v4
       with:
-        path: |
-          lnbits/
-          node_modules/
-        key: lnbits-setup-${{ runner.os }}-${{ hashFiles('**/pyproject.toml', '**/package*.json') }}
+        python-version: '3.10'
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install poetry
+        git clone https://github.com/lnbits/lnbits.git
+        cd lnbits
+        poetry install
+        cd ..
+        
+    - name: Install Playwright
+      run: |
+        npm init -y
+        npm install playwright
+        npx playwright install chromium
+        
+    - name: Setup LNBits environment
+      run: |
+        cd lnbits
+        cp .env.example .env
+        echo "LNBITS_BACKEND_WALLET_CLASS=VoidWallet" >> .env
+        echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
+        echo "LNBITS_EXTENSIONS_DEFAULT_INSTALL=allowance" >> .env
+        
+    - name: Copy allowance extension
+      run: |
+        cp -r . lnbits/lnbits/extensions/allowance/
         
     - name: Start LNBits
       run: |
