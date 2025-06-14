@@ -24,6 +24,14 @@ To install LNbits see: https://github.com/lnbits/lnbits/blob/main/docs/guide/ins
 6. When you're ready to share your manifest so others can install it, edit `/lnbits/allowance/manifest.json` to include the git credentials of your extension.
 7. IMPORTANT: If you want your extension to be added to the official LNbits manifest, please follow the guidelines here: https://github.com/lnbits/lnbits-extensions#important
 
+### Features
+
+- **Recurring Transfers**: Set up automated transfers between wallets
+- **Flexible Scheduling**: Support for various frequencies (per second, per minute, hourly, daily, weekly, monthly)
+- **Currency Support**: Multi-currency support with real-time conversion hints
+- **Vue.js Frontend**: Modern reactive interface following LNBits patterns
+- **Comprehensive Testing**: Full Playwright test suite for automated testing
+
 ### Testing
 
 The extension includes a comprehensive test suite using Playwright for automated browser testing.
@@ -60,12 +68,39 @@ node create-allowance.js
 #### Test Results
 
 - All tests use proper exit codes (0 for success, 1 for failure)
-- Screenshots are saved to `tests/test-results/` for debugging
+- Screenshots are saved to `tests/test-results/` (excluded from Git)
 - Tests are designed for CI/CD integration
 
 #### Test Environment
 
 Tests assume:
-- LNBits running on `http://localhost:5001`
+- LNBits running on `http://localhost:5001` (development environment)
 - Admin credentials: `ben.weeks` / `zUYmy&05&uZ$3kmf*^T8`
 - Fresh database for superuser creation test
+
+### Repository Structure
+
+```
+allowance/
+├── tests/                    # Playwright test scripts
+│   ├── create-admin-account.js
+│   ├── login-test.js
+│   ├── enable-allowance.js
+│   ├── create-allowance.js
+│   └── run_test.sh
+├── static/js/               # Vue.js frontend
+├── templates/allowance/     # HTML templates
+├── crud.py                  # Database operations
+├── views.py                 # Frontend routes
+├── views_api.py            # API endpoints
+└── manifest.json           # Extension manifest
+```
+
+### Recent Improvements
+
+- ✅ Fixed API authentication issues (403 Forbidden errors)
+- ✅ Resolved Vue.js mounting and form submission problems
+- ✅ Added comprehensive currency support with conversion hints
+- ✅ Implemented proper form validation with required field defaults
+- ✅ Clean repository structure with proper .gitignore patterns
+- ✅ Full test coverage with descriptive naming conventions
