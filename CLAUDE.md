@@ -34,37 +34,34 @@
    - **Solution**: Ensure all fields are properly mapped in `openUpdateDialog()`
 
 ### Testing Suite
-The extension includes comprehensive Playwright test scripts in `/tests/`:
+The extension includes comprehensive test suites for both API and UI testing:
+
+#### Test Organization
+- **API Tests**: `/tests/api_*.py` - Python-based API endpoint testing
+- **UI Tests**: `/tests/ui_*.js` - Playwright browser automation testing
+- **Test Runners**: Shell scripts to orchestrate all testing
 
 #### Test Scripts
-- **create-admin-account.js** - Creates initial superuser account on fresh LNBits install
-  - Detects "Set up the Superuser account below." screen
-  - Fills credentials using aria-label selectors
-  - Confirms success by finding "Add a new wallet" text
-  
-- **login-test.js** - Tests admin login functionality
-  - Handles switching from "Create Account" to Login screen
-  - Tests with actual admin credentials
-  - Confirms success with "Add a new wallet" visibility
-  
-- **enable-allowance.js** - Enables the allowance extension
-  - Navigates to Extensions page
-  - Finds Allowance card specifically
-  - Clicks Enable button (not Manage)
-  - Confirms success by checking for "Disable" button
-  
-- **create-allowance.js** - End-to-end allowance creation test
-  - Logs in, navigates to extension, creates allowance
-  - Uses proper form selectors and waits
-  - Verifies allowance appears in table
-  
-- **run_test.sh** - Test orchestration script
-  - Runs all tests in sequence
-  - Proper exit codes for CI/CD integration
-  - Screenshots saved to `tests/test-results/`
+**UI Tests (Playwright):**
+- **ui_create_admin_account.js** - Creates initial superuser account on fresh LNBits install
+- **ui_login_test.js** - Tests admin login functionality
+- **ui_enable_allowance.js** - Enables the allowance extension via UI
+- **ui_create_allowance.js** - End-to-end allowance creation test
+- **ui_edit_allowance.js** - Tests allowance editing through forms
+- **ui_delete_allowance.js** - Tests allowance deletion functionality
+
+**API Tests (Python):**
+- **api_allowances.py** - Tests core allowance CRUD API endpoints
+
+**Test Runners:**
+- **run_all_tests.sh** - Runs both API and UI tests in sequence
+- **run_api_tests.sh** - Runs only API tests (Python)
+- **run_ui_tests.sh** - Runs only UI tests (Playwright)
 
 #### Test Naming Conventions
-- Use descriptive action-based names (create-allowance.js, not step1.js)
+- **API Tests**: `api_*.py` - Python files for testing API endpoints
+- **UI Tests**: `ui_*.js` - JavaScript files for testing user interface
+- Use descriptive action-based names (ui_create_allowance.js, not step1.js)
 - Single-purpose scripts with clear goals
 - Chain scripts by calling previous scripts when needed
 
@@ -89,12 +86,12 @@ The repository follows a clean structure with proper .gitignore patterns:
 
 ```
 allowance/
-├── tests/                    # Playwright test scripts
-│   ├── create-admin-account.js
-│   ├── login-test.js
-│   ├── enable-allowance.js
-│   ├── create-allowance.js
-│   ├── run_test.sh
+├── tests/                    # Comprehensive test suite
+│   ├── api_*.py             # API endpoint tests (Python)
+│   ├── ui_*.js              # UI automation tests (Playwright)
+│   ├── run_all_tests.sh     # Run all tests
+│   ├── run_api_tests.sh     # Run API tests only
+│   ├── run_ui_tests.sh      # Run UI tests only
 │   └── test-results/        # Generated screenshots (ignored)
 ├── static/js/               # Vue.js frontend
 ├── templates/allowance/     # HTML templates

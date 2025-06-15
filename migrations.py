@@ -2,8 +2,9 @@
 # If you create a new release for your extension ,
 # remember the migration file is like a blockchain, never edit only add!
 
+from typing import Any
 
-async def m001_initial(db):
+async def m001_initial(db: Any) -> None:
     """
     Initial templates table with lightning address and currency support.
     """

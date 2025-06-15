@@ -38,39 +38,67 @@ To install LNbits see: https://github.com/lnbits/lnbits/blob/main/docs/guide/ins
 
 ### Testing
 
-The extension includes a comprehensive test suite using Playwright for automated browser testing.
+The extension includes comprehensive test suites for both API and UI testing.
+
+#### Test Organization
+
+- **API Tests**: `/tests/api_*.py` - Python-based API endpoint testing
+- **UI Tests**: `/tests/ui_*.js` - Playwright browser automation testing  
+- **Test Runners**: Shell scripts to orchestrate all testing
 
 #### Prerequisites
 
 ```bash
 cd tests
+# For UI tests
 npm install
+# For API tests  
+python3 -m venv .api_test_env
+source .api_test_env/bin/activate
+pip install httpx pytest pytest-asyncio
 ```
 
 #### Test Scripts
 
-- **create-admin-account.js** - Creates initial superuser account on fresh LNBits install
-- **login-test.js** - Tests admin login functionality  
-- **enable-allowance.js** - Enables the allowance extension via UI
-- **create-allowance.js** - End-to-end test that creates a new allowance
-- **test_scheduled_payments.py** - Automated test for scheduled payment functionality
-- **run_test.sh** - Runs all tests in sequence
+**API Tests (Python):**
+- **api_allowance_create.py** - Test POST /api/v1/allowance endpoint
+- **api_allowance_read.py** - Test GET /api/v1/allowance endpoints  
+- **api_allowance_update.py** - Test PUT /api/v1/allowance/{id} endpoint
+- **api_allowance_delete.py** - Test DELETE /api/v1/allowance/{id} endpoint
+- **api_currency_rate.py** - Test GET /api/v1/rate/{currency} endpoint
+
+**UI Tests (Playwright):**
+- **ui_create_admin_account.js** - Creates initial superuser account
+- **ui_login_test.js** - Tests admin login functionality
+- **ui_enable_allowance.js** - Enables the allowance extension via UI
+- **ui_create_allowance.js** - End-to-end allowance creation test
+- **ui_edit_allowance.js** - Tests allowance editing through forms
+- **ui_delete_allowance.js** - Tests allowance deletion functionality
+
+**Test Runners:**
+- **run_all_tests.sh** - Runs both API and UI tests in sequence
+- **run_api_tests.sh** - Runs only API tests (Python)
+- **run_ui_tests.sh** - Runs only UI tests (Playwright)
 
 #### Running Tests
 
 ```bash
-# Run all tests
+# Run all tests (API + UI)
 cd tests
-./run_test.sh
+./run_all_tests.sh
 
-# Run individual tests
-node create-admin-account.js
-node login-test.js  
-node enable-allowance.js
-node create-allowance.js
+# Run only API tests
+./run_api_tests.sh
 
-# Test scheduled payment functionality
-python test_scheduled_payments.py
+# Run only UI tests  
+./run_ui_tests.sh
+
+# Run individual API tests
+python3 api_allowance_create.py
+python3 api_currency_rate.py
+
+# Run individual UI tests
+npx playwright test ui_create_allowance.js
 ```
 
 #### Test Results
@@ -121,12 +149,12 @@ rm -rf .test-venv
 ```
 allowance/
 ├── .github/workflows/       # CI/CD pipeline configuration
-├── tests/                   # Playwright E2E test scripts
-│   ├── create-admin-account.js
-│   ├── login-test.js
-│   ├── enable-allowance.js
-│   ├── create-allowance.js
-│   └── run_test.sh
+├── tests/                   # Comprehensive test suite
+│   ├── api_*.py            # API endpoint tests (Python)
+│   ├── ui_*.js             # UI automation tests (Playwright)
+│   ├── run_all_tests.sh    # Run all tests
+│   ├── run_api_tests.sh    # Run API tests only
+│   └── run_ui_tests.sh     # Run UI tests only
 ├── static/js/              # Vue.js frontend
 ├── templates/allowance/    # HTML templates
 ├── crud.py                 # Database operations
