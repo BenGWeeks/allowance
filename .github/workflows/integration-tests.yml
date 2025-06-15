@@ -84,6 +84,21 @@ jobs:
     name: LNBits Integration Tests
     runs-on: ubuntu-latest
     needs: [extension-validation, python-tests]
+    
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: lnbits
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
 
     steps:
     - uses: actions/checkout@v4
@@ -93,7 +108,61 @@ jobs:
       with:
         python-version: '3.10'
         
-    - name: Simplified Integration Test
+    - name: Install LNBits
+      run: |
+        echo "📦 Installing LNBits..."
+        
+        # Install Poetry
+        pip install poetry
+        
+        # Clone LNBits
+        git clone https://github.com/lnbits/lnbits.git lnbits-app
+        cd lnbits-app
+        
+        # Install dependencies
+        poetry install --without dev
+        
+        # Setup environment
+        cp .env.example .env
+        echo "LNBITS_BACKEND_WALLET_CLASS=FakeWallet" >> .env
+        echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
+        echo "HOST=0.0.0.0" >> .env
+        echo "PORT=5001" >> .env
+        echo "DEBUG=true" >> .env
+        echo "LNBITS_FORCE_HTTPS=false" >> .env
+        
+        cd ..
+        
+    - name: Deploy allowance extension
+      run: |
+        echo "📦 Deploying allowance extension to LNBits..."
+        
+        # Create extension directory
+        mkdir -p lnbits-app/lnbits/extensions/allowance
+        
+        # Copy extension files
+        cp *.py *.json lnbits-app/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp -r static lnbits-app/lnbits/extensions/allowance/ 2>/dev/null || true
+        cp -r templates lnbits-app/lnbits/extensions/allowance/ 2>/dev/null || true
+        
+        echo "📋 Extension deployed with files:"
+        ls -la lnbits-app/lnbits/extensions/allowance/
+        
+        # Verify extension structure
+        if [ -f "lnbits-app/lnbits/extensions/allowance/manifest.json" ]; then
+          echo "✅ Extension manifest deployed successfully"
+          python3 -c "
+          import json
+          manifest = json.load(open('lnbits-app/lnbits/extensions/allowance/manifest.json'))
+          print(f'📋 Extension: {manifest[\"name\"]} v{manifest[\"version\"]}')
+          print(f'📝 Description: {manifest[\"short_description\"]}')
+          "
+        else
+          echo "❌ Extension deployment failed - manifest.json not found"
+          exit 1
+        fi
+        
+    - name: Basic validation tests
       run: |
         echo "🚀 Running simplified integration tests..."
         
