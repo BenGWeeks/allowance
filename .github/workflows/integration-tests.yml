@@ -145,6 +145,8 @@ jobs:
         cp *.py lnbits-app/lnbits/extensions/allowance/
         echo "📁 Copying extension configuration files..."
         cp manifest.json config.json lnbits-app/lnbits/extensions/allowance/
+        echo "📁 Copying documentation files..."
+        cp *.md lnbits-app/lnbits/extensions/allowance/ || echo "No markdown files to copy"
         echo "📁 Copying static directory..."
         cp -r static lnbits-app/lnbits/extensions/allowance/
         echo "📁 Copying templates directory..."
@@ -156,14 +158,13 @@ jobs:
         # Verify extension structure
         if [ -f "lnbits-app/lnbits/extensions/allowance/manifest.json" ]; then
           echo "✅ Extension manifest deployed successfully"
-          python3 -c "
-          import json
-          manifest = json.load(open('lnbits-app/lnbits/extensions/allowance/manifest.json'))
-          print(f'📋 Extension: {manifest[\"name\"]} v{manifest[\"version\"]}')
-          print(f'📝 Description: {manifest[\"short_description\"]}')
-          "
+          cat lnbits-app/lnbits/extensions/allowance/manifest.json
+          echo ""
+          echo "✅ Extension deployment completed"
         else
           echo "❌ Extension deployment failed - manifest.json not found"
+          echo "📋 Contents of extension directory:"
+          ls -la lnbits-app/lnbits/extensions/allowance/ || echo "Directory not found"
           exit 1
         fi
         
