@@ -155,46 +155,40 @@ jobs:
         
         cd ..
         
-    # Temporarily disabled to test if extension is causing startup issues
-    # - name: Deploy allowance extension
-    #   run: |
-    #     echo "📦 Deploying allowance extension to LNBits..."
-    #     
-    #     # Create extension directory
-    #     mkdir -p lnbits-app/lnbits/extensions/allowance
-    #     
-    #     # Copy extension files
-    #     echo "📁 Copying Python files..."
-    #     cp *.py lnbits-app/lnbits/extensions/allowance/
-    #     echo "📁 Copying extension configuration files..."
-    #     cp manifest.json config.json lnbits-app/lnbits/extensions/allowance/
-    #     echo "📁 Copying documentation files..."
-    #     cp *.md lnbits-app/lnbits/extensions/allowance/ || echo "No markdown files to copy"
-    #     echo "📁 Copying static directory..."
-    #     cp -r static lnbits-app/lnbits/extensions/allowance/
-    #     echo "📁 Copying templates directory..."
-    #     cp -r templates lnbits-app/lnbits/extensions/allowance/
-    #     
-    #     echo "📋 Extension deployed with files:"
-    #     ls -la lnbits-app/lnbits/extensions/allowance/
-    #     
-    #     # Verify extension structure
-    #     if [ -f "lnbits-app/lnbits/extensions/allowance/manifest.json" ]; then
-    #       echo "✅ Extension manifest deployed successfully"
-    #       cat lnbits-app/lnbits/extensions/allowance/manifest.json
-    #       echo ""
-    #       echo "✅ Extension deployment completed"
-    #     else
-    #       echo "❌ Extension deployment failed - manifest.json not found"
-    #       echo "📋 Contents of extension directory:"
-    #       ls -la lnbits-app/lnbits/extensions/allowance/ || echo "Directory not found"
-    #       exit 1
-    #     fi
-        
-    - name: Test LNBits without extension
+    - name: Deploy allowance extension
       run: |
-        echo "🧪 Testing LNBits startup without allowance extension..."
-        echo "This will help determine if the extension is causing startup issues."
+        echo "📦 Deploying allowance extension to LNBits..."
+        
+        # Create extension directory
+        mkdir -p lnbits-app/lnbits/extensions/allowance
+        
+        # Copy extension files
+        echo "📁 Copying Python files..."
+        cp *.py lnbits-app/lnbits/extensions/allowance/
+        echo "📁 Copying extension configuration files..."
+        cp manifest.json config.json lnbits-app/lnbits/extensions/allowance/
+        echo "📁 Copying documentation files..."
+        cp *.md lnbits-app/lnbits/extensions/allowance/ || echo "No markdown files to copy"
+        echo "📁 Copying static directory..."
+        cp -r static lnbits-app/lnbits/extensions/allowance/
+        echo "📁 Copying templates directory..."
+        cp -r templates lnbits-app/lnbits/extensions/allowance/
+        
+        echo "📋 Extension deployed with files:"
+        ls -la lnbits-app/lnbits/extensions/allowance/
+        
+        # Verify extension structure
+        if [ -f "lnbits-app/lnbits/extensions/allowance/manifest.json" ]; then
+          echo "✅ Extension manifest deployed successfully"
+          cat lnbits-app/lnbits/extensions/allowance/manifest.json
+          echo ""
+          echo "✅ Extension deployment completed"
+        else
+          echo "❌ Extension deployment failed - manifest.json not found"
+          echo "📋 Contents of extension directory:"
+          ls -la lnbits-app/lnbits/extensions/allowance/ || echo "Directory not found"
+          exit 1
+        fi
         
     - name: Install PostgreSQL client
       run: |
