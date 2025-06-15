@@ -26,12 +26,13 @@ echo
 echo "Running core UI test sequence..."
 
 TESTS=(
-    "ui_create_admin_account.js"
-    "ui_login_test.js" 
-    "ui_enable_allowance.js"
-    "ui_create_allowance.js"
-    "ui_edit_allowance.js"
-    "ui_delete_allowance.js"
+    "ui/create_admin_account.js"
+    "ui/login_test.js" 
+    "ui/enable_allowance.js"
+    "ui/create_allowance.js"
+    "ui/edit_allowance.js"
+    "ui/delete_allowance.js"
+    "ui/check-currencies.js"
 )
 
 PASSED=0

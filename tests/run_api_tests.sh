@@ -29,12 +29,12 @@ echo "📦 Installing API test dependencies..."
 pip install httpx pytest pytest-asyncio
 
 # Find and run API test files
-API_TESTS=($(find . -name "api_*.py" -type f))
+API_TESTS=($(find ./api -name "*.py" -type f))
 
 if [ ${#API_TESTS[@]} -eq 0 ]; then
-    echo "⚠️ No API test files found (api_*.py)"
+    echo "⚠️ No API test files found in ./api/"
     echo "📁 Current directory contents:"
-    ls -la api_*.py 2>/dev/null || echo "  No api_*.py files found"
+    ls -la ./api/*.py 2>/dev/null || echo "  No API test files found"
     exit 0
 fi
 
