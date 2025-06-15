@@ -211,6 +211,7 @@
               :rules="[val => val > 0 || 'Amount must be greater than 0']"
               min="1"
               step="1"
+              input-style="text-align: left"
               :hint="formDialog.data.currency && formDialog.data.currency !== 'sats' && fiatRates[formDialog.data.currency] ? `${formDialog.data.amount || 0} ${formDialog.data.currency} = ${Math.round((formDialog.data.amount || 0) * fiatRates[formDialog.data.currency])} sats (actual conversion calculated at the time of sending)` : ''"
             >
             </q-input>
@@ -311,4 +312,11 @@
 {% block scripts %} 
 {{ window_vars(user) }}
 <script src="/allowance/static/js/allowance.js"></script>
+<style>
+/* Override Quasar's q-gutter-sm margin on first child to prevent unwanted indentation */
+.q-gutter-sm > *:first-child,
+.q-gutter-x-sm > *:first-child {
+  margin-left: 0 !important;
+}
+</style>
 {% endblock %}
