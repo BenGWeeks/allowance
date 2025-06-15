@@ -71,6 +71,20 @@ jobs:
         echo "🔍 Running Flake8 linter..."
         flake8 *.py --max-line-length=100 --ignore=E203,W503 || echo "Flake8 issues found"
         
+        echo "🔬 Testing Pydantic compatibility..."
+        python -c "
+        import sys
+        try:
+            import pydantic
+            print(f'✅ Pydantic version: {pydantic.VERSION}')
+            # Test if we're using v1 compatible imports
+            from pydantic import BaseModel, validator
+            print('✅ Pydantic v1 imports successful')
+        except ImportError as e:
+            print(f'❌ Pydantic import error: {e}')
+            sys.exit(1)
+        "
+        
         echo "🔬 Running basic import checks..."
         python -c "
         try:
