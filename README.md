@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This is an LNBits extension that allows you to setup recurring transfers between wallets.
+This is an LNBits extension that allows you to setup recurring transfers from your LNBits wallet to any Lightning address (user@domain.com) or LNURL-pay endpoint. This enables scheduled payments to external services, not just wallet-to-wallet transfers within the same LNBits instance.
 
 ✅ CI/CD Status: Tests configured and working
 
@@ -28,8 +28,10 @@ To install LNbits see: https://github.com/lnbits/lnbits/blob/main/docs/guide/ins
 
 ### Features
 
-- **Recurring Transfers**: Set up automated transfers between wallets
-- **Flexible Scheduling**: Support for various frequencies (per second, per minute, hourly, daily, weekly, monthly)
+- **Lightning Address Support**: Send recurring payments to any Lightning address (user@domain.com) or LNURL-pay endpoint
+- **Scheduled Payments**: Automated payment execution with 1-minute minimum frequency using background tasks
+- **Flexible Scheduling**: Support for various frequencies (minutely, hourly, daily, weekly, monthly, yearly)
+- **Payment Tracking**: All payments are tagged as "allowance" payments in the LNBits payment history
 - **Currency Support**: Multi-currency support with real-time conversion hints
 - **Vue.js Frontend**: Modern reactive interface following LNBits patterns
 - **Comprehensive Testing**: Full Playwright test suite for automated testing
@@ -51,6 +53,7 @@ npm install
 - **login-test.js** - Tests admin login functionality  
 - **enable-allowance.js** - Enables the allowance extension via UI
 - **create-allowance.js** - End-to-end test that creates a new allowance
+- **test_scheduled_payments.py** - Automated test for scheduled payment functionality
 - **run_test.sh** - Runs all tests in sequence
 
 #### Running Tests
@@ -65,6 +68,9 @@ node create-admin-account.js
 node login-test.js  
 node enable-allowance.js
 node create-allowance.js
+
+# Test scheduled payment functionality
+python test_scheduled_payments.py
 ```
 
 #### Test Results
