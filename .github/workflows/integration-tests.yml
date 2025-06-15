@@ -265,6 +265,43 @@ jobs:
         
         echo "🎉 LNBits accessibility tests passed!"
         
+    - name: Install Playwright
+      run: |
+        npm init -y
+        npm install playwright
+        npx playwright install chromium
+        npx playwright install-deps chromium
+        
+    - name: Run Playwright tests
+      run: |
+        cd tests
+        echo "🎭 Running Playwright tests..."
+        
+        # Create test results directory
+        mkdir -p test-results
+        
+        # Create admin account
+        echo "👤 Creating admin account..."
+        node create-admin-account.js
+        
+        # Enable allowance extension
+        echo "🔌 Enabling allowance extension..."
+        node enable-allowance.js
+        
+        # Test allowance CRUD operations
+        echo "✅ Testing allowance creation..."
+        node create-allowance.js "Test Daily" 50 daily
+        node create-allowance.js "Test Weekly" 100 weekly
+        node create-allowance.js "Test Monthly" 200 monthly
+        
+        echo "✏️ Testing allowance editing..."
+        node edit-allowance.js "Test Daily" "Updated Daily" 75 weekly
+        
+        echo "🗑️ Testing allowance deletion..."
+        node delete-allowance.js "Updated Daily"
+        
+        echo "🎉 All Playwright tests passed!"
+        
     - name: Upload test screenshots
       uses: actions/upload-artifact@v4
       if: always()
