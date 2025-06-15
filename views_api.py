@@ -122,7 +122,7 @@ async def api_allowance_delete(
         )
 
     await delete_allowance(allowance_id)
-    return "", HTTPStatus.NO_CONTENT
+    return {"message": "Allowance deleted successfully"}
 
 
 # ANY OTHER ENDPOINTS YOU NEED
