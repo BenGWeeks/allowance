@@ -228,12 +228,25 @@ jobs:
         echo "🔄 Running database migrations..."
         poetry run lnbits --migrate
         
-        # Start LNBits with logging (using proper command from docs)
+        # Start LNBits with logging and timeout (using proper command from docs)
         echo "🚀 Starting LNBits..."
-        poetry run lnbits --port 5001 --host 0.0.0.0 > ../lnbits.log 2>&1 &
+        timeout 300 poetry run lnbits --port 5001 --host 0.0.0.0 > ../lnbits.log 2>&1 &
         LNBITS_PID=$!
         echo $LNBITS_PID > ../lnbits.pid
         echo "LNBits started with PID: $LNBITS_PID"
+        
+        # Give LNBits a moment to start
+        sleep 3
+        
+        # Check if process is still running
+        if ! ps -p $LNBITS_PID > /dev/null; then
+          echo "❌ LNBits process died immediately"
+          echo "📄 Log output:"
+          cat ../lnbits.log 2>/dev/null || echo "No log file found"
+          exit 1
+        fi
+        
+        echo "✅ LNBits process is running"
         
         cd ..
         
