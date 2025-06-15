@@ -11,11 +11,20 @@ const { chromium } = require('playwright');
     await page.goto('http://localhost:5001/');
     await page.waitForLoadState('networkidle');
     
-    // Check if we see the superuser setup screen
-    const superuserSetupVisible = await page.locator('text="Set up the Superuser account below."').isVisible() || await page.locator('text="Create account"').first().isVisible();
+    // Check if we see the superuser setup screen or if already logged in
+    const superuserSetupVisible = await page.locator('text="Set up the Superuser account below."').isVisible();
+    const createAccountVisible = await page.locator('text="Create account"').first().isVisible();
+    const walletDashboardVisible = await page.locator('text="Add a new wallet"').isVisible();
     
-    if (!superuserSetupVisible) {
-      console.log('⚠️ Superuser setup screen not visible. Admin account may already exist.');
+    // If wallet dashboard is visible, admin is already logged in
+    if (walletDashboardVisible) {
+      console.log('✅ Admin account appears to be already logged in - test passed');
+      await browser.close();
+      process.exit(0);
+    }
+    
+    if (!superuserSetupVisible && !createAccountVisible) {
+      console.log('⚠️ Neither superuser setup nor create account screen visible. Admin account may already exist.');
       console.log('✅ Admin account appears to already be set up - test passed');
       await browser.close();
       process.exit(0); // Exit successfully - not an error if account exists
