@@ -2,3 +2,35 @@ __pycache__
 node_modules
 .mypy_cache
 .venv
+
+# Data and temporary folders
+data/
+temp/
+test-results/
+
+# Test results
+tests/test-results/*
+tests/playwright-report/
+tests/.last-run.json
+tests/package-lock.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.coverage
+.pytest_cache/
+.mypy_cache/
+
+# Logs
+*.log
