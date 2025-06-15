@@ -1,4 +1,4 @@
-name: Allowance Extension Tests (Basic)
+name: Allowance Integration Tests (Basic)
 
 on:
   push:
