@@ -173,6 +173,20 @@ jobs:
           exit 1
         fi
         
+    - name: Install PostgreSQL client
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y postgresql-client
+        
+    - name: Test database connection
+      run: |
+        echo "🔍 Testing PostgreSQL connection..."
+        PGPASSWORD=postgres psql -h localhost -U postgres -d lnbits -c "SELECT version();" || {
+          echo "❌ Database connection failed"
+          exit 1
+        }
+        echo "✅ Database connection successful"
+        
     - name: Start LNBits
       run: |
         cd lnbits-app
@@ -184,6 +198,14 @@ jobs:
         export PORT=5001
         export DEBUG=true
         export LNBITS_FORCE_HTTPS=false
+        
+        # Test LNBits import before migration
+        echo "🐍 Testing LNBits import..."
+        poetry run python -c "import lnbits; print('✅ LNBits import successful')" || {
+          echo "❌ LNBits import failed"
+          poetry run python -c "import sys; print('Python path:', sys.path)"
+          exit 1
+        }
         
         # Run migrations
         echo "🔄 Running database migrations..."
