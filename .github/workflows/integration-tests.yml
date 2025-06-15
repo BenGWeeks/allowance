@@ -115,17 +115,14 @@ jobs:
         
     - name: Install LNBits
       run: |
-        echo "📦 Installing LNBits..."
-        
-        # Install Poetry
-        pip install poetry
+        echo "📦 Installing LNBits with pip..."
         
         # Clone LNBits
         git clone https://github.com/lnbits/lnbits.git lnbits-app
         cd lnbits-app
         
-        # Install dependencies
-        poetry install --without dev
+        # Install LNBits directly with pip
+        pip install -e .
         
         # Setup environment
         cp .env.example .env
@@ -201,19 +198,19 @@ jobs:
         
         # Test LNBits import before migration
         echo "🐍 Testing LNBits import..."
-        poetry run python -c "import lnbits; print('✅ LNBits import successful')" || {
+        python -c "import lnbits; print('✅ LNBits import successful')" || {
           echo "❌ LNBits import failed"
-          poetry run python -c "import sys; print('Python path:', sys.path)"
+          python -c "import sys; print('Python path:', sys.path)"
           exit 1
         }
         
         # Run migrations
         echo "🔄 Running database migrations..."
-        poetry run python -m lnbits --migrate
+        python -m lnbits --migrate
         
         # Start LNBits with logging
         echo "🚀 Starting LNBits..."
-        poetry run python -m lnbits > ../lnbits.log 2>&1 &
+        python -m lnbits > ../lnbits.log 2>&1 &
         LNBITS_PID=$!
         echo $LNBITS_PID > ../lnbits.pid
         echo "LNBits started with PID: $LNBITS_PID"
