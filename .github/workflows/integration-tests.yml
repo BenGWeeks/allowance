@@ -141,9 +141,14 @@ jobs:
         mkdir -p lnbits-app/lnbits/extensions/allowance
         
         # Copy extension files
-        cp *.py *.json lnbits-app/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp -r static lnbits-app/lnbits/extensions/allowance/ 2>/dev/null || true
-        cp -r templates lnbits-app/lnbits/extensions/allowance/ 2>/dev/null || true
+        echo "📁 Copying Python files..."
+        cp *.py lnbits-app/lnbits/extensions/allowance/
+        echo "📁 Copying JSON files..."
+        cp *.json lnbits-app/lnbits/extensions/allowance/
+        echo "📁 Copying static directory..."
+        cp -r static lnbits-app/lnbits/extensions/allowance/
+        echo "📁 Copying templates directory..."
+        cp -r templates lnbits-app/lnbits/extensions/allowance/
         
         echo "📋 Extension deployed with files:"
         ls -la lnbits-app/lnbits/extensions/allowance/
