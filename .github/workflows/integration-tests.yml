@@ -237,9 +237,9 @@ jobs:
         
         cd ..
         
-        # Wait for LNBits to start
+        # Wait for LNBits to start with better timeout and logging
         echo "⏳ Waiting for LNBits to start..."
-        for i in {1..30}; do
+        for i in {1..60}; do
           if curl -f http://localhost:5001/ --max-time 3 2>/dev/null; then
             echo "✅ LNBits is ready!"
             break
@@ -247,20 +247,25 @@ jobs:
           
           if ! ps -p $LNBITS_PID > /dev/null; then
             echo "❌ LNBits process died"
-            cat lnbits.log 2>/dev/null || echo "No log file found"
+            echo "📄 Last 50 lines of log:"
+            tail -n 50 lnbits.log 2>/dev/null || echo "No log file found"
             exit 1
           fi
           
-          if [ $((i % 5)) -eq 0 ]; then
-            echo "⏳ Still waiting... ($i/30)"
+          if [ $((i % 10)) -eq 0 ]; then
+            echo "⏳ Still waiting... ($i/60) - showing last 10 lines of log:"
+            tail -n 10 lnbits.log 2>/dev/null || echo "No log file found"
           fi
           
           sleep 1
         done
         
         if ! curl -f http://localhost:5001/ --max-time 5; then
-          echo "❌ LNBits failed to start"
+          echo "❌ LNBits failed to start after 60 seconds"
+          echo "📄 Full log output:"
           cat lnbits.log 2>/dev/null || echo "No log file found"
+          echo "🔍 Process status:"
+          ps aux | grep lnbits | grep -v grep || echo "No lnbits processes found"
           exit 1
         fi
         
