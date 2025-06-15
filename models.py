@@ -1,7 +1,7 @@
 # Data models for your extension
 
-from typing import Optional
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel, validator
 
@@ -19,12 +19,15 @@ class CreateAllowanceData(BaseModel):
     memo: str
     active: bool = True
     end_date: Optional[datetime] = None
-    
-    @validator('amount')
+    lnurlpay: Optional[str] = None  # LNURL pay string for compatibility
+    total: int = 0  # Total amount processed
+
+    @validator("amount")
     def amount_must_be_positive(cls, v):
         if v <= 0:
-            raise ValueError('Amount must be greater than 0')
+            raise ValueError("Amount must be greater than 0")
         return v
+
 
 class Allowance(BaseModel):
     id: str
@@ -39,9 +42,11 @@ class Allowance(BaseModel):
     memo: str
     active: bool = True
     end_date: Optional[datetime] = None
-    
-    @validator('amount')
+    lnurlpay: Optional[str] = None  # LNURL pay string for compatibility
+    total: int = 0  # Total amount processed
+
+    @validator("amount")
     def amount_must_be_positive(cls, v):
         if v <= 0:
-            raise ValueError('Amount must be greater than 0')
+            raise ValueError("Amount must be greater than 0")
         return v

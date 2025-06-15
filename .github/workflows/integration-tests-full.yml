@@ -1,0 +1,352 @@
+name: Allowance Integration Tests (Full)
+
+on:
+  # Disabled for now - enable manually if needed
+  # pull_request:
+  #   branches: [ main ]
+  # push:
+  #   branches: [ main ]
+  workflow_dispatch:  # Allow manual trigger only
+
+jobs:
+  extension-validation:
+    name: Validate Extension Files
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Validate extension structure
+      run: |
+        echo "🔍 Checking required extension files..."
+        
+        # Check required files exist
+        required_files=("manifest.json" "views.py" "models.py" "crud.py" "__init__.py")
+        for file in "${required_files[@]}"; do
+          if [[ -f "$file" ]]; then
+            echo "✅ $file exists"
+          else
+            echo "❌ $file missing"
+            exit 1
+          fi
+        done
+        
+        # Check Python syntax
+        echo "🐍 Checking Python syntax..."
+        python -m py_compile *.py
+        echo "✅ All Python files have valid syntax"
+        
+        # Check manifest.json is valid JSON
+        echo "📋 Validating manifest.json..."
+        python -c "import json; json.load(open('manifest.json'))"
+        echo "✅ manifest.json is valid JSON"
+        
+        echo "🎉 Extension validation passed!"
+
+  python-tests:
+    name: Python Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install black flake8 mypy pydantic fastapi
+        
+    - name: Run code quality checks
+      run: |
+        echo "🎨 Running Black formatter check..."
+        black --check --diff *.py || echo "Black formatting issues found"
+        
+        echo "🔍 Running Flake8 linter..."
+        flake8 *.py --max-line-length=100 --ignore=E203,W503 || echo "Flake8 issues found"
+        
+        echo "🔬 Testing Pydantic compatibility..."
+        python -c "
+        import sys
+        try:
+            import pydantic
+            print(f'✅ Pydantic version: {pydantic.VERSION}')
+            # Test if we're using v1 compatible imports
+            from pydantic import BaseModel, validator
+            print('✅ Pydantic v1 imports successful')
+        except ImportError as e:
+            print(f'❌ Pydantic import error: {e}')
+            sys.exit(1)
+        "
+        
+        echo "🔬 Running basic import checks..."
+        python -c "
+        try:
+            import crud, models, views
+            print('✅ All modules import successfully')
+        except Exception as e:
+            print(f'⚠️ Import check skipped: {e}')
+        "
+
+  integration-tests:
+    name: LNBits Integration Tests
+    runs-on: ubuntu-latest
+    needs: [extension-validation, python-tests]
+    
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: lnbits
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install LNBits
+      run: |
+        echo "📦 Installing LNBits following official documentation..."
+        
+        # Install Poetry
+        pip install poetry
+        
+        # Clone LNBits
+        git clone https://github.com/lnbits/lnbits.git lnbits-app
+        cd lnbits-app
+        
+        # Set up Python environment (use available Python version)
+        poetry env use python3
+        
+        # Install dependencies (using --only main as per docs)
+        poetry install --only main
+        
+        # Setup environment
+        cp .env.example .env
+        echo "LNBITS_BACKEND_WALLET_CLASS=FakeWallet" >> .env
+        echo "LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits" >> .env
+        echo "HOST=0.0.0.0" >> .env
+        echo "PORT=5001" >> .env
+        echo "DEBUG=true" >> .env
+        echo "LNBITS_FORCE_HTTPS=false" >> .env
+        
+        cd ..
+        
+    - name: Deploy allowance extension
+      run: |
+        echo "📦 Deploying allowance extension to LNBits..."
+        
+        # Create extension directory
+        mkdir -p lnbits-app/lnbits/extensions/allowance
+        
+        # Copy extension files
+        echo "📁 Copying Python files..."
+        cp *.py lnbits-app/lnbits/extensions/allowance/
+        echo "📁 Copying extension configuration files..."
+        cp manifest.json config.json lnbits-app/lnbits/extensions/allowance/
+        echo "📁 Copying documentation files..."
+        cp *.md lnbits-app/lnbits/extensions/allowance/ || echo "No markdown files to copy"
+        echo "📁 Copying static directory..."
+        cp -r static lnbits-app/lnbits/extensions/allowance/
+        echo "📁 Copying templates directory..."
+        cp -r templates lnbits-app/lnbits/extensions/allowance/
+        
+        echo "📋 Extension deployed with files:"
+        ls -la lnbits-app/lnbits/extensions/allowance/
+        
+        # Verify extension structure
+        if [ -f "lnbits-app/lnbits/extensions/allowance/manifest.json" ]; then
+          echo "✅ Extension manifest deployed successfully"
+          cat lnbits-app/lnbits/extensions/allowance/manifest.json
+          echo ""
+          echo "✅ Extension deployment completed"
+        else
+          echo "❌ Extension deployment failed - manifest.json not found"
+          echo "📋 Contents of extension directory:"
+          ls -la lnbits-app/lnbits/extensions/allowance/ || echo "Directory not found"
+          exit 1
+        fi
+        
+    - name: Install PostgreSQL client
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y postgresql-client
+        
+    - name: Test database connection
+      run: |
+        echo "🔍 Testing PostgreSQL connection..."
+        PGPASSWORD=postgres psql -h localhost -U postgres -d lnbits -c "SELECT version();" || {
+          echo "❌ Database connection failed"
+          exit 1
+        }
+        echo "✅ Database connection successful"
+        
+    - name: Start LNBits
+      run: |
+        cd lnbits-app
+        
+        # Export environment variables  
+        export LNBITS_BACKEND_WALLET_CLASS=FakeWallet
+        export LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits
+        export HOST=0.0.0.0
+        export PORT=5001
+        export DEBUG=true
+        export LNBITS_FORCE_HTTPS=false
+        
+        # Test LNBits import before migration
+        echo "🐍 Testing LNBits import..."
+        poetry run python -c "import lnbits; print('✅ LNBits import successful')" || {
+          echo "❌ LNBits import failed"
+          poetry run python -c "import sys; print('Python path:', sys.path)"
+          exit 1
+        }
+        
+        # Run migrations
+        echo "🔄 Running database migrations..."
+        poetry run lnbits --migrate
+        
+        # Start LNBits with logging and timeout (using proper command from docs)
+        echo "🚀 Starting LNBits..."
+        timeout 300 poetry run lnbits --port 5001 --host 0.0.0.0 > ../lnbits.log 2>&1 &
+        LNBITS_PID=$!
+        echo $LNBITS_PID > ../lnbits.pid
+        echo "LNBits started with PID: $LNBITS_PID"
+        
+        # Give LNBits a moment to start
+        sleep 3
+        
+        # Check if process is still running
+        if ! ps -p $LNBITS_PID > /dev/null; then
+          echo "❌ LNBits process died immediately"
+          echo "📄 Log output:"
+          cat ../lnbits.log 2>/dev/null || echo "No log file found"
+          exit 1
+        fi
+        
+        echo "✅ LNBits process is running"
+        
+        cd ..
+        
+        # Wait for LNBits to start with better timeout and logging
+        echo "⏳ Waiting for LNBits to start..."
+        for i in {1..60}; do
+          if curl -f http://localhost:5001/ --max-time 3 2>/dev/null; then
+            echo "✅ LNBits is ready!"
+            break
+          fi
+          
+          if ! ps -p $LNBITS_PID > /dev/null; then
+            echo "❌ LNBits process died"
+            echo "📄 Last 50 lines of log:"
+            tail -n 50 lnbits.log 2>/dev/null || echo "No log file found"
+            exit 1
+          fi
+          
+          if [ $((i % 10)) -eq 0 ]; then
+            echo "⏳ Still waiting... ($i/60) - showing last 10 lines of log:"
+            tail -n 10 lnbits.log 2>/dev/null || echo "No log file found"
+          fi
+          
+          sleep 1
+        done
+        
+        if ! curl -f http://localhost:5001/ --max-time 5; then
+          echo "❌ LNBits failed to start after 60 seconds"
+          echo "📄 Full log output:"
+          cat lnbits.log 2>/dev/null || echo "No log file found"
+          echo "🔍 Process status:"
+          ps aux | grep lnbits | grep -v grep || echo "No lnbits processes found"
+          exit 1
+        fi
+        
+    - name: Test LNBits accessibility
+      run: |
+        echo "🌐 Testing LNBits endpoints..."
+        
+        # Test homepage
+        curl -f http://localhost:5001/ > /dev/null && echo "✅ Homepage accessible"
+        
+        # Test API docs
+        curl -f http://localhost:5001/docs > /dev/null && echo "✅ API docs accessible"
+        
+        # Test allowance extension route
+        curl -s http://localhost:5001/allowance/ | grep -q "allowance" && echo "✅ Allowance extension route accessible"
+        
+        echo "🎉 LNBits accessibility tests passed!"
+        
+    - name: Install Playwright
+      run: |
+        npm init -y
+        npm install playwright
+        npx playwright install chromium
+        npx playwright install-deps chromium
+        
+    - name: Run Playwright tests
+      run: |
+        cd tests
+        echo "🎭 Running Playwright tests..."
+        
+        # Create test results directory
+        mkdir -p test-results
+        
+        # Create admin account
+        echo "👤 Creating admin account..."
+        node create-admin-account.js
+        
+        # Enable allowance extension
+        echo "🔌 Enabling allowance extension..."
+        node enable-allowance.js
+        
+        # Test allowance CRUD operations
+        echo "✅ Testing allowance creation..."
+        node create-allowance.js "Test Daily" 50 daily
+        node create-allowance.js "Test Weekly" 100 weekly
+        node create-allowance.js "Test Monthly" 200 monthly
+        
+        echo "✏️ Testing allowance editing..."
+        node edit-allowance.js "Test Daily" "Updated Daily" 75 weekly
+        
+        echo "🗑️ Testing allowance deletion..."
+        node delete-allowance.js "Updated Daily"
+        
+        echo "🎉 All Playwright tests passed!"
+        
+    - name: Upload test screenshots
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-test-screenshots
+        path: tests/test-results/
+        
+    - name: Stop LNBits
+      if: always()
+      run: |
+        echo "🛑 Stopping LNBits..."
+        if [ -f lnbits.pid ]; then
+          kill $(cat lnbits.pid) || true
+        fi

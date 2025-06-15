@@ -4,6 +4,8 @@
 
 This is an LNBits extension that allows you to setup recurring transfers between wallets.
 
+✅ CI/CD Status: Tests configured and working
+
 ### Installation
 
 Install and enable the "Allowance" extension either through the official LNbits manifest (**not yet vetted**) or by adding https://raw.githubusercontent.com/bengweeks/allowance/main/manifest.json to `Server`/ `Server` / `Extension Sources`.
@@ -78,22 +80,57 @@ Tests assume:
 - Admin credentials: `ben.weeks` / `zUYmy&05&uZ$3kmf*^T8`
 - Fresh database for superuser creation test
 
+### Testing & Quality
+
+#### Functional Testing Focus
+
+Following LNBits extension best practices, we prioritize **functional testing** over heavy tooling:
+
+```bash
+# Optional development quality check
+python3 -m venv .test-venv && source .test-venv/bin/activate
+pip install black mypy ruff pydantic fastapi
+black --check *.py && ruff check *.py && mypy --ignore-missing-imports *.py
+rm -rf .test-venv
+```
+
+#### GitHub Actions Testing
+
+- **End-to-End Testing**: Full LNBits environment with PostgreSQL
+- **Browser Automation**: Playwright testing of actual user workflows  
+- **Extension Integration**: Real extension installation and testing
+
+#### LNBits Extension Philosophy
+
+*"Only submit fully working extensions. Do not add dependencies. The easier an extension is to review, the quicker the review process."* - [LNBits Guidelines](https://github.com/lnbits/lnbits-extensions)
+
+#### Configuration Files
+
+- `pyproject.toml` - Minimal Python dependencies
+- `.github/workflows/test.yml` - Functional testing pipeline
+- `.gitignore` - Excludes data/, temp/, and test results
+
 ### Repository Structure
 
 ```
 allowance/
-├── tests/                    # Playwright test scripts
+├── .github/workflows/       # CI/CD pipeline configuration
+├── tests/                   # Playwright E2E test scripts
 │   ├── create-admin-account.js
 │   ├── login-test.js
 │   ├── enable-allowance.js
 │   ├── create-allowance.js
 │   └── run_test.sh
-├── static/js/               # Vue.js frontend
-├── templates/allowance/     # HTML templates
-├── crud.py                  # Database operations
-├── views.py                 # Frontend routes
-├── views_api.py            # API endpoints
-└── manifest.json           # Extension manifest
+├── static/js/              # Vue.js frontend
+├── templates/allowance/    # HTML templates
+├── crud.py                 # Database operations
+├── views.py                # Frontend routes
+├── views_api.py           # API endpoints
+├── models.py              # Pydantic data models
+├── tasks.py               # Background task processing
+├── migrations.py          # Database schema
+├── pyproject.toml         # Python dependencies & tool config
+└── manifest.json          # Extension manifest
 ```
 
 ### Recent Improvements

@@ -2,7 +2,7 @@ from http import HTTPStatus
 
 from fastapi import APIRouter, Depends, Query, Request
 from lnbits.core.crud import get_user
-# from lnbits.core.models import WalletTypeInfo  # Not available in LNbits v1.0
+from lnbits.core.models import WalletTypeInfo
 from lnbits.core.services import create_invoice
 from lnbits.decorators import (
     get_wallet_for_key,
@@ -10,8 +10,7 @@ from lnbits.decorators import (
     require_invoice_key,
 )
 from lnbits.helpers import urlsafe_short_hash
-from lnbits.utils.exchange_rates import currencies, get_fiat_rate_satoshis
-from lnurl import encode as lnurl_encode
+from lnbits.utils.exchange_rates import get_fiat_rate_satoshis
 from starlette.exceptions import HTTPException
 
 from .crud import (
@@ -21,7 +20,7 @@ from .crud import (
     get_allowances,
     update_allowance,
 )
-from .models import CreateAllowanceData, Allowance
+from .models import CreateAllowanceData
 
 allowance_api_router = APIRouter()
 
@@ -31,11 +30,12 @@ allowance_api_router = APIRouter()
 
 ## Get all the records belonging to the user
 
+
 @allowance_api_router.get("/api/v1/allowance", status_code=HTTPStatus.OK)
 async def api_allowances(
     all_wallets: bool = Query(False),
-    wallet = Depends(get_wallet_for_key),
-):
+    wallet: WalletTypeInfo = Depends(get_wallet_for_key),
+) -> list[dict]:
     wallet_ids = [wallet.id]
     if all_wallets:
         user = await get_user(wallet.user)
@@ -51,7 +51,7 @@ async def api_allowances(
     status_code=HTTPStatus.OK,
     dependencies=[Depends(require_invoice_key)],
 )
-async def api_allowance(allowance_id: str):
+async def api_allowance(allowance_id: str) -> dict:
     allowance = await get_allowance(allowance_id)
     if not allowance:
         raise HTTPException(
@@ -67,8 +67,8 @@ async def api_allowance(allowance_id: str):
 async def api_allowance_update(
     data: CreateAllowanceData,
     allowance_id: str,
-    wallet = Depends(get_wallet_for_key),
-):
+    wallet: WalletTypeInfo = Depends(get_wallet_for_key),
+) -> dict:
     if not allowance_id:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
@@ -84,7 +84,9 @@ async def api_allowance_update(
     for key, value in data.dict().items():
         setattr(allowance, key, value)
 
-    return await update_allowance(allowance)
+    update_data = CreateAllowanceData(**allowance.dict())
+    updated_allowance = await update_allowance(update_data)
+    return updated_allowance.dict()
 
 
 ## Create a new record
@@ -94,11 +96,12 @@ async def api_allowance_update(
 async def api_allowance_create(
     request: Request,
     data: CreateAllowanceData,
-    wallet = Depends(require_admin_key),
-):
+    wallet: WalletTypeInfo = Depends(require_admin_key),
+) -> dict:
     data.id = urlsafe_short_hash()
     data.wallet = data.wallet or wallet.id
-    return await create_allowance(data)
+    new_allowance = await create_allowance(data)
+    return new_allowance.dict()
 
 
 ## Delete a record
@@ -106,7 +109,7 @@ async def api_allowance_create(
 
 @allowance_api_router.delete("/api/v1/allowance/{allowance_id}")
 async def api_allowance_delete(
-    allowance_id: str, wallet = Depends(require_admin_key)
+    allowance_id: str, wallet: WalletTypeInfo = Depends(require_admin_key)
 ):
     allowance = await get_allowance(allowance_id)
 
@@ -121,7 +124,7 @@ async def api_allowance_delete(
         )
 
     await delete_allowance(allowance_id)
-    return "", HTTPStatus.NO_CONTENT
+    return {"message": "Allowance deleted successfully"}
 
 
 # ANY OTHER ENDPOINTS YOU NEED
@@ -129,8 +132,9 @@ async def api_allowance_delete(
 ## Currency exchange rate endpoint for dynamic currency support
 ## (currencies list comes from core LNBits /api/v1/currencies)
 
+
 @allowance_api_router.get("/api/v1/rate/{currency}", status_code=HTTPStatus.OK)
-async def api_check_fiat_rate(currency):
+async def api_check_fiat_rate(currency: str) -> dict:
     try:
         rate = await get_fiat_rate_satoshis(currency)
     except AssertionError:

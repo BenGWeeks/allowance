@@ -117,10 +117,40 @@ Fixed critical authentication issue in `views_api.py`:
 - Fixed 403 Forbidden errors when creating/editing allowances
 - Improved delete endpoint to return proper JSON response
 
-### Development Environment
-- Make sure you are working on the dev docker of lnbits (running on port 5001), not the production version (running on port 5000).
+### Code Quality and Testing
 
+#### Local Development Testing (Optional)
+For development quality checks, you can run local linting (but this is not required for CI):
+
+```bash
+# Optional: Quick quality check during development
+python3 -m venv .test-venv
+source .test-venv/bin/activate
+pip install black mypy ruff pydantic fastapi
+
+# Run checks
+black --check *.py && ruff check *.py && mypy --ignore-missing-imports *.py
+
+# Clean up
+rm -rf .test-venv
+```
+
+#### GitHub Actions Testing
+Following LNBits extension best practices, we focus on **functional testing** rather than heavy linting:
+
+- **Functional Tests**: End-to-end extension testing with real LNBits environment
+- **Integration Tests**: Full Playwright browser automation testing
+- **Database Tests**: PostgreSQL integration with actual extension workflows
+
+**Philosophy**: *"The easier an extension is to review, the quicker the review process"* - LNBits Guidelines
+
+#### Extension Development Approach
+Following LNBits extension guidelines:
+- ✅ **Submit fully working extensions**
+- ✅ **Minimize dependencies** 
+- ✅ **Keep it simple and reviewable**
+- ✅ **Focus on functionality over tooling**
+
+### Development Environment
+- Make sure you are working on the dev docker of lnbits (running on port 5001), not the production version (running on port 5000)
 - When looking for best practice of how to create an extension, look at https://github.com/lnbits/lnbits/tree/main/lnbits/extensions/lnurlp (do not download it, just look at the source)
-
-### Development Environment
-- Make sure you are working on the dev docker of lnbits (running on port 5001), not the production version (running on port 5000).

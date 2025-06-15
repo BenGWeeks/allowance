@@ -1,9 +1,9 @@
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 from lnbits.db import Database
 from lnbits.helpers import urlsafe_short_hash
 
-from .models import CreateAllowanceData, Allowance
+from .models import Allowance, CreateAllowanceData
 
 db = Database("ext_allowance")
 
@@ -42,7 +42,7 @@ async def get_allowance(allowance_id: str) -> Optional[Allowance]:
     )
 
 
-async def get_allowances(wallet_ids: Union[str, List[str]]) -> List[Allowance]:
+async def get_allowances(wallet_ids: Union[str, list[str]]) -> list[Allowance]:
     if isinstance(wallet_ids, str):
         wallet_ids = [wallet_ids]
     q = ",".join([f"'{w}'" for w in wallet_ids])
@@ -70,9 +70,10 @@ async def delete_allowance(allowance_id: str) -> None:
     )
 
 
-async def get_all_active_allowances() -> List[Allowance]:
+async def get_all_active_allowances() -> list[Allowance]:
     """Get all active allowances for scheduled processing"""
     return await db.fetchall(
-        "SELECT * FROM allowance.maintable WHERE active = true ORDER BY next_payment_date",
+        "SELECT * FROM allowance.maintable WHERE active = true "
+        "ORDER BY next_payment_date",
         model=Allowance,
     )
