@@ -143,8 +143,8 @@ jobs:
         # Copy extension files
         echo "📁 Copying Python files..."
         cp *.py lnbits-app/lnbits/extensions/allowance/
-        echo "📁 Copying JSON files..."
-        cp *.json lnbits-app/lnbits/extensions/allowance/
+        echo "📁 Copying extension configuration files..."
+        cp manifest.json config.json lnbits-app/lnbits/extensions/allowance/
         echo "📁 Copying static directory..."
         cp -r static lnbits-app/lnbits/extensions/allowance/
         echo "📁 Copying templates directory..."
