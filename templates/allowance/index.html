@@ -154,7 +154,7 @@
   <!-- CREATE/UPDATE ALLOWANCE DIALOG -->
   <q-dialog v-model="formDialog.show" @hide="closeFormDialog">
     <q-card class="q-pa-lg q-pt-xl" style="width: 500px">
-      <q-form @submit.prevent="saveAllowance" class="q-gutter-md">
+      <q-form @submit.prevent="saveAllowance" class="q-gutter-md" ref="allowanceForm" no-error-focus>
         <div class="text-center q-mb-lg">
           <div class="text-h6">
             <span v-if="formDialog.data.id">Update Allowance</span>
