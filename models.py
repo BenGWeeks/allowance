@@ -39,11 +39,11 @@ class Allowance(BaseModel):
     start_date: datetime
     frequency_type: str
     next_payment_date: datetime
-    memo: str
+    memo: Optional[str] = ""
     active: bool = True
     end_date: Optional[datetime] = None
     lnurlpay: Optional[str] = None  # LNURL pay string for compatibility
-    total: int = 0  # Total amount processed
+    total: Optional[int] = 0  # Total amount processed
 
     @validator("amount")
     def amount_must_be_positive(cls, v):

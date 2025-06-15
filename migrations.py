@@ -10,7 +10,7 @@ async def m001_initial(db: Any) -> None:
     """
     await db.execute(
         """
-        CREATE TABLE allowance.maintable (
+        CREATE TABLE ext_allowance.maintable (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             wallet TEXT NOT NULL,

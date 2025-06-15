@@ -12,13 +12,15 @@ async def test_create_allowance():
     
     try:
         async with httpx.AsyncClient() as client:
+            start_date = datetime.utcnow() + timedelta(days=1)
             payload = {
                 "name": "Test API Create Allowance",
                 "lightning_address": "test@example.com",
                 "amount": 1000,
                 "currency": "sats",
                 "frequency_type": "daily",
-                "start_date": (datetime.utcnow() + timedelta(days=1)).isoformat(),
+                "start_date": start_date.isoformat(),
+                "next_payment_date": start_date.isoformat(),
                 "active": True,
                 "memo": "Created via API test"
             }
