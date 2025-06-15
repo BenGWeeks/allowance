@@ -2,21 +2,36 @@
 
 ## LNBits Extension Development Learnings
 
-### Vue.js Integration Issues
+### Vue.js Integration Issues (RESOLVED)
 1. **localStorage Error**: The persistent `Cannot read properties of undefined (reading 'localStorage')` error comes from LNBits' bundle.min.js, specifically when windowMixin tries to access `this.$q.localStorage` during Vue app initialization.
+   - **Solution**: Follow LNURLP pattern exactly - use `el: '#vue'` WITHOUT `.mount('#vue')` call
 
 2. **Vue 3 vs Vue 2**: LNBits uses Vue 3 (confirmed by "Vue is not a constructor" error when trying Vue 2 syntax).
 
-3. **App Mounting**: The Vue app must be mounted with `.mount('#vue')` - without this, the form submission handlers don't work.
+3. **App Mounting**: LNBits has an automatic mounting system. Do NOT call `.mount('#vue')` manually.
+   - **Correct Pattern**: 
+   ```javascript
+   window.app = Vue.createApp({
+     el: '#vue',
+     mixins: [window.windowMixin],
+     // ... rest of app
+   })  // NO .mount() call!
+   ```
 
 4. **windowMixin Required**: The windowMixin is essential for LNBits extensions - it provides access to user data, wallets, and Quasar utilities.
 
-### Form Submission Issues
-1. **@submit.prevent Required**: Quasar forms need `@submit.prevent="saveAllowance"` to prevent default form submission.
+### Form Submission Issues (RESOLVED)
+1. **@submit.prevent vs @click**: Use `@click="saveAllowance"` on the submit button instead of form @submit
+   - **Working Pattern**: `<q-btn @click="saveAllowance">Create Allowance</q-btn>`
 
-2. **Validation Blocking**: Empty validation errors `[ '', '', '', '', '', '' ]` suggest Quasar validation is blocking form submission but not providing proper error messages.
+2. **Validation Blocking**: Missing required fields cause silent validation failures
+   - **Solution**: Always provide default values for required fields in `openCreateDialog()`
+   - **Critical Fix**: Default `frequency_type` was missing, causing all submissions to fail
 
-3. **Active Toggle Issue**: The Active toggle mysteriously switches to OFF when the form is submitted, indicating potential data binding issues.
+3. **Edit Form Issues**: 
+   - **Problem**: Clicking "Update Allowance" would only toggle Active state instead of saving
+   - **Root Cause**: Missing `start_date` field in form data mapping
+   - **Solution**: Ensure all fields are properly mapped in `openUpdateDialog()`
 
 ### Testing Suite
 The extension includes comprehensive Playwright test scripts in `/tests/`:
@@ -63,12 +78,130 @@ The extension includes comprehensive Playwright test scripts in `/tests/`:
 ✅ All core functionality working:
 - Admin account creation and login
 - Extension enabling via UI
-- Allowance creation through forms
+- Allowance creation through forms (POST requests successful)
+- Allowance editing through forms (PUT requests successful)
 - Proper error handling and exit codes
+- Vue app mounting following LNURLP pattern
+- Form validation with required field defaults
+
+### Repository Structure
+The repository follows a clean structure with proper .gitignore patterns:
+
+```
+allowance/
+├── tests/                    # Playwright test scripts
+│   ├── create-admin-account.js
+│   ├── login-test.js
+│   ├── enable-allowance.js
+│   ├── create-allowance.js
+│   ├── run_test.sh
+│   └── test-results/        # Generated screenshots (ignored)
+├── static/js/               # Vue.js frontend
+├── templates/allowance/     # HTML templates
+├── crud.py                  # Database operations
+├── views.py                 # Frontend routes
+├── views_api.py            # API endpoints
+└── manifest.json           # Extension manifest
+```
 
 ### Git Best Practices
 - Don't commit broken code - use `git stash` instead
 - Name test files descriptively following action-based conventions
 - All tests use proper exit codes (0 for success, 1 for failure)
+- Repository excludes temporary files (data/, temp/, test results, screenshots)
+- Clean commit history with descriptive messages
 
+### API Authentication Fix
+Fixed critical authentication issue in `views_api.py`:
+- Changed `wallet.id` to `wallet.wallet.id` for proper wallet ID access
+- Fixed 403 Forbidden errors when creating/editing allowances
+- Improved delete endpoint to return proper JSON response
+
+### Development Environment
+- Make sure you are working on the dev docker of lnbits (running on port 5001), not the production version (running on port 5000)
 - When looking for best practice of how to create an extension, look at https://github.com/lnbits/lnbits/tree/main/lnbits/extensions/lnurlp (do not download it, just look at the source)
+
+## Preventing Merge Conflicts in Pull Requests
+
+### Root Causes (Now Resolved)
+1. **Runtime Files Tracked**: The `data/` directory containing logs, auth keys, and runtime files was being tracked by git, causing constant conflicts. This is now resolved with proper `.gitignore` patterns.
+
+2. **Parallel Development**: Multiple issue branches being developed simultaneously can create conflicting changes.
+
+### Best Practices to Minimize Future Conflicts
+
+#### 1. Keep Branches Short-Lived and Focused
+- Create branch → Make targeted changes → Create PR → Merge quickly
+- Avoid long-running feature branches that diverge significantly from main
+- Focus each branch on a single issue or feature
+
+#### 2. Rebase Before Creating PRs
+```bash
+# Before creating a PR, update your branch with latest main:
+git fetch origin main
+git rebase origin/main
+
+# If conflicts occur during rebase, resolve them incrementally:
+git status                    # See conflicted files
+# Edit files to resolve conflicts
+git add <resolved-files>
+git rebase --continue
+```
+
+#### 3. Use GitHub's "Update Branch" Feature
+- When GitHub shows merge conflicts on a PR, use the "Update branch" button first
+- This merges main into your branch through GitHub's interface
+- Often resolves conflicts automatically without manual intervention
+
+#### 4. Keep Main Branch Updated Locally
+```bash
+# Regularly update your local main branch:
+git checkout main
+git pull origin main
+
+# When starting new work, ensure you're on latest main:
+git checkout main
+git pull origin main
+git checkout -b feature/new-branch
+```
+
+#### 5. Monitor .gitignore Completeness
+Ensure these patterns are properly ignored to prevent runtime file conflicts:
+```gitignore
+# Runtime data (Docker volumes)
+data/
+pgdata/
+*.log
+
+# Test artifacts
+tests/test-results/
+test-results/
+*.png
+*.json
+
+# Temporary files
+temp/
+.pytest_cache/
+__pycache__/
+
+# IDE files
+.vscode/
+.idea/
+```
+
+#### 6. Communication and Coordination
+- Review other open PRs before starting work to avoid overlapping changes
+- If working on related features, coordinate with other developers
+- Consider smaller, incremental PRs rather than large feature drops
+
+#### 7. Conflict Resolution Workflow
+When conflicts do occur:
+1. **Don't panic** - conflicts are normal in active development
+2. **Fetch latest main**: `git fetch origin main`
+3. **Merge or rebase**: Choose based on preference (rebase for cleaner history)
+4. **Resolve conflicts systematically**: Handle one file at a time
+5. **Test after resolution**: Ensure functionality still works
+6. **Commit with clear message**: Explain what was resolved
+
+### Expected Reduction in Conflicts
+With the `data/` directory now properly ignored and these practices in place, merge conflicts should be significantly reduced. Most future conflicts will be legitimate code conflicts that require human decision-making rather than spurious runtime file conflicts.

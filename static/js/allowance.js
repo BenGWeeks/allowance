@@ -6,6 +6,8 @@ window.app = Vue.createApp({
   data() {
     return {
       allowances: [],
+      currencies: [],
+      fiatRates: {},
       allowanceTable: {
         columns: [
           {name: 'name', align: 'left', label: 'Description', field: 'name'},
@@ -65,6 +67,7 @@ window.app = Vue.createApp({
       this.formDialog.data = {
         wallet: this.g.user.wallets[0].id,
         currency: 'sats',
+        frequency_type: 'weekly', // Default to weekly to help with testing
         active: true,
         start_date: today
       }
@@ -72,29 +75,15 @@ window.app = Vue.createApp({
       console.log('📅 Form opened with default start date:', today)
       console.log('🔘 Active state set to:', this.formDialog.data.active)
     },
-    saveAllowance() {
+    saveAllowance(event) {
+      // Prevent default form submission like LNURLP pattern
+      if (event) {
+        event.preventDefault()
+      }
+      
       console.log('🔥 saveAllowance called')
       console.log('📊 Form data:', this.formDialog.data)
       console.log('🔘 Active field at submission:', this.formDialog.data.active, '(type:', typeof this.formDialog.data.active, ')')
-      
-      // Check Quasar form validation first
-      if (this.$refs.allowanceForm) {
-        console.log('📋 Checking Quasar form validation...')
-        const isValid = this.$refs.allowanceForm.validate()
-        console.log('📋 Quasar form validation result:', isValid)
-        if (!isValid) {
-          console.log('❌ Quasar validation failed - checking form errors')
-          // Log validation errors if available
-          const errors = this.$refs.allowanceForm.$el.querySelectorAll('.q-field--error')
-          console.log('❌ Form errors found:', errors.length)
-          errors.forEach((error, i) => {
-            console.log(`❌ Error ${i}:`, error.textContent)
-          })
-          return
-        }
-      } else {
-        console.log('⚠️ No form ref found')
-      }
       
       // Validate required fields
       const errors = []
@@ -105,11 +94,26 @@ window.app = Vue.createApp({
       if (!this.formDialog.data.frequency_type) errors.push('Frequency is required')
       if (!this.formDialog.data.start_date) errors.push('Start date is required')
       
+      console.log('🔍 Validation check:', {
+        name: this.formDialog.data.name,
+        wallet: this.formDialog.data.wallet,
+        lightning_address: this.formDialog.data.lightning_address,
+        amount: this.formDialog.data.amount,
+        frequency_type: this.formDialog.data.frequency_type,
+        start_date: this.formDialog.data.start_date,
+        errors: errors
+      })
+      
       if (errors.length > 0) {
         console.log('❌ Validation errors:', errors)
         LNbits.utils.notifyApiError('Form validation failed: ' + errors.join(', '))
         return
       }
+      
+      console.log('✅ Validation passed, proceeding...')
+      
+      console.log('🔍 Available wallets:', this.g.user.wallets)
+      console.log('🔍 Looking for wallet ID:', this.formDialog.data.wallet)
       
       const wallet = _.findWhere(this.g.user.wallets, {
         id: this.formDialog.data.wallet
@@ -121,6 +125,8 @@ window.app = Vue.createApp({
         LNbits.utils.notifyApiError('No wallet selected')
         return
       }
+      
+      console.log('✅ Wallet found, preparing data...')
       
       const data = _.clone(this.formDialog.data)
       
@@ -159,6 +165,7 @@ window.app = Vue.createApp({
       }
       
       console.log('📤 Final data to send:', backendData)
+      console.log('🔍 Decision point - has ID?', !!backendData.id, 'ID value:', backendData.id)
       
       if (backendData.id) {
         console.log('🔄 Updating existing allowance')
@@ -169,7 +176,9 @@ window.app = Vue.createApp({
       }
     },
     createAllowance(wallet, data) {
+      console.log('🚀 createAllowance called with:', { wallet, data })
       this.formDialog.loading = true
+      console.log('📡 Making POST request...')
       LNbits.api
         .request('POST', '/allowance/api/v1/allowance', wallet.adminkey, data)
         .then(response => {
@@ -234,6 +243,7 @@ window.app = Vue.createApp({
         amount: clonedData.amount,
         currency: clonedData.currency,
         frequency_type: clonedData.frequency_type,
+        start_date: clonedData.start_date, // Add missing start_date
         next_payment_date: clonedData.next_payment_date,
         memo: clonedData.memo,
         end_date: clonedData.end_date
@@ -334,6 +344,21 @@ window.app = Vue.createApp({
       navigator.clipboard.writeText(text)
       this.$q.notify({message: 'Copied to clipboard', type: 'positive'})
     },
+    updateFiatRate(currency) {
+      if (currency && currency !== 'sats' && currency !== 'satoshis') {
+        LNbits.api
+          .request('GET', '/api/v1/rate/' + currency, null)
+          .then(response => {
+            let rates = _.clone(this.fiatRates)
+            rates[currency] = response.data.rate
+            this.fiatRates = rates
+            console.log(`💱 Rate for ${currency}: 1 ${currency} = ${response.data.rate} sats`)
+          })
+          .catch(err => {
+            console.error(`Failed to get rate for ${currency}:`, err)
+          })
+      }
+    },
     toggleActive() {
       console.log('🔄 Manual toggle called - before:', this.formDialog.data.active)
       this.formDialog.data.active = !this.formDialog.data.active
@@ -364,11 +389,63 @@ window.app = Vue.createApp({
       }
       
       return date.toISOString()
+    },
+    loadCurrencies() {
+      console.log('🌍 Loading currencies from LNbits core API...')
+      
+      // Try without authentication first (public endpoint)
+      LNbits.api
+        .request('GET', '/api/v1/currencies')
+        .then(response => {
+          console.log('✅ Currencies loaded successfully:', response.data?.length || 0, 'currencies')
+          this.currencies = ['sats', ...response.data]
+        })
+        .catch(err => {
+          console.warn('⚠️ Public currencies API failed, trying with authentication...', err.message || err)
+          
+          // Try with authentication as fallback
+          if (this.g?.user?.wallets?.[0]?.inkey) {
+            LNbits.api
+              .request('GET', '/api/v1/currencies', this.g.user.wallets[0].inkey)
+              .then(response => {
+                console.log('✅ Currencies loaded with auth:', response.data?.length || 0, 'currencies')
+                this.currencies = ['sats', ...response.data]
+              })
+              .catch(authErr => {
+                console.error('❌ Failed to fetch currencies with auth:', authErr.message || authErr)
+                console.log('💡 Falling back to basic currencies')
+                this.currencies = ['sats', 'USD', 'EUR']
+              })
+          } else {
+            console.error('❌ Failed to fetch currencies and no auth available:', err.message || err)
+            console.log('💡 Falling back to basic currencies')
+            this.currencies = ['sats', 'USD', 'EUR']
+          }
+        })
+    }
+  },
+  watch: {
+    'formDialog.data.currency': function(newVal) {
+      if (newVal) {
+        this.updateFiatRate(newVal)
+      }
     }
   },
   created() {
     if (this.g?.user?.wallets?.length) {
       this.getAllowances()
+      this.loadCurrencies()
+    } else {
+      // If user data not loaded yet, retry after a short delay
+      setTimeout(() => {
+        if (this.g?.user?.wallets?.length) {
+          this.getAllowances()
+          this.loadCurrencies()
+        } else {
+          console.warn('User data still not available, loading basic currencies only')
+          this.currencies = ['sats', 'USD', 'EUR']
+        }
+      }, 1000)
     }
   }
 })

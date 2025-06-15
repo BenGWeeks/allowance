@@ -149,7 +149,7 @@
   </div>
 
   <!-- CREATE/UPDATE ALLOWANCE DIALOG -->
-  <q-dialog v-model="formDialog.show" position="top" @hide="closeFormDialog">
+  <q-dialog v-model="formDialog.show" @hide="closeFormDialog">
     <q-card class="q-pa-lg q-pt-xl" style="width: 500px">
       <q-form @submit.prevent="saveAllowance" class="q-gutter-md" ref="allowanceForm" no-error-focus>
         <q-input
@@ -201,6 +201,8 @@
               :rules="[val => val > 0 || 'Amount must be greater than 0']"
               min="1"
               step="1"
+              input-style="text-align: left"
+              :hint="formDialog.data.currency && formDialog.data.currency !== 'sats' && fiatRates[formDialog.data.currency] ? `${formDialog.data.amount || 0} ${formDialog.data.currency} = ${Math.round((formDialog.data.amount || 0) * fiatRates[formDialog.data.currency])} sats (actual conversion calculated at the time of sending)` : ''"
             >
             </q-input>
           </div>
@@ -209,8 +211,13 @@
               filled
               dense
               v-model="formDialog.data.currency"
-              :options="['sats', 'USD', 'EUR']"
+              :options="currencies"
+              :display-value="formDialog.data.currency || 'sats'"
               label="Currency"
+              @update:model-value="updateFiatRate"
+              :options-dense="true"
+              :virtual-scroll-slice-size="500"
+              :popup-content-style="{ maxHeight: '200px' }"
             ></q-select>
           </div>
         </div>
@@ -259,27 +266,30 @@
           </div>
         </div>
         
-        <q-toggle
-          v-model="formDialog.data.active"
-          label="Active"
-          color="positive"
-        />
+        <div class="row">
+          <q-toggle
+            v-model="formDialog.data.active"
+            label="Active"
+            color="positive"
+          />
+        </div>
         
         <div class="row q-mt-lg">
+          <q-btn
+            unelevated
+            color="primary"
+            :loading="formDialog.loading"
+            type="submit"
+            >
+            <span v-if="formDialog.data.id">Update Allowance</span>
+            <span v-else>Create Allowance</span>
+          </q-btn>
           <q-btn
             v-close-popup
             flat
             color="grey"
             class="q-ml-auto"
             >Cancel</q-btn
-          >
-          <q-btn
-            unelevated
-            color="primary"
-            :loading="formDialog.loading"
-            type="submit"
-            class="q-ml-sm"
-            >Save</q-btn
           >
         </div>
       </q-form>
@@ -292,4 +302,11 @@
 {% block scripts %} 
 {{ window_vars(user) }}
 <script src="/allowance/static/js/allowance.js"></script>
+<style>
+/* Override Quasar's q-gutter-sm margin on first child to prevent unwanted indentation */
+.q-gutter-sm > *:first-child,
+.q-gutter-x-sm > *:first-child {
+  margin-left: 0 !important;
+}
+</style>
 {% endblock %}
