@@ -205,3 +205,38 @@ When conflicts do occur:
 
 ### Expected Reduction in Conflicts
 With the `data/` directory now properly ignored and these practices in place, merge conflicts should be significantly reduced. Most future conflicts will be legitimate code conflicts that require human decision-making rather than spurious runtime file conflicts.
+
+## Cleaning Up Messy PRs
+
+### When PRs Show Too Many Files
+If a PR shows many unrelated file changes (like 140+ files when you only changed 3):
+
+1. **Identify the Problem**: Usually caused by merging main that has cleanup changes
+2. **Reset and Cherry-Pick**: 
+   ```bash
+   # Reset to a clean state
+   git reset --soft HEAD~N  # N = number of commits to undo
+   
+   # Or checkout files from main to reset
+   git checkout origin/main -- .
+   
+   # Then stage only your specific changes
+   git add path/to/your/specific/files
+   ```
+
+3. **Force Push Carefully**:
+   ```bash
+   git push --force-with-lease origin branch-name
+   ```
+
+### Avoiding Log File Conflicts
+The `data/` directory often contains Docker-managed files that cause conflicts:
+- **Never commit log files**: Even temporarily to resolve conflicts
+- **If stuck with permission errors**: Stage other files and ignore logs
+- **Check Docker usage**: `lsof filename` to see if files are in use
+
+### Clean PR Best Practices
+1. **Minimal Changes**: Only commit files directly related to your issue
+2. **Review Before Push**: Use `git status` and `git diff --cached`
+3. **Descriptive Commits**: Explain what changed and why
+4. **Test Locally**: Ensure your changes work before pushing
