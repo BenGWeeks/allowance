@@ -449,3 +449,4 @@ window.app = Vue.createApp({
       }, 1000)
     }
   }
+})
