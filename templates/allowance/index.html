@@ -275,30 +275,30 @@
           </div>
         </div>
         
-        <q-toggle
-          v-model="formDialog.data.active"
-          label="Active"
-          color="positive"
-        />
+        <div class="row">
+          <q-toggle
+            v-model="formDialog.data.active"
+            label="Active"
+            color="positive"
+          />
+        </div>
         
         <div class="row q-mt-lg">
+          <q-btn
+            unelevated
+            color="primary"
+            :loading="formDialog.loading"
+            type="submit"
+            >
+            <span v-if="formDialog.data.id">Update Allowance</span>
+            <span v-else>Create Allowance</span>
+          </q-btn>
           <q-btn
             v-close-popup
             flat
             color="grey"
             class="q-ml-auto"
             >Cancel</q-btn
-          >
-          <q-btn
-            unelevated
-            color="primary"
-            :loading="formDialog.loading"
-            @click="saveAllowance"
-            class="q-ml-sm"
-            >
-            <span v-if="formDialog.data.id">Update Allowance</span>
-            <span v-else>Create Allowance</span>
-          </q-btn
           >
         </div>
       </q-form>
