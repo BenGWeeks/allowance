@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, validator
 
 
 class CreateAllowanceData(BaseModel):
@@ -22,8 +22,7 @@ class CreateAllowanceData(BaseModel):
     lnurlpay: Optional[str] = None  # LNURL pay string for compatibility
     total: int = 0  # Total amount processed
 
-    @field_validator("amount")
-    @classmethod
+    @validator("amount")
     def amount_must_be_positive(cls, v):
         if v <= 0:
             raise ValueError("Amount must be greater than 0")
@@ -46,8 +45,7 @@ class Allowance(BaseModel):
     lnurlpay: Optional[str] = None  # LNURL pay string for compatibility
     total: int = 0  # Total amount processed
 
-    @field_validator("amount")
-    @classmethod
+    @validator("amount")
     def amount_must_be_positive(cls, v):
         if v <= 0:
             raise ValueError("Amount must be greater than 0")
