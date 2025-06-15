@@ -168,48 +168,102 @@ jobs:
           exit 1
         fi
         
-    - name: Basic validation tests
+    - name: Start LNBits
       run: |
-        echo "🚀 Running simplified integration tests..."
+        cd lnbits-app
         
-        # Test extension structure
-        echo "📁 Testing extension structure..."
-        if [ -d "static" ] && [ -d "templates" ]; then
-          echo "✅ Required directories exist"
-        else
-          echo "❌ Missing required directories"
+        # Export environment variables  
+        export LNBITS_BACKEND_WALLET_CLASS=FakeWallet
+        export LNBITS_DATABASE_URL=postgres://postgres:postgres@localhost:5432/lnbits
+        export HOST=0.0.0.0
+        export PORT=5001
+        export DEBUG=true
+        export LNBITS_FORCE_HTTPS=false
+        
+        # Run migrations
+        echo "🔄 Running database migrations..."
+        poetry run python -m lnbits --migrate
+        
+        # Start LNBits with logging
+        echo "🚀 Starting LNBits..."
+        poetry run python -m lnbits > ../lnbits.log 2>&1 &
+        LNBITS_PID=$!
+        echo $LNBITS_PID > ../lnbits.pid
+        echo "LNBits started with PID: $LNBITS_PID"
+        
+        cd ..
+        
+        # Wait for LNBits to start
+        echo "⏳ Waiting for LNBits to start..."
+        for i in {1..30}; do
+          if curl -f http://localhost:5001/ --max-time 3 2>/dev/null; then
+            echo "✅ LNBits is ready!"
+            break
+          fi
+          
+          if ! ps -p $LNBITS_PID > /dev/null; then
+            echo "❌ LNBits process died"
+            cat lnbits.log 2>/dev/null || echo "No log file found"
+            exit 1
+          fi
+          
+          if [ $((i % 5)) -eq 0 ]; then
+            echo "⏳ Still waiting... ($i/30)"
+          fi
+          
+          sleep 1
+        done
+        
+        if ! curl -f http://localhost:5001/ --max-time 5; then
+          echo "❌ LNBits failed to start"
+          cat lnbits.log 2>/dev/null || echo "No log file found"
           exit 1
         fi
         
-        # Test template files
-        echo "📄 Testing template files..."
-        if [ -f "templates/allowance/index.html" ]; then
-          echo "✅ Main template exists"
-        else
-          echo "❌ Main template missing"
-          exit 1
+    - name: Install Playwright
+      run: |
+        npm init -y
+        npm install playwright
+        npx playwright install chromium
+        
+    - name: Run Playwright tests
+      run: |
+        cd tests
+        echo "🎭 Running Playwright tests..."
+        
+        # Create admin account
+        echo "👤 Creating admin account..."
+        node create-admin-account.js
+        
+        # Enable allowance extension
+        echo "🔌 Enabling allowance extension..."
+        node enable-allowance.js
+        
+        # Test allowance CRUD operations
+        echo "✅ Testing allowance creation..."
+        node create-allowance.js "Test Daily" 50 daily
+        node create-allowance.js "Test Weekly" 100 weekly
+        node create-allowance.js "Test Monthly" 200 monthly
+        
+        echo "✏️ Testing allowance editing..."
+        node edit-allowance.js "Test Daily" "Updated Daily" 75 weekly
+        
+        echo "🗑️ Testing allowance deletion..."
+        node delete-allowance.js "Updated Daily"
+        
+        echo "🎉 All Playwright tests passed!"
+        
+    - name: Upload test screenshots
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-test-screenshots
+        path: tests/test-results/
+        
+    - name: Stop LNBits
+      if: always()
+      run: |
+        echo "🛑 Stopping LNBits..."
+        if [ -f lnbits.pid ]; then
+          kill $(cat lnbits.pid) || true
         fi
-        
-        # Test static files
-        echo "📄 Testing static files..."
-        if [ -f "static/js/index.js" ]; then
-          echo "✅ JavaScript file exists"
-        else
-          echo "❌ JavaScript file missing"
-          exit 1
-        fi
-        
-        # Test manifest content
-        echo "📋 Testing manifest content..."
-        python3 -c "
-        import json
-        manifest = json.load(open('manifest.json'))
-        required_fields = ['name', 'short_description', 'min_lnbits_version']
-        for field in required_fields:
-            if field not in manifest:
-                print(f'❌ Missing {field} in manifest')
-                exit(1)
-        print('✅ Manifest has required fields')
-        "
-        
-        echo "🎉 Simplified integration tests passed!"
