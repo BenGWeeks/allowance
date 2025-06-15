@@ -156,8 +156,51 @@ async def api_allowance_create(
     data: CreateAllowanceData,
     # wallet = Depends(require_admin_key),  # Temporarily disabled
 ):
-    # Temporary implementation without authentication
-    return {"message": "Create endpoint test - authentication disabled"}
+    # Create allowance in database (simplified version without full authentication)
+    try:
+        import asyncpg
+        
+        # Generate ID
+        data.id = urlsafe_short_hash()
+        
+        # Connect to database
+        conn = await asyncpg.connect(
+            "postgresql://lnbits:password@allowance-postgres:5432/lnbits"
+        )
+        
+        # Insert new allowance
+        await conn.execute(
+            """
+            INSERT INTO ext_allowance.maintable 
+            (id, name, wallet, lightning_address, amount, currency, start_date, 
+             frequency_type, next_payment_date, memo, active, end_date)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            """,
+            data.id,
+            data.name,
+            data.wallet or "test-wallet",
+            data.lightning_address,
+            data.amount,
+            data.currency,
+            data.start_date,
+            data.frequency_type,
+            data.next_payment_date,
+            data.memo,
+            data.active,
+            data.end_date,
+        )
+        
+        await conn.close()
+        
+        logger.info(f"✅ Created allowance: {data.id}")
+        return {"id": data.id, "name": data.name, "message": "Allowance created successfully"}
+        
+    except Exception as e:
+        logger.error(f"🚨 Error creating allowance: {e}")
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR, 
+            detail=f"Failed to create allowance: {str(e)}"
+        )
     # data.id = urlsafe_short_hash()
     # data.wallet = data.wallet or wallet.id
     # new_allowance = await create_allowance(data)

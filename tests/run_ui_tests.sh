@@ -41,7 +41,7 @@ for test in "${TESTS[@]}"; do
     if [ -f "$test" ]; then
         echo
         echo "🧪 Running: $test"
-        if npx playwright test "$test"; then
+        if node "$test"; then
             echo "✅ PASSED: $test"
             ((PASSED++))
         else

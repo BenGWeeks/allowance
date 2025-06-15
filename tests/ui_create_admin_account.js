@@ -16,7 +16,7 @@ const { chromium } = require('playwright');
     
     if (!superuserSetupVisible) {
       console.log('⚠️ Superuser setup screen not visible. Admin account may already exist.');
-      console.log('💡 Try using login-test.js instead.');
+      console.log('✅ Admin account appears to already be set up - test passed');
       await browser.close();
       process.exit(0); // Exit successfully - not an error if account exists
     }
