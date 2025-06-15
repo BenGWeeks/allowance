@@ -3,6 +3,7 @@ from http import HTTPStatus
 from fastapi import APIRouter, Depends, Query, Request
 from loguru import logger
 from lnbits.core.crud import get_user
+
 # from lnbits.core.models import WalletTypeInfo  # Not available in LNbits v1.0
 from lnbits.core.services import create_invoice
 from lnbits.decorators import (
@@ -32,55 +33,67 @@ allowance_api_router = APIRouter()
 ## Get all the records belonging to the user
 
 
-@allowance_api_router.get("/api/v1/allowance", status_code=HTTPStatus.OK, response_model=None)
+@allowance_api_router.get(
+    "/api/v1/allowance", status_code=HTTPStatus.OK, response_model=None
+)
 async def api_allowances(
     all_wallets: bool = Query(False),
     # wallet = Depends(get_wallet_for_key),  # Causing Pydantic error
 ):
     # Get real allowances from database
     logger.info("🔗 API called: Getting real allowances from database")
-    
+
     try:
         import asyncpg
-        
+
         # Connect to database
-        conn = await asyncpg.connect('postgresql://lnbits:password@allowance-postgres:5432/lnbits')
-        
+        conn = await asyncpg.connect(
+            "postgresql://lnbits:password@allowance-postgres:5432/lnbits"
+        )
+
         # Get all allowances (only select columns that exist)
-        rows = await conn.fetch("""
+        rows = await conn.fetch(
+            """
             SELECT id, name, wallet, lightning_address, amount, currency,
                    start_date, frequency_type, next_payment_date, memo, 
                    active, end_date
             FROM ext_allowance.maintable 
             ORDER BY start_date DESC
-        """)
-        
+        """
+        )
+
         await conn.close()
-        
+
         # Convert to list of dicts
         allowances = []
         for row in rows:
             allowance_dict = {
-                'id': row['id'],
-                'name': row['name'],
-                'wallet': row['wallet'],
-                'lightning_address': row['lightning_address'],
-                'amount': row['amount'],
-                'currency': row['currency'],
-                'start_date': row['start_date'].isoformat() if row['start_date'] else None,
-                'frequency_type': row['frequency_type'],
-                'next_payment_date': row['next_payment_date'].isoformat() if row['next_payment_date'] else None,
-                'memo': row['memo'] or '',
-                'active': row['active'],
-                'end_date': row['end_date'].isoformat() if row['end_date'] else None,
-                'lnurlpay': None,  # Column doesn't exist in table
-                'total': 0  # Column doesn't exist in table
+                "id": row["id"],
+                "name": row["name"],
+                "wallet": row["wallet"],
+                "lightning_address": row["lightning_address"],
+                "amount": row["amount"],
+                "currency": row["currency"],
+                "start_date": (
+                    row["start_date"].isoformat() if row["start_date"] else None
+                ),
+                "frequency_type": row["frequency_type"],
+                "next_payment_date": (
+                    row["next_payment_date"].isoformat()
+                    if row["next_payment_date"]
+                    else None
+                ),
+                "memo": row["memo"] or "",
+                "active": row["active"],
+                "end_date": row["end_date"].isoformat() if row["end_date"] else None,
+                "lnurlpay": None,  # Column doesn't exist in table
+                "total": 0,  # Column doesn't exist in table
             }
             allowances.append(allowance_dict)
-            
+
         logger.info(f"📊 Returning {len(allowances)} allowances")
         return allowances
-        
+
     except Exception as e:
         logger.error(f"🚨 Database error in api_allowances: {e}")
         return []
@@ -135,7 +148,9 @@ async def api_allowance_update(
 ## Create a new record
 
 
-@allowance_api_router.post("/api/v1/allowance", status_code=HTTPStatus.CREATED, response_model=None)
+@allowance_api_router.post(
+    "/api/v1/allowance", status_code=HTTPStatus.CREATED, response_model=None
+)
 async def api_allowance_create(
     request: Request,
     data: CreateAllowanceData,
@@ -154,7 +169,7 @@ async def api_allowance_create(
 
 @allowance_api_router.delete("/api/v1/allowance/{allowance_id}", response_model=None)
 async def api_allowance_delete(
-    allowance_id: str  # , wallet = Depends(require_admin_key)  # Temporarily disabled
+    allowance_id: str,  # , wallet = Depends(require_admin_key)  # Temporarily disabled
 ):
     # Temporary implementation without authentication
     return {"message": "Delete endpoint test - authentication disabled"}
@@ -190,7 +205,9 @@ async def api_allowance_delete(
 
 
 @allowance_api_router.post(
-    "/api/v1/allowance/payment/{allowance_id}", status_code=HTTPStatus.CREATED, response_model=None
+    "/api/v1/allowance/payment/{allowance_id}",
+    status_code=HTTPStatus.CREATED,
+    response_model=None,
 )
 async def api_allowance_create_invoice(
     allowance_id: str, amount: int = Query(..., ge=1), memo: str = ""

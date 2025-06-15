@@ -4,6 +4,7 @@
 
 from typing import Any
 
+
 async def m001_initial(db: Any) -> None:
     """
     Initial templates table with lightning address and currency support.
