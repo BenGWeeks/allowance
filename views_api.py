@@ -35,7 +35,7 @@ allowance_api_router = APIRouter()
 async def api_allowances(
     all_wallets: bool = Query(False),
     wallet: WalletTypeInfo = Depends(get_wallet_for_key),
-):
+) -> list[dict]:
     wallet_ids = [wallet.id]
     if all_wallets:
         user = await get_user(wallet.user)
@@ -51,7 +51,7 @@ async def api_allowances(
     status_code=HTTPStatus.OK,
     dependencies=[Depends(require_invoice_key)],
 )
-async def api_allowance(allowance_id: str):
+async def api_allowance(allowance_id: str) -> dict:
     allowance = await get_allowance(allowance_id)
     if not allowance:
         raise HTTPException(
@@ -68,7 +68,7 @@ async def api_allowance_update(
     data: CreateAllowanceData,
     allowance_id: str,
     wallet: WalletTypeInfo = Depends(get_wallet_for_key),
-):
+) -> dict:
     if not allowance_id:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
@@ -85,7 +85,8 @@ async def api_allowance_update(
         setattr(allowance, key, value)
 
     update_data = CreateAllowanceData(**allowance.dict())
-    return await update_allowance(update_data)
+    updated_allowance = await update_allowance(update_data)
+    return updated_allowance.dict()
 
 
 ## Create a new record
@@ -96,10 +97,11 @@ async def api_allowance_create(
     request: Request,
     data: CreateAllowanceData,
     wallet: WalletTypeInfo = Depends(require_admin_key),
-):
+) -> dict:
     data.id = urlsafe_short_hash()
     data.wallet = data.wallet or wallet.id
-    return await create_allowance(data)
+    new_allowance = await create_allowance(data)
+    return new_allowance.dict()
 
 
 ## Delete a record
@@ -132,7 +134,7 @@ async def api_allowance_delete(
 
 
 @allowance_api_router.get("/api/v1/rate/{currency}", status_code=HTTPStatus.OK)
-async def api_check_fiat_rate(currency: str):
+async def api_check_fiat_rate(currency: str) -> dict:
     try:
         rate = await get_fiat_rate_satoshis(currency)
     except AssertionError:
