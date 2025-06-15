@@ -108,6 +108,11 @@ jobs:
       with:
         python-version: '3.10'
         
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
     - name: Install LNBits
       run: |
         echo "📦 Installing LNBits..."
@@ -230,6 +235,9 @@ jobs:
       run: |
         cd tests
         echo "🎭 Running Playwright tests..."
+        
+        # Create test results directory
+        mkdir -p test-results
         
         # Create admin account
         echo "👤 Creating admin account..."
