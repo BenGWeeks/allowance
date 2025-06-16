@@ -61,8 +61,24 @@ The extension includes comprehensive test suites for both API and UI testing:
 
 **Test Runners:**
 - **run_all_tests.sh** - Runs both API and UI tests in sequence
-- **run_api_tests.sh** - Runs only API tests (Python, auto-detects system dependencies)
+- **run_api_tests.sh** - Runs only API tests (Python, requires system packages)
 - **run_ui_tests.sh** - Runs only UI tests (Playwright)
+
+**Test Dependencies:**
+Install Python dependencies with:
+```bash
+sudo apt install python3-httpx python3-pytest python3-loguru
+```
+
+**Running Tests:**
+```bash
+# Run all tests (API + UI)
+./tests/run_all_tests.sh
+
+# Run individual test suites
+./tests/run_api_tests.sh
+./tests/run_ui_tests.sh
+```
 
 #### Test Naming Conventions
 - **API Tests**: Located in `tests/api/` directory with descriptive names
@@ -83,9 +99,12 @@ The extension includes comprehensive test suites for both API and UI testing:
 - Extension enabling via UI
 - Allowance creation through forms (POST requests successful)
 - Allowance editing through forms (PUT requests successful)
+- Allowance deletion via API (DELETE requests successful)
+- Chronological ordering by created_at timestamp (newest first)
 - Proper error handling and exit codes
 - Vue app mounting following LNURLP pattern
 - Form validation with required field defaults
+- Clean test suite with no false failures
 
 ### Repository Structure
 The repository follows a clean structure with proper .gitignore patterns:

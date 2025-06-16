@@ -48,12 +48,15 @@ The extension includes comprehensive test suites for both API and UI testing.
 
 #### Prerequisites
 
+**Python Dependencies:**
+```bash
+sudo apt install python3-httpx python3-pytest python3-loguru
+```
+
+**UI Test Dependencies:**
 ```bash
 cd tests
-# For UI tests
 npm install
-# For API tests (auto-detects system dependencies or creates virtual environment)
-./run_api_tests.sh
 ```
 
 #### Test Scripts
@@ -77,21 +80,20 @@ npm install
 
 **Test Runners:**
 - **run_all_tests.sh** - Runs both API and UI tests in sequence
-- **run_api_tests.sh** - Runs only API tests (Python)
+- **run_api_tests.sh** - Runs only API tests (Python, requires system packages)
 - **run_ui_tests.sh** - Runs only UI tests (Playwright)
 
 #### Running Tests
 
 ```bash
 # Run all tests (API + UI)
-cd tests
-./run_all_tests.sh
+./tests/run_all_tests.sh
 
 # Run only API tests
-./run_api_tests.sh
+./tests/run_api_tests.sh
 
 # Run only UI tests  
-./run_ui_tests.sh
+./tests/run_ui_tests.sh
 
 # Run individual API tests
 python3 tests/api/allowance_create.py
@@ -179,6 +181,8 @@ allowance/
 
 ### Recent Improvements
 
+- ✅ Added `created_at` column for chronological ordering (newest allowances first)
+- ✅ Simplified test runners with clean output and system package dependencies
 - ✅ Fixed API authentication issues (403 Forbidden errors)
 - ✅ Resolved Vue.js mounting and form submission problems
 - ✅ Added comprehensive currency support with conversion hints
