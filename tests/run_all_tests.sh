@@ -1,7 +1,8 @@
 #!/bin/bash
 # Run all tests (API + UI)
 
-set -e
+# Don't exit on first error - we want to see all results
+set +e
 
 echo "🚀 Running All Tests"
 echo "==================="
