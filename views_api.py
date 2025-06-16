@@ -261,6 +261,41 @@ async def api_allowance_create(
         # Generate ID
         data.id = urlsafe_short_hash()
         
+        # Parse datetime strings to proper datetime objects
+        from datetime import datetime
+        import re
+        
+        def parse_datetime_string(date_input):
+            """Parse datetime input (string or datetime object) to timezone-naive datetime"""
+            if not date_input:
+                return None
+            try:
+                # If already a datetime object, just remove timezone info
+                if isinstance(date_input, datetime):
+                    return date_input.replace(tzinfo=None)
+                
+                # If it's a string, parse it
+                if isinstance(date_input, str):
+                    # Remove 'Z' suffix and parse as UTC
+                    if date_input.endswith('Z'):
+                        date_input = date_input[:-1] + '+00:00'
+                    # Parse ISO format and remove timezone
+                    dt = datetime.fromisoformat(date_input)
+                    return dt.replace(tzinfo=None)
+                
+                # If it's something else, try to convert to string first
+                date_str = str(date_input)
+                dt = datetime.fromisoformat(date_str)
+                return dt.replace(tzinfo=None)
+                
+            except Exception as e:
+                logger.warning(f"Error parsing datetime '{date_input}' (type: {type(date_input)}): {e}")
+                return None
+        
+        start_date = parse_datetime_string(data.start_date) if data.start_date else None
+        next_payment_date = parse_datetime_string(data.next_payment_date) if data.next_payment_date else None
+        end_date = parse_datetime_string(data.end_date) if data.end_date else None
+        
         # Connect to database
         conn = await asyncpg.connect(
             "postgresql://lnbits:password@allowance-postgres:5432/lnbits"
@@ -280,12 +315,12 @@ async def api_allowance_create(
             data.lightning_address,
             data.amount,
             data.currency,
-            data.start_date,
+            start_date,
             data.frequency_type,
-            data.next_payment_date,
+            next_payment_date,
             data.memo,
             data.active,
-            data.end_date,
+            end_date,
         )
         
         await conn.close()
