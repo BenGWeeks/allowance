@@ -37,14 +37,22 @@ window.app = Vue.createApp({
   },
   methods: {
     getAllowances() {
-      // Temporarily bypass wallet check since API authentication is disabled
       console.log('🔍 Loading allowances...')
       this.allowanceTable.loading = true
+      
+      // Use the first available wallet for admin operations
+      const wallet = this.g.user.wallets[0]
+      if (!wallet) {
+        console.error('❌ No wallet found for authentication')
+        this.allowanceTable.loading = false
+        return
+      }
+      
       LNbits.api
         .request(
           'GET',
           '/allowance/api/v1/allowance',
-          null // No auth key needed since API auth is disabled
+          wallet.adminkey
         )
         .then(response => {
           console.log('✅ Allowances loaded:', response.data)
