@@ -1,0 +1,9 @@
+[
+  {
+    "name": "Weekly Pocket Money",
+    "lightningAddress": "muddledsmell08@walletofsatoshi.com",
+    "amount": 100,
+    "frequency": "weekly",
+    "memo": "Weekly allowance for testing"
+  }
+]

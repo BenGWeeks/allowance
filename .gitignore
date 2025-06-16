@@ -9,11 +9,19 @@ temp/
 test-results/
 pgdata/
 
-# Test results
+# Test results and environments
 tests/test-results/*
 tests/playwright-report/
 tests/.last-run.json
-tests/package-lock.json
+tests/.api_test_env/
+tests/api/test-results/*
+tests/api/playwright-report/
+tests/api/.last-run.json
+tests/api/package-lock.json
+tests/ui/test-results/*
+tests/ui/playwright-report/
+tests/ui/.last-run.json
+tests/ui/package-lock.json
 
 # IDE
 .vscode/

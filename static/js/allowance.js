@@ -37,21 +37,29 @@ window.app = Vue.createApp({
   },
   methods: {
     getAllowances() {
-      if (!this.g?.user?.wallets?.length) {
-        console.log('No user wallets available')
+      console.log('🔍 Loading allowances...')
+      this.allowanceTable.loading = true
+      
+      // Use the first available wallet for admin operations
+      const wallet = this.g.user.wallets[0]
+      if (!wallet) {
+        console.error('❌ No wallet found for authentication')
+        this.allowanceTable.loading = false
         return
       }
-      this.allowanceTable.loading = true
+      
       LNbits.api
         .request(
           'GET',
           '/allowance/api/v1/allowance',
-          this.g.user.wallets[0].inkey
+          wallet.adminkey
         )
         .then(response => {
+          console.log('✅ Allowances loaded:', response.data)
           this.allowances = response.data
         })
         .catch(err => {
+          console.error('❌ Error loading allowances:', err)
           LNbits.utils.notifyApiError(err)
         })
         .finally(() => {
@@ -84,6 +92,12 @@ window.app = Vue.createApp({
       console.log('🔥 saveAllowance called')
       console.log('📊 Form data:', this.formDialog.data)
       console.log('🔘 Active field at submission:', this.formDialog.data.active, '(type:', typeof this.formDialog.data.active, ')')
+      
+      // Don't proceed if dialog is not shown
+      if (!this.formDialog.show) {
+        console.log('❌ Form dialog is not visible, aborting saveAllowance')
+        return
+      }
       
       // Validate required fields
       const errors = []

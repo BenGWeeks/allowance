@@ -34,37 +34,56 @@
    - **Solution**: Ensure all fields are properly mapped in `openUpdateDialog()`
 
 ### Testing Suite
-The extension includes comprehensive Playwright test scripts in `/tests/`:
+The extension includes comprehensive test suites for both API and UI testing:
+
+#### Test Organization
+- **API Tests**: `/tests/api/*.py` - Python-based API endpoint testing
+- **UI Tests**: `/tests/ui/*.js` - Playwright browser automation testing
+- **Test Runners**: Shell scripts to orchestrate all testing
 
 #### Test Scripts
-- **create-admin-account.js** - Creates initial superuser account on fresh LNBits install
-  - Detects "Set up the Superuser account below." screen
-  - Fills credentials using aria-label selectors
-  - Confirms success by finding "Add a new wallet" text
-  
-- **login-test.js** - Tests admin login functionality
-  - Handles switching from "Create Account" to Login screen
-  - Tests with actual admin credentials
-  - Confirms success with "Add a new wallet" visibility
-  
-- **enable-allowance.js** - Enables the allowance extension
-  - Navigates to Extensions page
-  - Finds Allowance card specifically
-  - Clicks Enable button (not Manage)
-  - Confirms success by checking for "Disable" button
-  
-- **create-allowance.js** - End-to-end allowance creation test
-  - Logs in, navigates to extension, creates allowance
-  - Uses proper form selectors and waits
-  - Verifies allowance appears in table
-  
-- **run_test.sh** - Test orchestration script
-  - Runs all tests in sequence
-  - Proper exit codes for CI/CD integration
-  - Screenshots saved to `tests/test-results/`
+**UI Tests (Playwright):**
+- **tests/ui/create_admin_account.js** - Creates initial superuser account on fresh LNBits install
+- **tests/ui/login_test.js** - Tests admin login functionality
+- **tests/ui/enable_allowance.js** - Enables the allowance extension via UI
+- **tests/ui/create_allowance.js** - End-to-end allowance creation test
+- **tests/ui/edit_allowance.js** - Tests allowance editing through forms
+- **tests/ui/delete_allowance.js** - Tests allowance deletion functionality
+- **tests/ui/check-currencies.js** - Tests currency dropdown functionality
+
+**API Tests (Python):**
+- **tests/api/allowance_create.py** - Tests allowance creation API
+- **tests/api/allowance_read.py** - Tests allowance retrieval API
+- **tests/api/allowance_update.py** - Tests allowance update API
+- **tests/api/allowance_delete.py** - Tests allowance deletion API
+- **tests/api/currency_rate.py** - Tests currency conversion API
+- **tests/api/scheduled_payments.py** - Tests scheduled payment execution
+
+**Test Runners:**
+- **run_all_tests.sh** - Runs both API and UI tests in sequence
+- **run_api_tests.sh** - Runs only API tests (Python, requires system packages)
+- **run_ui_tests.sh** - Runs only UI tests (Playwright)
+
+**Test Dependencies:**
+Install Python dependencies with:
+```bash
+sudo apt install python3-httpx python3-pytest python3-loguru
+```
+
+**Running Tests:**
+```bash
+# Run all tests (API + UI)
+./tests/run_all_tests.sh
+
+# Run individual test suites
+./tests/run_api_tests.sh
+./tests/run_ui_tests.sh
+```
 
 #### Test Naming Conventions
-- Use descriptive action-based names (create-allowance.js, not step1.js)
+- **API Tests**: Located in `tests/api/` directory with descriptive names
+- **UI Tests**: Located in `tests/ui/` directory with descriptive names
+- Use descriptive action-based names (create_allowance.js, not step1.js)
 - Single-purpose scripts with clear goals
 - Chain scripts by calling previous scripts when needed
 
@@ -80,21 +99,34 @@ The extension includes comprehensive Playwright test scripts in `/tests/`:
 - Extension enabling via UI
 - Allowance creation through forms (POST requests successful)
 - Allowance editing through forms (PUT requests successful)
+- Allowance deletion via API (DELETE requests successful)
+- Chronological ordering by created_at timestamp (newest first)
 - Proper error handling and exit codes
 - Vue app mounting following LNURLP pattern
 - Form validation with required field defaults
+- Clean test suite with no false failures
 
 ### Repository Structure
 The repository follows a clean structure with proper .gitignore patterns:
 
 ```
 allowance/
-├── tests/                    # Playwright test scripts
-│   ├── create-admin-account.js
-│   ├── login-test.js
-│   ├── enable-allowance.js
-│   ├── create-allowance.js
-│   ├── run_test.sh
+├── tests/                    # Comprehensive test suite
+│   ├── api/                 # API endpoint tests (Python)
+│   │   ├── allowance_*.py   # CRUD operations testing
+│   │   ├── currency_rate.py # Currency conversion testing
+│   │   └── scheduled_payments.py # Scheduled payments testing
+│   ├── ui/                  # UI automation tests (Playwright)
+│   │   ├── create_admin_account.js
+│   │   ├── login_test.js
+│   │   ├── enable_allowance.js
+│   │   ├── create_allowance.js
+│   │   ├── edit_allowance.js
+│   │   ├── delete_allowance.js
+│   │   └── check-currencies.js
+│   ├── run_all_tests.sh     # Run all tests
+│   ├── run_api_tests.sh     # Run API tests only
+│   ├── run_ui_tests.sh      # Run UI tests only
 │   └── test-results/        # Generated screenshots (ignored)
 ├── static/js/               # Vue.js frontend
 ├── templates/allowance/     # HTML templates
@@ -119,21 +151,38 @@ Fixed critical authentication issue in `views_api.py`:
 
 ### Code Quality and Testing
 
-#### Local Development Testing (Optional)
-For development quality checks, you can run local linting (but this is not required for CI):
+#### Local Development Testing
+To ensure your code passes CI checks, run these formatting and linting tools locally:
 
 ```bash
-# Optional: Quick quality check during development
+# Install code quality tools using pipx (recommended)
+pipx install black
+pipx install mypy
+pipx install ruff
+
+# Or install in a virtual environment
 python3 -m venv .test-venv
 source .test-venv/bin/activate
 pip install black mypy ruff pydantic fastapi
 
-# Run checks
-black --check *.py && ruff check *.py && mypy --ignore-missing-imports *.py
+# Format code with Black (CI requires this)
+black .
 
-# Clean up
+# Check formatting without modifying files
+black --check .
+
+# Run type checking with mypy
+mypy --ignore-missing-imports *.py
+
+# Run linting with ruff
+ruff check .
+
+# Clean up virtual environment if used
+deactivate
 rm -rf .test-venv
 ```
+
+**Important**: The GitHub Actions CI workflow runs `black --check .` and will fail if code is not properly formatted. Always run `black .` before committing to avoid CI failures.
 
 #### GitHub Actions Testing
 Following LNBits extension best practices, we focus on **functional testing** rather than heavy linting:
@@ -154,3 +203,6 @@ Following LNBits extension guidelines:
 ### Development Environment
 - Make sure you are working on the dev docker of lnbits (running on port 5001), not the production version (running on port 5000)
 - When looking for best practice of how to create an extension, look at https://github.com/lnbits/lnbits/tree/main/lnbits/extensions/lnurlp (do not download it, just look at the source)
+
+### Repo Interaction Guidelines
+- Do not send or create pull requests to https://github.com/lnbits/myextension (or make any changes to that repo)

@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This is an LNBits extension that allows you to setup recurring transfers between wallets.
+This is an LNBits extension that allows you to setup recurring payments from your LNBits wallet to any Lightning address (user@domain.com) or LNURL-pay endpoint. This enables scheduled payments to external services and Lightning addresses, not just wallet-to-wallet transfers within the same LNBits instance.
 
 ✅ CI/CD Status: Tests configured and working
 
@@ -12,59 +12,102 @@ Install and enable the "Allowance" extension either through the official LNbits 
 
 ### Development
 
-> This guide assumes you're using this extension as a base for a new one, and have installed LNbits using https://github.com/lnbits/lnbits/blob/main/docs/guide/installation.md#option-1-recommended-poetry.
+For development, we use Docker Compose to run LNBits:
 
-To install LNbits see: https://github.com/lnbits/lnbits/blob/main/docs/guide/installation.md#option-1-recommended-poetry.
+1. Clone this repository
+2. Start LNBits using Docker Compose:
+   ```bash
+   docker-compose up -d
+   ```
+3. Access the development instance at `http://localhost:5001`
+4. Enable the Allowance extension through the Extensions menu
 
-> LNBits cannot be installed on Windows.
+The Docker Compose configuration automatically mounts the current directory into the container, so changes to the code are reflected immediately.
 
-1. `Ctrl c` shut down your LNbits installation.
-2. Download the extension files from https://github.com/bengweek/allowance to a folder outside of `/lnbits`, and initialize the folder with `git`. Alternatively, create a repo, copy the allowance extension files into it, then `git clone` the extension to a location outside of `/lnbits`.
-3. Remove the installed extension from `lnbits/lnbits/extensions`.
-4. Create a symbolic link using `ln -s /home/ben/Projects/<name of your extension> /home/ben/Projects/lnbits/lnbits/extensions`.
-5. Restart your LNbits installation. You can now modify your extension and `git push` changes to a repo.
-6. When you're ready to share your manifest so others can install it, edit `/lnbits/allowance/manifest.json` to include the git credentials of your extension.
-7. IMPORTANT: If you want your extension to be added to the official LNbits manifest, please follow the guidelines here: https://github.com/lnbits/lnbits-extensions#important
+> Note: LNBits cannot be installed on Windows.
+
+When ready to share your extension:
+- Update `manifest.json` with your repository details
+- Follow [LNBits extension guidelines](https://github.com/lnbits/lnbits-extensions#important) for official submission
 
 ### Features
 
-- **Recurring Transfers**: Set up automated transfers between wallets
-- **Flexible Scheduling**: Support for various frequencies (per second, per minute, hourly, daily, weekly, monthly)
+- **Lightning Address Support**: Send recurring payments to any Lightning address (user@domain.com) or LNURL-pay endpoint
+- **Scheduled Payments**: Automated payment execution with 1-minute minimum frequency using background tasks
+- **Flexible Scheduling**: Support for various frequencies (minutely, hourly, daily, weekly, monthly, yearly)
+- **Payment Tracking**: All payments are tagged as "allowance" payments in the LNBits payment history
 - **Currency Support**: Multi-currency support with real-time conversion hints
 - **Vue.js Frontend**: Modern reactive interface following LNBits patterns
 - **Comprehensive Testing**: Full Playwright test suite for automated testing
 
 ### Testing
 
-The extension includes a comprehensive test suite using Playwright for automated browser testing.
+The extension includes comprehensive test suites for both API and UI testing.
+
+#### Test Organization
+
+- **API Tests**: `/tests/api/*.py` - Python-based API endpoint testing
+- **UI Tests**: `/tests/ui/*.js` - Playwright browser automation testing  
+- **Test Runners**: Shell scripts to orchestrate all testing
 
 #### Prerequisites
 
+**System Dependencies (no virtual environment needed):**
 ```bash
+# Install Python test dependencies
+sudo apt install -y python3-httpx python3-pytest python3-loguru
+
+# Install Node.js and npm if not already installed
+sudo apt install -y nodejs npm
+
+# Install UI test dependencies
 cd tests
 npm install
+cd ..
 ```
 
 #### Test Scripts
 
-- **create-admin-account.js** - Creates initial superuser account on fresh LNBits install
-- **login-test.js** - Tests admin login functionality  
-- **enable-allowance.js** - Enables the allowance extension via UI
-- **create-allowance.js** - End-to-end test that creates a new allowance
-- **run_test.sh** - Runs all tests in sequence
+**API Tests (Python):**
+- **tests/api/allowance_create.py** - Test POST /api/v1/allowance endpoint
+- **tests/api/allowance_read.py** - Test GET /api/v1/allowance endpoints  
+- **tests/api/allowance_update.py** - Test PUT /api/v1/allowance/{id} endpoint
+- **tests/api/allowance_delete.py** - Test DELETE /api/v1/allowance/{id} endpoint
+- **tests/api/currency_rate.py** - Test GET /api/v1/rate/{currency} endpoint
+- **tests/api/scheduled_payments.py** - Test scheduled payment execution
+
+**UI Tests (Playwright):**
+- **tests/ui/create_admin_account.js** - Creates initial superuser account
+- **tests/ui/login_test.js** - Tests admin login functionality
+- **tests/ui/enable_allowance.js** - Enables the allowance extension via UI
+- **tests/ui/create_allowance.js** - End-to-end allowance creation test
+- **tests/ui/edit_allowance.js** - Tests allowance editing through forms
+- **tests/ui/delete_allowance.js** - Tests allowance deletion functionality
+- **tests/ui/check-currencies.js** - Tests currency dropdown functionality
+
+**Test Runners:**
+- **tests/run_all_tests.sh** - Runs both API and UI tests in sequence
+- **tests/run_api_tests.sh** - Runs only API tests (uses system Python packages)
+- **tests/run_ui_tests.sh** - Runs only UI tests (Playwright browser automation)
 
 #### Running Tests
 
 ```bash
-# Run all tests
-cd tests
-./run_test.sh
+# Run all tests (API + UI)
+./tests/run_all_tests.sh
 
-# Run individual tests
-node create-admin-account.js
-node login-test.js  
-node enable-allowance.js
-node create-allowance.js
+# Run only API tests
+./tests/run_api_tests.sh
+
+# Run only UI tests  
+./tests/run_ui_tests.sh
+
+# Run individual API tests
+python3 tests/api/allowance_create.py
+python3 tests/api/currency_rate.py
+
+# Run individual UI tests
+node tests/ui/create_allowance.js
 ```
 
 #### Test Results
@@ -82,17 +125,30 @@ Tests assume:
 
 ### Testing & Quality
 
-#### Functional Testing Focus
+#### Code Formatting & Linting
 
-Following LNBits extension best practices, we prioritize **functional testing** over heavy tooling:
+To ensure your code passes CI checks, run these tools locally before committing:
 
 ```bash
-# Optional development quality check
-python3 -m venv .test-venv && source .test-venv/bin/activate
-pip install black mypy ruff pydantic fastapi
-black --check *.py && ruff check *.py && mypy --ignore-missing-imports *.py
-rm -rf .test-venv
+# Install formatting tools (using pipx is recommended)
+pipx install black
+pipx install mypy  
+pipx install ruff
+
+# Format all Python files (REQUIRED for CI)
+black .
+
+# Check formatting without modifying
+black --check .
+
+# Run type checking
+mypy --ignore-missing-imports *.py
+
+# Run linting
+ruff check .
 ```
+
+**Important**: CI will fail if code is not formatted with Black. Always run `black .` before pushing changes.
 
 #### GitHub Actions Testing
 
@@ -115,29 +171,47 @@ rm -rf .test-venv
 ```
 allowance/
 ├── .github/workflows/       # CI/CD pipeline configuration
-├── tests/                   # Playwright E2E test scripts
-│   ├── create-admin-account.js
-│   ├── login-test.js
-│   ├── enable-allowance.js
-│   ├── create-allowance.js
-│   └── run_test.sh
-├── static/js/              # Vue.js frontend
+│   └── integration-tests.yml # GitHub Actions workflow
+├── tests/                   # Comprehensive test suite
+│   ├── api/                # API endpoint tests (Python)
+│   │   ├── allowance_create.py
+│   │   ├── allowance_read.py
+│   │   ├── allowance_update.py
+│   │   ├── allowance_delete.py
+│   │   ├── currency_rate.py
+│   │   └── scheduled_payments.py
+│   ├── ui/                 # UI automation tests (Playwright)
+│   │   ├── create_admin_account.js
+│   │   ├── login_test.js
+│   │   ├── enable_allowance.js
+│   │   ├── create_allowance.js
+│   │   ├── edit_allowance.js
+│   │   ├── delete_allowance.js
+│   │   └── check-currencies.js
+│   ├── run_all_tests.sh    # Run all tests
+│   ├── run_api_tests.sh    # Run API tests only
+│   ├── run_ui_tests.sh     # Run UI tests only
+│   ├── get_api_key.py      # Helper to get admin API key
+│   ├── package.json        # Node.js dependencies
+│   └── test_scheduled_payments.py # Additional payment tests
+├── static/
+│   ├── js/                 # Frontend JavaScript
+│   │   └── index.js        # Vue.js application
+│   └── css/                # Styles (if any)
 ├── templates/allowance/    # HTML templates
-├── crud.py                 # Database operations
-├── views.py                # Frontend routes
-├── views_api.py           # API endpoints
+│   └── index.html         # Main extension page
+├── __init__.py            # Extension initialization
+├── config.json            # Extension configuration
+├── crud.py                # Database operations
 ├── models.py              # Pydantic data models
 ├── tasks.py               # Background task processing
+├── views.py               # Frontend routes
+├── views_api.py           # API endpoints
 ├── migrations.py          # Database schema
-├── pyproject.toml         # Python dependencies & tool config
-└── manifest.json          # Extension manifest
+├── manifest.json          # Extension manifest
+├── pyproject.toml         # Python dependencies
+├── README.md              # This file
+├── CLAUDE.md              # Development notes
+└── .gitignore             # Git ignore patterns
 ```
 
-### Recent Improvements
-
-- ✅ Fixed API authentication issues (403 Forbidden errors)
-- ✅ Resolved Vue.js mounting and form submission problems
-- ✅ Added comprehensive currency support with conversion hints
-- ✅ Implemented proper form validation with required field defaults
-- ✅ Clean repository structure with proper .gitignore patterns
-- ✅ Full test coverage with descriptive naming conventions
