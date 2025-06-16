@@ -13,6 +13,17 @@ async def test_update_allowance():
     test_id = "test_allowance_id"
 
     try:
+        # Get admin API key dynamically
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+        from get_api_key import get_admin_api_key
+        
+        admin_key = await get_admin_api_key()
+        if not admin_key:
+            print("❌ Failed to get admin API key")
+            return False
+
         async with httpx.AsyncClient() as client:
             payload = {
                 "name": "Updated Test Allowance",
@@ -24,10 +35,6 @@ async def test_update_allowance():
                 "active": False,
                 "memo": "Updated via API test",
             }
-
-            # For development testing, we need an actual API key
-            # This is the admin key for wallet b2a9a06ff45e439d8c00bc6406d48191
-            admin_key = "d16c6bf31be03c2cd0cfadc7d90a2d69"  # Known dev admin key
 
             response = await client.put(
                 f"{base_url}/allowance/api/v1/allowance/{test_id}",

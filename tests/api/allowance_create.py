@@ -12,6 +12,17 @@ async def test_create_allowance():
     base_url = "http://localhost:5001"
 
     try:
+        # Get admin API key dynamically
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+        from get_api_key import get_admin_api_key
+        
+        admin_key = await get_admin_api_key()
+        if not admin_key:
+            print("❌ Failed to get admin API key")
+            return False
+
         async with httpx.AsyncClient() as client:
             start_date = datetime.utcnow() + timedelta(days=1)
             payload = {
@@ -25,10 +36,6 @@ async def test_create_allowance():
                 "active": True,
                 "memo": "Created via API test",
             }
-
-            # For development testing, we need an actual API key
-            # This is the admin key for wallet b2a9a06ff45e439d8c00bc6406d48191
-            admin_key = "d16c6bf31be03c2cd0cfadc7d90a2d69"  # Known dev admin key
 
             response = await client.post(
                 f"{base_url}/allowance/api/v1/allowance",

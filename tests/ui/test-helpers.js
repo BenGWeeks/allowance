@@ -44,11 +44,18 @@ async function getAdminApiKey(page) {
  */
 async function getAllowanceCount(page) {
   try {
-    // For now, use the known development environment behavior
-    // TODO: Get actual API key dynamically
+    // Get admin API key dynamically
+    const { getAdminApiKey } = require('../get_api_key.js');
+    const adminKey = await getAdminApiKey(page);
+    
+    if (!adminKey) {
+      console.log('⚠️ Failed to get admin API key');
+      return 0;
+    }
+    
     const response = await page.request.get('http://localhost:5001/allowance/api/v1/allowance', {
       headers: {
-        'X-Api-Key': 'd16c6bf31be03c2cd0cfadc7d90a2d69' // Development key
+        'X-Api-Key': adminKey
       }
     });
     
@@ -72,9 +79,18 @@ async function getAllowanceCount(page) {
  */
 async function getAllowances(page) {
   try {
+    // Get admin API key dynamically
+    const { getAdminApiKey } = require('../get_api_key.js');
+    const adminKey = await getAdminApiKey(page);
+    
+    if (!adminKey) {
+      console.log('⚠️ Failed to get admin API key');
+      return [];
+    }
+    
     const response = await page.request.get('http://localhost:5001/allowance/api/v1/allowance', {
       headers: {
-        'X-Api-Key': 'd16c6bf31be03c2cd0cfadc7d90a2d69' // Development key
+        'X-Api-Key': adminKey
       }
     });
     
