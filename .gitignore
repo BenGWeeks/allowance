@@ -9,10 +9,11 @@ temp/
 test-results/
 pgdata/
 
-# Test results
+# Test results and environments
 tests/test-results/*
 tests/playwright-report/
 tests/.last-run.json
+tests/.api_test_env/
 tests/api/test-results/*
 tests/api/playwright-report/
 tests/api/.last-run.json
