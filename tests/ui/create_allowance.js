@@ -54,8 +54,10 @@ const getTestData = () => {
       }
     });
     
+    let lastCreateResponse = null;
     page.on('response', response => {
       if (response.url().includes('/allowance/api/v1/allowance') && response.request().method() === 'POST') {
+        lastCreateResponse = { status: response.status(), url: response.url() };
         console.log(`📥 POST response: ${response.status()} ${response.url()}`);
       }
     });
@@ -86,6 +88,7 @@ const getTestData = () => {
     // Step 3: Create allowances from JSON file
     for (let i = 0; i < allowancesToCreate.length; i++) {
       const testData = allowancesToCreate[i];
+      lastCreateResponse = null; // Reset for this iteration
       console.log(`\n📝 Step 3.${i+1}: Creating allowance "${testData.name}" (${testData.amount} sats ${testData.frequency})...`);
     const newAllowanceButton = page.locator('button:has-text("New Allowance")');
     
@@ -280,6 +283,17 @@ const getTestData = () => {
       
       // Wait for table to update
       await page.waitForTimeout(2000);
+      
+      // Check if we got an error response during creation (anything other than 200/201)
+      if (lastCreateResponse && (lastCreateResponse.status < 200 || lastCreateResponse.status >= 300)) {
+        console.log(`❌ CREATION FAILED: Server returned ${lastCreateResponse.status} error`);
+        console.log(`   Reason: HTTP error prevented allowance creation`);
+        failureCount++;
+        await page.screenshot({ path: `/mnt/raid1/GitHub/allowance/tests/test-results/create-allowance-${i+1}-http-error.png`, fullPage: true });
+        // Reset for next iteration
+        lastCreateResponse = null;
+        continue; // Skip to next allowance
+      }
       
       const allowanceRows = page.locator(`tr:has-text("${testData.name}")`);
       const allowanceCount = await allowanceRows.count();
