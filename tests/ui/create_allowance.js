@@ -85,6 +85,23 @@ const getTestData = () => {
     await page.goto('http://localhost:5001/allowance/');
     await page.waitForTimeout(3000);
     
+    // Get initial count
+    const { getAdminApiKey } = require('../get_api_key.js');
+    const adminKey = await getAdminApiKey(page);
+    
+    let initialCount = 0;
+    if (adminKey) {
+      const initialResponse = await page.request.get('http://localhost:5001/allowance/api/v1/allowance', {
+        headers: { 'X-Api-Key': adminKey }
+      });
+      if (initialResponse.ok()) {
+        const initialData = await initialResponse.json();
+        initialCount = Array.isArray(initialData) ? initialData.length : 0;
+      }
+    }
+    console.log(`📊 Initial allowance count: ${initialCount}`);
+    console.log(`🎯 Expected final count: ${initialCount + allowancesToCreate.length}`);
+    
     // Step 3: Create allowances from JSON file
     for (let i = 0; i < allowancesToCreate.length; i++) {
       const testData = allowancesToCreate[i];
@@ -339,17 +356,48 @@ const getTestData = () => {
     }
   } // End of for loop
   
+  // Step 4: Verify final count
+  console.log(`\n📝 Step 4: Verifying final count...`);
+  let finalCount = 0;
+  if (adminKey) {
+    const finalResponse = await page.request.get('http://localhost:5001/allowance/api/v1/allowance', {
+      headers: { 'X-Api-Key': adminKey }
+    });
+    if (finalResponse.ok()) {
+      const finalData = await finalResponse.json();
+      finalCount = Array.isArray(finalData) ? finalData.length : 0;
+    }
+  }
+  
+  const expectedFinalCount = initialCount + allowancesToCreate.length;
+  const actualCountChange = finalCount - initialCount;
+  
+  console.log(`📊 Final allowance count: ${finalCount}`);
+  console.log(`📈 Count change: +${actualCountChange} (expected: +${allowancesToCreate.length})`);
+  
+  // Count verification
+  const countVerificationPassed = (finalCount === expectedFinalCount);
+  
   // Final results
   console.log(`\n🎯 FINAL RESULTS:`);
   console.log(`✅ Successful: ${successCount}/${allowancesToCreate.length}`);
   console.log(`❌ Failed: ${failureCount}/${allowancesToCreate.length}`);
+  console.log(`📊 Count verification: ${countVerificationPassed ? '✅ PASSED' : '❌ FAILED'}`);
   
-  if (successCount === allowancesToCreate.length) {
+  if (successCount === allowancesToCreate.length && countVerificationPassed) {
     console.log('🎉 ALL ALLOWANCE CREATION TESTS PASSED! 🎉');
     await page.screenshot({ path: 'tests/test-results/create-allowance-all-success.png', fullPage: true });
   } else {
-    console.log('💥 SOME ALLOWANCE CREATION TESTS FAILED!');
+    console.log('💥 ALLOWANCE CREATION TESTS FAILED!');
+    if (!countVerificationPassed) {
+      console.log(`   📊 Count mismatch: expected ${expectedFinalCount}, got ${finalCount}`);
+    }
     await page.screenshot({ path: 'tests/test-results/create-allowance-final-state.png', fullPage: true });
+    
+    // Update failure count if count verification failed
+    if (!countVerificationPassed && successCount === allowancesToCreate.length) {
+      failureCount = allowancesToCreate.length; // Mark as failed due to count mismatch
+    }
   }
     
   } catch (error) {

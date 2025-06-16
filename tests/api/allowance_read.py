@@ -31,13 +31,14 @@ async def test_list_allowances():
 
             print(f"List allowances API response: {response.status_code}")
 
-            if response.status_code == 200:
-                data = response.json()
-                print(f"✅ Retrieved {len(data)} allowances")
-                return True
-            else:
-                print(f"❌ Failed to list allowances: {response.text}")
+            if response.status_code != 200:
+                print(f"❌ Failed to list allowances: HTTP {response.status_code}")
+                print(f"   Response: {response.text}")
                 return False
+                
+            data = response.json()
+            print(f"✅ Retrieved {len(data)} allowances")
+            return True
 
     except Exception as e:
         print(f"❌ API test error: {e}")

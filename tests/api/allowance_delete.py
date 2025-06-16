@@ -74,7 +74,8 @@ async def test_delete_allowance():
             print(f"Delete allowance API response: {delete_response.status_code}")
 
             if delete_response.status_code != 200:
-                print(f"❌ Failed to delete allowance: {delete_response.text}")
+                print(f"❌ Failed to delete allowance: HTTP {delete_response.status_code}")
+                print(f"   Response: {delete_response.text}")
                 return False
                 
             print(f"✅ Deleted allowance: {test_id}")
