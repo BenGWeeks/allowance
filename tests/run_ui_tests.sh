@@ -29,9 +29,9 @@ TESTS=(
     "ui/create_admin_account.js"
     "ui/login_test.js" 
     "ui/enable_allowance.js"
-    "ui/create_allowance.js"
-    "ui/edit_allowance.js"
-    "ui/delete_allowance.js"
+    "ui/create_allowance_simple.js"
+    "ui/edit_allowance_simple.js"
+    "ui/delete_allowance_simple.js"
     "ui/check-currencies.js"
 )
 

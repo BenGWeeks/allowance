@@ -15,18 +15,27 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-# Create virtual environment if it doesn't exist
-if [ ! -d ".api_test_env" ]; then
-    echo "📦 Creating virtual environment for API tests..."
-    python3 -m venv .api_test_env
+# Try to run without virtual environment first
+echo "🔍 Checking if dependencies are available..."
+if python3 -c "import httpx, pytest" 2>/dev/null; then
+    echo "✅ Dependencies available system-wide"
+    USE_VENV=false
+else
+    echo "📦 Dependencies not available, creating virtual environment..."
+    USE_VENV=true
+    
+    # Create virtual environment if it doesn't exist
+    if [ ! -d ".api_test_env" ]; then
+        python3 -m venv .api_test_env
+    fi
+
+    # Activate virtual environment
+    source .api_test_env/bin/activate
+
+    # Install dependencies
+    echo "📦 Installing API test dependencies..."
+    pip install httpx pytest pytest-asyncio
 fi
-
-# Activate virtual environment
-source .api_test_env/bin/activate
-
-# Install dependencies
-echo "📦 Installing API test dependencies..."
-pip install httpx pytest pytest-asyncio
 
 # Find and run API test files
 API_TESTS=($(find ./api -name "*.py" -type f))
@@ -61,8 +70,10 @@ for test in "${API_TESTS[@]}"; do
     fi
 done
 
-# Deactivate virtual environment
-deactivate
+# Deactivate virtual environment if we used one
+if [ "$USE_VENV" = true ]; then
+    deactivate
+fi
 
 echo
 echo "============================="

@@ -15,10 +15,18 @@ const { chromium } = require('playwright');
     const superuserSetupVisible = await page.locator('text="Set up the Superuser account below."').isVisible();
     const createAccountVisible = await page.locator('text="Create account"').first().isVisible();
     const walletDashboardVisible = await page.locator('text="Add a new wallet"').isVisible();
+    const loginVisible = await page.locator('text="Login"').first().isVisible();
     
     // If wallet dashboard is visible, admin is already logged in
     if (walletDashboardVisible) {
       console.log('✅ Admin account appears to be already logged in - test passed');
+      await browser.close();
+      process.exit(0);
+    }
+    
+    // If login screen is visible, admin account already exists
+    if (loginVisible && !superuserSetupVisible) {
+      console.log('✅ Login screen visible - admin account already exists - test passed');
       await browser.close();
       process.exit(0);
     }
@@ -32,55 +40,112 @@ const { chromium } = require('playwright');
     
     console.log('📝 Found Superuser setup screen, creating admin account...');
     
-    // Fill in the superuser account form using aria-label selectors
-    // Username
-    await page.fill('[aria-label="Username"]', 'ben.weeks');
+    // Try multiple selectors for form fields
+    const usernameSelectors = [
+      '[aria-label="Username"]',
+      'input[type="text"]',
+      'input[placeholder*="username" i]',
+      'input[placeholder*="user" i]',
+      '.q-field:has-text("Username") input'
+    ];
     
-    // Password
-    await page.fill('[aria-label="Password"]', 'zUYmy&05&uZ$3kmf*^T8');
+    const passwordSelectors = [
+      '[aria-label="Password"]',
+      'input[type="password"]',
+      'input[placeholder*="password" i]',
+      '.q-field:has-text("Password") input[type="password"]'
+    ];
     
-    // Confirm password
-    await page.fill('[aria-label="Password repeat"]', 'zUYmy&05&uZ$3kmf*^T8');
+    // Fill username
+    let filled = false;
+    for (const selector of usernameSelectors) {
+      try {
+        await page.fill(selector, 'ben.weeks', { timeout: 5000 });
+        console.log(`✅ Filled username using selector: ${selector}`);
+        filled = true;
+        break;
+      } catch (e) {
+        // Try next selector
+      }
+    }
+    
+    if (!filled) {
+      console.log('❌ Could not find username field');
+      await page.screenshot({ path: 'tests/test-results/create-account-error.png', fullPage: true });
+      process.exit(1);
+    }
+    
+    // Fill passwords
+    const passwordFields = await page.locator('input[type="password"]').all();
+    if (passwordFields.length >= 2) {
+      await passwordFields[0].fill('zUYmy&05&uZ$3kmf*^T8');
+      console.log('✅ Filled password field');
+      await passwordFields[1].fill('zUYmy&05&uZ$3kmf*^T8');
+      console.log('✅ Filled password confirmation field');
+    } else {
+      console.log('❌ Could not find password fields');
+      await page.screenshot({ path: 'tests/test-results/create-account-error.png', fullPage: true });
+      process.exit(1);
+    }
     
     // Take screenshot before submitting
     await page.screenshot({ path: 'tests/test-results/create-account-form.png', fullPage: true });
     console.log('📸 Form screenshot saved');
     
-    // Submit the form - wait for button to be enabled
-    console.log('🖱️ Waiting for Login button to be enabled...');
-    await page.waitForSelector('button:has-text("Login"):not([disabled])', { timeout: 5000 });
+    // Submit the form - look for submit button
+    console.log('🖱️ Looking for submit button...');
     
-    console.log('🖱️ Creating superuser account...');
-    await page.click('button:has-text("Login")');
+    const submitSelectors = [
+      'button:has-text("Login")',
+      'button:has-text("Create")',
+      'button:has-text("Submit")',
+      'button[type="submit"]'
+    ];
+    
+    let submitted = false;
+    for (const selector of submitSelectors) {
+      try {
+        const button = page.locator(selector).first();
+        if (await button.isVisible({ timeout: 3000 })) {
+          await button.click();
+          console.log(`✅ Clicked submit button: ${selector}`);
+          submitted = true;
+          break;
+        }
+      } catch (e) {
+        // Try next selector
+      }
+    }
+    
+    if (!submitted) {
+      console.log('❌ Could not find submit button');
+      await page.screenshot({ path: 'tests/test-results/create-account-error.png', fullPage: true });
+      process.exit(1);
+    }
+    
+    // Wait for navigation to complete
+    console.log('⏳ Waiting for account creation to complete...');
     await page.waitForTimeout(5000);
     
-    // Check if account was created successfully
-    const addWalletVisible = await page.locator('text="Add a new wallet"').isVisible();
-    const errorVisible = await page.locator('.q-notification--negative, .error').isVisible() || await page.locator('text=error').isVisible();
+    // Check if we're now on the wallet page
+    const isSuccess = await page.locator('text="Add a new wallet"').isVisible();
     
-    if (addWalletVisible) {
-      console.log('✅ Admin account created successfully!');
-      console.log('📝 Username: ben.weeks');
-      console.log('🔑 Password: [saved in script]');
-      
-      // Take final screenshot
+    if (isSuccess) {
+      console.log('✅ Successfully created admin account!');
       await page.screenshot({ path: 'tests/test-results/create-account-success.png', fullPage: true });
+      await browser.close();
       process.exit(0); // Success
-    } else if (errorVisible) {
-      console.log('❌ Error creating account. Check screenshot for details.');
-      await page.screenshot({ path: 'tests/test-results/create-account-error.png', fullPage: true });
-      process.exit(1); // Failure
     } else {
-      console.log('⚠️ Unknown state after account creation');
-      await page.screenshot({ path: 'tests/test-results/create-account-unknown.png', fullPage: true });
+      console.log('❌ Admin account creation might have failed');
+      await page.screenshot({ path: 'tests/test-results/create-account-error.png', fullPage: true });
+      await browser.close();
       process.exit(1); // Failure
     }
     
   } catch (error) {
     console.error('💥 Error:', error.message);
     await page.screenshot({ path: 'tests/test-results/create-account-error.png', fullPage: true });
-    process.exit(1); // Failure
-  } finally {
     await browser.close();
+    process.exit(1); // Failure
   }
 })();
