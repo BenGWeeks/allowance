@@ -151,21 +151,38 @@ Fixed critical authentication issue in `views_api.py`:
 
 ### Code Quality and Testing
 
-#### Local Development Testing (Optional)
-For development quality checks, you can run local linting (but this is not required for CI):
+#### Local Development Testing
+To ensure your code passes CI checks, run these formatting and linting tools locally:
 
 ```bash
-# Optional: Quick quality check during development
+# Install code quality tools using pipx (recommended)
+pipx install black
+pipx install mypy
+pipx install ruff
+
+# Or install in a virtual environment
 python3 -m venv .test-venv
 source .test-venv/bin/activate
 pip install black mypy ruff pydantic fastapi
 
-# Run checks
-black --check *.py && ruff check *.py && mypy --ignore-missing-imports *.py
+# Format code with Black (CI requires this)
+black .
 
-# Clean up
+# Check formatting without modifying files
+black --check .
+
+# Run type checking with mypy
+mypy --ignore-missing-imports *.py
+
+# Run linting with ruff
+ruff check .
+
+# Clean up virtual environment if used
+deactivate
 rm -rf .test-venv
 ```
+
+**Important**: The GitHub Actions CI workflow runs `black --check .` and will fail if code is not properly formatted. Always run `black .` before committing to avoid CI failures.
 
 #### GitHub Actions Testing
 Following LNBits extension best practices, we focus on **functional testing** rather than heavy linting:

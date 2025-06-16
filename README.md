@@ -118,17 +118,30 @@ Tests assume:
 
 ### Testing & Quality
 
-#### Functional Testing Focus
+#### Code Formatting & Linting
 
-Following LNBits extension best practices, we prioritize **functional testing** over heavy tooling:
+To ensure your code passes CI checks, run these tools locally before committing:
 
 ```bash
-# Optional development quality check
-python3 -m venv .test-venv && source .test-venv/bin/activate
-pip install black mypy ruff pydantic fastapi
-black --check *.py && ruff check *.py && mypy --ignore-missing-imports *.py
-rm -rf .test-venv
+# Install formatting tools (using pipx is recommended)
+pipx install black
+pipx install mypy  
+pipx install ruff
+
+# Format all Python files (REQUIRED for CI)
+black .
+
+# Check formatting without modifying
+black --check .
+
+# Run type checking
+mypy --ignore-missing-imports *.py
+
+# Run linting
+ruff check .
 ```
+
+**Important**: CI will fail if code is not formatted with Black. Always run `black .` before pushing changes.
 
 #### GitHub Actions Testing
 
