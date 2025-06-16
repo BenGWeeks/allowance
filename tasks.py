@@ -122,7 +122,7 @@ async def get_invoice_from_lnurl(
     Returns the payment request (invoice)
     """
     try:
-        params = {
+        params: dict[str, int | str] = {
             "amount": amount_msats,  # Amount in millisatoshis
         }
 

@@ -103,7 +103,7 @@ async def monitor_payments(
     logger.info(f"📊 Monitoring for {duration_seconds} seconds...")
 
     start_time = time.time()
-    payment_attempts = []
+    payment_attempts: list[dict] = []
 
     headers = {"X-Api-Key": admin_key}
 
