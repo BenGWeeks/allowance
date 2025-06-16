@@ -93,6 +93,12 @@ window.app = Vue.createApp({
       console.log('📊 Form data:', this.formDialog.data)
       console.log('🔘 Active field at submission:', this.formDialog.data.active, '(type:', typeof this.formDialog.data.active, ')')
       
+      // Don't proceed if dialog is not shown
+      if (!this.formDialog.show) {
+        console.log('❌ Form dialog is not visible, aborting saveAllowance')
+        return
+      }
+      
       // Validate required fields
       const errors = []
       if (!this.formDialog.data.name) errors.push('Description is required')

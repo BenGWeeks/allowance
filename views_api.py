@@ -75,9 +75,9 @@ async def api_allowances(
                 """
                 SELECT id, name, wallet, lightning_address, amount, currency,
                        start_date, frequency_type, next_payment_date, memo, 
-                       active, end_date
+                       active, end_date, created_at
                 FROM ext_allowance.maintable 
-                ORDER BY start_date DESC
+                ORDER BY created_at DESC, id DESC
             """
             )
         else:
@@ -86,10 +86,10 @@ async def api_allowances(
                 """
                 SELECT id, name, wallet, lightning_address, amount, currency,
                        start_date, frequency_type, next_payment_date, memo, 
-                       active, end_date
+                       active, end_date, created_at
                 FROM ext_allowance.maintable 
                 WHERE wallet = $1
-                ORDER BY start_date DESC
+                ORDER BY created_at DESC, id DESC
             """,
                 wallet.id
             )
@@ -118,6 +118,9 @@ async def api_allowances(
                 "memo": row["memo"] or "",
                 "active": row["active"],
                 "end_date": row["end_date"].isoformat() if row["end_date"] else None,
+                "created_at": (
+                    row["created_at"].isoformat() if row["created_at"] else None
+                ),
                 "lnurlpay": None,  # Column doesn't exist in table
                 "total": 0,  # Column doesn't exist in table
             }
@@ -377,7 +380,7 @@ async def api_allowance_create(
             "postgresql://lnbits:password@allowance-postgres:5432/lnbits"
         )
         
-        # Insert new allowance
+        # Insert new allowance (created_at will be set automatically by DEFAULT CURRENT_TIMESTAMP)
         await conn.execute(
             """
             INSERT INTO ext_allowance.maintable 

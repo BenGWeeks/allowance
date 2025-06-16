@@ -25,7 +25,8 @@ async def m001_initial(db: Any) -> None:
             active BOOLEAN DEFAULT TRUE,
             end_date TIMESTAMP,
             lnurlpay TEXT, -- LNURL pay string for compatibility
-            total INTEGER DEFAULT 0 -- Total amount processed
+            total INTEGER DEFAULT 0, -- Total amount processed
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- When the allowance was created
         );
     """
     )

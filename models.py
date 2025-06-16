@@ -21,6 +21,7 @@ class CreateAllowanceData(BaseModel):
     end_date: Optional[datetime] = None
     lnurlpay: Optional[str] = None  # LNURL pay string for compatibility
     total: int = 0  # Total amount processed
+    created_at: Optional[datetime] = None  # Auto-set by database
 
     @validator("amount")
     def amount_must_be_positive(cls, v):
@@ -44,6 +45,7 @@ class Allowance(BaseModel):
     end_date: Optional[datetime] = None
     lnurlpay: Optional[str] = None  # LNURL pay string for compatibility
     total: Optional[int] = 0  # Total amount processed
+    created_at: Optional[datetime] = None  # When the allowance was created
 
     @validator("amount")
     def amount_must_be_positive(cls, v):
