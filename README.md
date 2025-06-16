@@ -14,14 +14,15 @@ Install and enable the "Allowance" extension either through the official LNbits 
 
 For development, we use Docker Compose to run LNBits:
 
-1. Clone this repository outside of your LNBits installation
-2. Create a symbolic link to your development directory:
+1. Clone this repository
+2. Start LNBits using Docker Compose:
    ```bash
-   ln -s /path/to/your/allowance /path/to/lnbits/lnbits/extensions/allowance
+   docker-compose up -d
    ```
-3. Start LNBits using Docker Compose
-4. Access the development instance at `http://localhost:5001`
-5. Enable the Allowance extension through the Extensions menu
+3. Access the development instance at `http://localhost:5001`
+4. Enable the Allowance extension through the Extensions menu
+
+The Docker Compose configuration automatically mounts the current directory into the container, so changes to the code are reflected immediately.
 
 > Note: LNBits cannot be installed on Windows.
 
