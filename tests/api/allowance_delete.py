@@ -13,12 +13,13 @@ async def test_delete_allowance():
 
     try:
         async with httpx.AsyncClient() as client:
-            # Note: In real test environment, admin key would be configured
-            admin_key = "test_admin_key_placeholder"
+            # For development testing, we need an actual API key
+            # This is the admin key for wallet b2a9a06ff45e439d8c00bc6406d48191
+            admin_key = "d16c6bf31be03c2cd0cfadc7d90a2d69"  # Known dev admin key
 
             response = await client.delete(
                 f"{base_url}/allowance/api/v1/allowance/{test_id}",
-                headers={"X-API-KEY": admin_key},
+                headers={"X-Api-Key": admin_key}
             )
 
             print(f"Delete allowance API response: {response.status_code}")

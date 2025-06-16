@@ -12,12 +12,13 @@ async def test_list_allowances():
 
     try:
         async with httpx.AsyncClient() as client:
-            # Note: In real test environment, invoice key would be configured
-            invoice_key = "test_invoice_key_placeholder"
-
+            # For development testing, we need an actual API key
+            # This is the admin key for wallet b2a9a06ff45e439d8c00bc6406d48191
+            admin_key = "d16c6bf31be03c2cd0cfadc7d90a2d69"  # Known dev admin key
+            
             response = await client.get(
                 f"{base_url}/allowance/api/v1/allowance",
-                headers={"X-API-KEY": invoice_key},
+                headers={"X-Api-Key": admin_key}
             )
 
             print(f"List allowances API response: {response.status_code}")
@@ -42,11 +43,11 @@ async def test_get_single_allowance():
 
     try:
         async with httpx.AsyncClient() as client:
-            invoice_key = "test_invoice_key_placeholder"
+            admin_key = "d16c6bf31be03c2cd0cfadc7d90a2d69"  # Known dev admin key
 
             response = await client.get(
                 f"{base_url}/allowance/api/v1/allowance/{test_id}",
-                headers={"X-API-KEY": invoice_key},
+                headers={"X-Api-Key": admin_key}
             )
 
             print(f"Get single allowance API response: {response.status_code}")

@@ -3,13 +3,54 @@
  */
 
 /**
+ * Get admin API key by extracting from the LNBits UI
+ * @param {Page} page - Playwright page object
+ * @returns {Promise<string|null>} - Admin API key or null if not found
+ */
+async function getAdminApiKey(page) {
+  try {
+    // Navigate to the main wallet page where API keys are displayed
+    await page.goto('http://localhost:5001/');
+    await page.waitForTimeout(2000);
+    
+    // Look for API key in the UI (it might be in a data attribute or text content)
+    const apiKey = await page.evaluate(() => {
+      // Try to find API key in various locations
+      const keyElements = document.querySelectorAll('[data-cy="admin-key"], [data-cy="api-key"], .api-key');
+      for (const el of keyElements) {
+        const key = el.textContent || el.getAttribute('data-key') || el.value;
+        if (key && key.length > 10) {
+          return key.trim();
+        }
+      }
+      
+      // Try to find it in the page source
+      const pageText = document.body.textContent;
+      const keyMatch = pageText.match(/[a-f0-9]{32}/); // Look for 32-char hex string
+      return keyMatch ? keyMatch[0] : null;
+    });
+    
+    return apiKey;
+  } catch (error) {
+    console.log(`⚠️ Error getting API key: ${error.message}`);
+    return null;
+  }
+}
+
+/**
  * Get allowance count via API endpoint
  * @param {Page} page - Playwright page object
  * @returns {Promise<number>} - Number of allowances
  */
 async function getAllowanceCount(page) {
   try {
-    const response = await page.request.get('http://localhost:5001/allowance/api/v1/allowance');
+    // For now, use the known development environment behavior
+    // TODO: Get actual API key dynamically
+    const response = await page.request.get('http://localhost:5001/allowance/api/v1/allowance', {
+      headers: {
+        'X-Api-Key': 'd16c6bf31be03c2cd0cfadc7d90a2d69' // Development key
+      }
+    });
     
     if (response.ok()) {
       const data = await response.json();
@@ -31,7 +72,11 @@ async function getAllowanceCount(page) {
  */
 async function getAllowances(page) {
   try {
-    const response = await page.request.get('http://localhost:5001/allowance/api/v1/allowance');
+    const response = await page.request.get('http://localhost:5001/allowance/api/v1/allowance', {
+      headers: {
+        'X-Api-Key': 'd16c6bf31be03c2cd0cfadc7d90a2d69' // Development key
+      }
+    });
     
     if (response.ok()) {
       const data = await response.json();
@@ -150,6 +195,7 @@ async function waitForCountChange(page, expectedChange, initialCount, maxWaitMs 
 }
 
 module.exports = {
+  getAdminApiKey,
   getAllowanceCount,
   getAllowances,
   findAllowanceByName,

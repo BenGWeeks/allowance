@@ -17,7 +17,7 @@ fi
 
 # Try to run without virtual environment first
 echo "🔍 Checking if dependencies are available..."
-if python3 -c "import httpx, pytest" 2>/dev/null; then
+if python3 -c "import httpx, pytest, loguru" 2>/dev/null; then
     echo "✅ Dependencies available system-wide"
     USE_VENV=false
 else
@@ -34,7 +34,7 @@ else
 
     # Install dependencies
     echo "📦 Installing API test dependencies..."
-    pip install httpx pytest pytest-asyncio
+    pip install httpx pytest pytest-asyncio loguru
 fi
 
 # Find and run API test files
