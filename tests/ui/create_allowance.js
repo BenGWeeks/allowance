@@ -2,40 +2,36 @@ const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
-// Get test data from command line args or default values
+// Get test data from JSON file
 const getTestData = () => {
-  // Check if test data file exists (for parameterized runs)
-  const testDataPath = path.join(__dirname, 'current-test-data.json');
+  // Try to load from create-allowance.json
+  const testDataPath = path.join(__dirname, 'create-allowance.json');
   if (fs.existsSync(testDataPath)) {
-    return JSON.parse(fs.readFileSync(testDataPath, 'utf8'));
+    const allowances = JSON.parse(fs.readFileSync(testDataPath, 'utf8'));
+    if (Array.isArray(allowances) && allowances.length > 0) {
+      return allowances;
+    }
   }
   
-  // Check command line arguments
-  const args = process.argv.slice(2);
-  if (args.length >= 4) {
-    return {
-      name: args[0],
-      lightningAddress: args[1], 
-      amount: parseInt(args[2]),
-      frequency: args[3]
-    };
-  }
-  
-  // Default test data
-  return {
+  // Fallback to single default allowance
+  return [{
     name: 'Pocket money',
     lightningAddress: 'muddledsmell08@walletofsatoshi.com',
     amount: 100,
-    frequency: 'weekly'
-  };
+    frequency: 'weekly',
+    memo: 'Default test allowance'
+  }];
 };
 
 (async () => {
-  const testData = getTestData();
-  console.log(`🎯 Testing allowance: ${testData.name} (${testData.amount} sats ${testData.frequency})`);
+  const allowancesToCreate = getTestData();
+  console.log(`🎯 Testing ${allowancesToCreate.length} allowance(s) from create-allowance.json`);
   
   const browser = await chromium.launch({ headless: true, slowMo: 500 });
   const page = await browser.newPage();
+  
+  let successCount = 0;
+  let failureCount = 0;
 
   try {
     console.log('🚀 Starting create allowance test...');
@@ -87,8 +83,10 @@ const getTestData = () => {
     await page.goto('http://localhost:5001/allowance/');
     await page.waitForTimeout(3000);
     
-    // Step 3: Create new allowance
-    console.log('📝 Step 3: Creating new allowance...');
+    // Step 3: Create allowances from JSON file
+    for (let i = 0; i < allowancesToCreate.length; i++) {
+      const testData = allowancesToCreate[i];
+      console.log(`\n📝 Step 3.${i+1}: Creating allowance "${testData.name}" (${testData.amount} sats ${testData.frequency})...`);
     const newAllowanceButton = page.locator('button:has-text("New Allowance")');
     
     if (await newAllowanceButton.isVisible()) {
@@ -300,35 +298,54 @@ const getTestData = () => {
         console.log(`  ✓ Address: ${testData.lightningAddress}`, hasAddress ? '✅' : '❌');
         console.log(`  ✓ Frequency: ${testData.frequency}`, hasFrequency ? '✅' : '❌');
         
-        await page.screenshot({ path: '/mnt/raid1/GitHub/allowance/tests/test-results/create-allowance-success.png', fullPage: true });
-        console.log('🎉 ALLOWANCE CREATION TEST PASSED! 🎉');
-        process.exit(0); // Success
+        await page.screenshot({ path: `/mnt/raid1/GitHub/allowance/tests/test-results/create-allowance-${i+1}-success.png`, fullPage: true });
+        console.log(`✅ Allowance "${testData.name}" created successfully!`);
+        successCount++;
       } else {
-        console.log('❌ Allowance not found in table');
+        console.log(`❌ Allowance "${testData.name}" not found in table`);
         
         // Check if dialog is still open (error state)
         const dialogOpen = await page.locator('.q-dialog').isVisible();
         if (dialogOpen) {
           console.log('⚠️ Form dialog still open - possible validation error');
-          await page.screenshot({ path: 'tests/test-results/create-allowance-validation-error.png', fullPage: true });
-          process.exit(1); // Failure
+          await page.screenshot({ path: `/mnt/raid1/GitHub/allowance/tests/test-results/create-allowance-${i+1}-validation-error.png`, fullPage: true });
         }
+        failureCount++;
       }
       
-      // Final screenshot
-      await page.screenshot({ path: 'tests/test-results/create-allowance-final.png', fullPage: true });
-      
     } else {
-      console.log('❌ New Allowance button not found');
-      await page.screenshot({ path: 'tests/test-results/create-allowance-no-button.png', fullPage: true });
-      process.exit(1); // Failure
+      console.log(`❌ New Allowance button not found for "${testData.name}"`);
+      await page.screenshot({ path: `/mnt/raid1/GitHub/allowance/tests/test-results/create-allowance-${i+1}-no-button.png`, fullPage: true });
+      failureCount++;
     }
+    
+    // Wait a bit between allowances
+    if (i < allowancesToCreate.length - 1) {
+      await page.waitForTimeout(2000);
+    }
+  } // End of for loop
+  
+  // Final results
+  console.log(`\n🎯 FINAL RESULTS:`);
+  console.log(`✅ Successful: ${successCount}/${allowancesToCreate.length}`);
+  console.log(`❌ Failed: ${failureCount}/${allowancesToCreate.length}`);
+  
+  if (successCount === allowancesToCreate.length) {
+    console.log('🎉 ALL ALLOWANCE CREATION TESTS PASSED! 🎉');
+    await page.screenshot({ path: 'tests/test-results/create-allowance-all-success.png', fullPage: true });
+  } else {
+    console.log('💥 SOME ALLOWANCE CREATION TESTS FAILED!');
+    await page.screenshot({ path: 'tests/test-results/create-allowance-final-state.png', fullPage: true });
+  }
     
   } catch (error) {
     console.error('💥 Error:', error.message);
     await page.screenshot({ path: 'tests/test-results/create-allowance-error.png', fullPage: true });
-    process.exit(1); // Failure
+    failureCount = allowancesToCreate.length; // Mark all as failed
   } finally {
     await browser.close();
   }
+  
+  // Exit with appropriate code
+  process.exit(failureCount === 0 ? 0 : 1);
 })();
