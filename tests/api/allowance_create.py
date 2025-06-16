@@ -15,29 +15,30 @@ async def test_create_allowance():
         # Get admin API key dynamically
         import sys
         import os
+
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         from get_api_key import get_admin_api_key
-        
+
         admin_key = await get_admin_api_key()
         if not admin_key:
             print("❌ Failed to get admin API key")
             return False
 
         async with httpx.AsyncClient() as client:
-            
+
             # Step 1: Get initial count
             initial_response = await client.get(
                 f"{base_url}/allowance/api/v1/allowance",
-                headers={"X-Api-Key": admin_key}
+                headers={"X-Api-Key": admin_key},
             )
-            
+
             if initial_response.status_code != 200:
                 print(f"❌ Failed to get initial count: {initial_response.status_code}")
                 return False
-                
+
             initial_count = len(initial_response.json())
             print(f"📊 Initial allowance count: {initial_count}")
-            
+
             # Step 2: Create allowance
             start_date = datetime.utcnow() + timedelta(days=1)
             payload = {
@@ -55,7 +56,7 @@ async def test_create_allowance():
             response = await client.post(
                 f"{base_url}/allowance/api/v1/allowance",
                 json=payload,
-                headers={"X-Api-Key": admin_key}
+                headers={"X-Api-Key": admin_key},
             )
 
             print(f"Create allowance API response: {response.status_code}")
@@ -64,26 +65,26 @@ async def test_create_allowance():
                 print(f"❌ Failed to create allowance: HTTP {response.status_code}")
                 print(f"   Response: {response.text}")
                 return False
-                
+
             data = response.json()
             print(f"✅ Created allowance: {data.get('name')} (ID: {data.get('id')})")
-            
+
             # Step 3: Verify count increased by 1
             final_response = await client.get(
                 f"{base_url}/allowance/api/v1/allowance",
-                headers={"X-Api-Key": admin_key}
+                headers={"X-Api-Key": admin_key},
             )
-            
+
             if final_response.status_code != 200:
                 print(f"❌ Failed to get final count: {final_response.status_code}")
                 return False
-                
+
             final_count = len(final_response.json())
             count_change = final_count - initial_count
-            
+
             print(f"📊 Final allowance count: {final_count}")
             print(f"📈 Count change: +{count_change}")
-            
+
             if count_change == 1:
                 print("✅ Count verification passed: +1 allowance created")
                 return True

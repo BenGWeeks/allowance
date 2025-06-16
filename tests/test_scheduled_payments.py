@@ -9,11 +9,11 @@ from typing import List
 
 class TestScheduledPayments:
     """Test class for scheduled payment functionality."""
-    
+
     def test_placeholder(self) -> None:
         """Placeholder test to satisfy pytest discovery."""
         assert True
-    
+
     @pytest.fixture
     def payment_attempts(self) -> List[dict]:
         """Fixture for payment attempts data."""

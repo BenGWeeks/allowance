@@ -15,16 +15,17 @@ async def test_update_allowance():
         # Get admin API key dynamically
         import sys
         import os
+
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         from get_api_key import get_admin_api_key
-        
+
         admin_key = await get_admin_api_key()
         if not admin_key:
             print("❌ Failed to get admin API key")
             return False
 
         async with httpx.AsyncClient() as client:
-            
+
             # Step 1: Create a test allowance to update
             start_date = datetime.utcnow() + timedelta(days=1)
             create_data = {
@@ -36,23 +37,25 @@ async def test_update_allowance():
                 "start_date": start_date.isoformat(),
                 "next_payment_date": (start_date + timedelta(days=7)).isoformat(),
                 "active": True,
-                "memo": "Test allowance for update"
+                "memo": "Test allowance for update",
             }
-            
+
             create_response = await client.post(
                 f"{base_url}/allowance/api/v1/allowance",
                 json=create_data,
-                headers={"X-Api-Key": admin_key}
+                headers={"X-Api-Key": admin_key},
             )
-            
+
             if create_response.status_code != 201:
-                print(f"❌ Failed to create test allowance: {create_response.status_code}")
+                print(
+                    f"❌ Failed to create test allowance: {create_response.status_code}"
+                )
                 return False
-                
+
             created_allowance = create_response.json()
             test_id = created_allowance["id"]
             print(f"✅ Created test allowance: {test_id}")
-            
+
             # Step 2: Update the allowance
             update_start_date = datetime.utcnow() + timedelta(days=2)
             update_data = {
@@ -62,7 +65,9 @@ async def test_update_allowance():
                 "currency": "sats",
                 "frequency_type": "monthly",
                 "start_date": update_start_date.isoformat(),
-                "next_payment_date": (update_start_date + timedelta(days=30)).isoformat(),
+                "next_payment_date": (
+                    update_start_date + timedelta(days=30)
+                ).isoformat(),
                 "active": False,
                 "memo": "Updated via API test",
             }
@@ -70,54 +75,64 @@ async def test_update_allowance():
             update_response = await client.put(
                 f"{base_url}/allowance/api/v1/allowance/{test_id}",
                 json=update_data,
-                headers={"X-Api-Key": admin_key}
+                headers={"X-Api-Key": admin_key},
             )
 
             print(f"Update allowance API response: {update_response.status_code}")
 
             if update_response.status_code != 200:
-                print(f"❌ Failed to update allowance: HTTP {update_response.status_code}")
+                print(
+                    f"❌ Failed to update allowance: HTTP {update_response.status_code}"
+                )
                 print(f"   Response: {update_response.text}")
                 return False
-                
+
             print(f"✅ Updated allowance: {test_id}")
-            
+
             # Step 3: Verify the update by fetching the allowance
             list_response = await client.get(
                 f"{base_url}/allowance/api/v1/allowance",
-                headers={"X-Api-Key": admin_key}
+                headers={"X-Api-Key": admin_key},
             )
-            
+
             if list_response.status_code != 200:
                 print(f"❌ Failed to fetch allowances: {list_response.status_code}")
                 return False
-                
+
             allowances = list_response.json()
             updated_allowance = None
             for allowance in allowances:
                 if allowance["id"] == test_id:
                     updated_allowance = allowance
                     break
-            
+
             if not updated_allowance:
                 print(f"❌ Updated allowance not found")
                 return False
-            
+
             # Verify the updates
             success = True
             if updated_allowance["name"] != "Updated Test Allowance":
-                print(f"❌ Name not updated: expected 'Updated Test Allowance', got '{updated_allowance['name']}'")
+                print(
+                    f"❌ Name not updated: expected 'Updated Test Allowance', got '{updated_allowance['name']}'"
+                )
                 success = False
             if updated_allowance["lightning_address"] != "updated@example.com":
-                print(f"❌ Address not updated: expected 'updated@example.com', got '{updated_allowance['lightning_address']}'")
+                print(
+                    f"❌ Address not updated: expected 'updated@example.com', got '{updated_allowance['lightning_address']}'"
+                )
                 success = False
             if updated_allowance["amount"] != 2000:
-                print(f"❌ Amount not updated: expected 2000, got {updated_allowance['amount']}")
+                print(
+                    f"❌ Amount not updated: expected 2000, got {updated_allowance['amount']}"
+                )
                 success = False
             if updated_allowance["active"] != False:
-                print(f"❌ Active status not updated: expected False, got {updated_allowance['active']}")
+                print(
+                    f"❌ Active status not updated: expected False, got {updated_allowance['active']}"
+                )
                 success = False
-            
+
             if success:
                 print("✅ All update verifications passed")
                 return True

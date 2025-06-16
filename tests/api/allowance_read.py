@@ -14,19 +14,20 @@ async def test_list_allowances():
         # Get admin API key dynamically
         import sys
         import os
+
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         from get_api_key import get_admin_api_key
-        
+
         admin_key = await get_admin_api_key()
         if not admin_key:
             print("❌ Failed to get admin API key")
             return False
 
         async with httpx.AsyncClient() as client:
-            
+
             response = await client.get(
                 f"{base_url}/allowance/api/v1/allowance",
-                headers={"X-Api-Key": admin_key}
+                headers={"X-Api-Key": admin_key},
             )
 
             print(f"List allowances API response: {response.status_code}")
@@ -35,7 +36,7 @@ async def test_list_allowances():
                 print(f"❌ Failed to list allowances: HTTP {response.status_code}")
                 print(f"   Response: {response.text}")
                 return False
-                
+
             data = response.json()
             print(f"✅ Retrieved {len(data)} allowances")
             return True
@@ -54,9 +55,10 @@ async def test_get_single_allowance():
         # Get admin API key dynamically
         import sys
         import os
+
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         from get_api_key import get_admin_api_key
-        
+
         admin_key = await get_admin_api_key()
         if not admin_key:
             print("❌ Failed to get admin API key")
@@ -66,7 +68,7 @@ async def test_get_single_allowance():
 
             response = await client.get(
                 f"{base_url}/allowance/api/v1/allowance/{test_id}",
-                headers={"X-Api-Key": admin_key}
+                headers={"X-Api-Key": admin_key},
             )
 
             print(f"Get single allowance API response: {response.status_code}")

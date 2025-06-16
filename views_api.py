@@ -44,12 +44,12 @@ async def api_allowances(
     api_key = request.headers.get("X-Api-Key")
     if not api_key:
         raise HTTPException(status_code=401, detail="API key required")
-    
+
     # Validate the API key and get wallet
     try:
         from lnbits.core.models import Wallet
         from lnbits.core.crud import get_wallet_for_key
-        
+
         wallet = await get_wallet_for_key(api_key)
         if not wallet:
             raise HTTPException(status_code=401, detail="Invalid API key")
@@ -91,7 +91,7 @@ async def api_allowances(
                 WHERE wallet = $1
                 ORDER BY created_at DESC, id DESC
             """,
-                wallet.id
+                wallet.id,
             )
 
         await conn.close()
@@ -147,11 +147,11 @@ async def api_allowance(request: Request, allowance_id: str):
     api_key = request.headers.get("X-Api-Key")
     if not api_key:
         raise HTTPException(status_code=401, detail="API key required")
-    
+
     # Validate the API key and get wallet
     try:
         from lnbits.core.crud import get_wallet_for_key
-        
+
         wallet = await get_wallet_for_key(api_key)
         if not wallet:
             raise HTTPException(status_code=401, detail="Invalid API key")
@@ -164,13 +164,13 @@ async def api_allowance(request: Request, allowance_id: str):
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
         )
-    
+
     # Verify wallet ownership
     if allowance.wallet != wallet.id:
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN, detail="Not your Allowance."
         )
-    
+
     return allowance.dict()
 
 
@@ -187,11 +187,11 @@ async def api_allowance_update(
     api_key = request.headers.get("X-Api-Key")
     if not api_key:
         raise HTTPException(status_code=401, detail="API key required")
-    
+
     # Validate the API key and get wallet
     try:
         from lnbits.core.crud import get_wallet_for_key
-        
+
         wallet = await get_wallet_for_key(api_key)
         if not wallet:
             raise HTTPException(status_code=401, detail="Invalid API key")
@@ -203,12 +203,12 @@ async def api_allowance_update(
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
         )
-    
+
     # Get existing allowance and update using direct database query
     try:
         import asyncpg
         from datetime import datetime
-        
+
         def parse_datetime_string(date_input):
             """Parse datetime input (string or datetime object) to timezone-naive datetime"""
             if not date_input:
@@ -217,57 +217,63 @@ async def api_allowance_update(
                 # If already a datetime object, just remove timezone info
                 if isinstance(date_input, datetime):
                     return date_input.replace(tzinfo=None)
-                
+
                 # If it's a string, parse it
                 if isinstance(date_input, str):
                     # Remove 'Z' suffix and parse as UTC
-                    if date_input.endswith('Z'):
-                        date_input = date_input[:-1] + '+00:00'
+                    if date_input.endswith("Z"):
+                        date_input = date_input[:-1] + "+00:00"
                     # Parse ISO format and remove timezone
                     dt = datetime.fromisoformat(date_input)
                     return dt.replace(tzinfo=None)
-                
+
                 # If it's something else, try to convert to string first
                 date_str = str(date_input)
                 dt = datetime.fromisoformat(date_str)
                 return dt.replace(tzinfo=None)
-                
+
             except Exception as e:
-                logger.warning(f"Error parsing datetime '{date_input}' (type: {type(date_input)}): {e}")
+                logger.warning(
+                    f"Error parsing datetime '{date_input}' (type: {type(date_input)}): {e}"
+                )
                 return None
-        
+
         # Connect to database
         conn = await asyncpg.connect(
             "postgresql://lnbits:password@allowance-postgres:5432/lnbits"
         )
-        
+
         # Check if allowance exists and verify ownership
         row = await conn.fetchrow(
             """
             SELECT wallet FROM ext_allowance.maintable 
             WHERE id = $1
             """,
-            allowance_id
+            allowance_id,
         )
-        
+
         if not row:
             await conn.close()
             raise HTTPException(
                 status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
             )
-        
+
         # Verify wallet ownership
         if row["wallet"] != wallet.id:
             await conn.close()
             raise HTTPException(
                 status_code=HTTPStatus.FORBIDDEN, detail="Not your Allowance."
             )
-        
+
         # Parse datetime fields
         start_date = parse_datetime_string(data.start_date) if data.start_date else None
-        next_payment_date = parse_datetime_string(data.next_payment_date) if data.next_payment_date else None
+        next_payment_date = (
+            parse_datetime_string(data.next_payment_date)
+            if data.next_payment_date
+            else None
+        )
         end_date = parse_datetime_string(data.end_date) if data.end_date else None
-        
+
         # Update the allowance
         await conn.execute(
             """
@@ -289,20 +295,24 @@ async def api_allowance_update(
             data.active,
             end_date,
         )
-        
+
         await conn.close()
-        
+
         logger.info(f"✅ Updated allowance: {allowance_id}")
-        return {"id": allowance_id, "name": data.name, "message": "Allowance updated successfully"}
-        
+        return {
+            "id": allowance_id,
+            "name": data.name,
+            "message": "Allowance updated successfully",
+        }
+
     except HTTPException:
         # Re-raise HTTP exceptions (404, 403) as-is
         raise
     except Exception as e:
         logger.error(f"🚨 Database error in api_allowance_update: {e}")
         raise HTTPException(
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR, 
-            detail=f"Failed to update allowance: {str(e)}"
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update allowance: {str(e)}",
         )
 
 
@@ -320,11 +330,11 @@ async def api_allowance_create(
     api_key = request.headers.get("X-Api-Key")
     if not api_key:
         raise HTTPException(status_code=401, detail="API key required")
-    
+
     # Validate the API key and get wallet
     try:
         from lnbits.core.crud import get_wallet_for_key
-        
+
         wallet = await get_wallet_for_key(api_key)
         if not wallet:
             raise HTTPException(status_code=401, detail="Invalid API key")
@@ -336,14 +346,14 @@ async def api_allowance_create(
     logger.info(f"🔗 API called: Creating allowance for wallet {wallet.id}")
     try:
         import asyncpg
-        
+
         # Generate ID
         data.id = urlsafe_short_hash()
-        
+
         # Parse datetime strings to proper datetime objects
         from datetime import datetime
         import re
-        
+
         def parse_datetime_string(date_input):
             """Parse datetime input (string or datetime object) to timezone-naive datetime"""
             if not date_input:
@@ -352,34 +362,40 @@ async def api_allowance_create(
                 # If already a datetime object, just remove timezone info
                 if isinstance(date_input, datetime):
                     return date_input.replace(tzinfo=None)
-                
+
                 # If it's a string, parse it
                 if isinstance(date_input, str):
                     # Remove 'Z' suffix and parse as UTC
-                    if date_input.endswith('Z'):
-                        date_input = date_input[:-1] + '+00:00'
+                    if date_input.endswith("Z"):
+                        date_input = date_input[:-1] + "+00:00"
                     # Parse ISO format and remove timezone
                     dt = datetime.fromisoformat(date_input)
                     return dt.replace(tzinfo=None)
-                
+
                 # If it's something else, try to convert to string first
                 date_str = str(date_input)
                 dt = datetime.fromisoformat(date_str)
                 return dt.replace(tzinfo=None)
-                
+
             except Exception as e:
-                logger.warning(f"Error parsing datetime '{date_input}' (type: {type(date_input)}): {e}")
+                logger.warning(
+                    f"Error parsing datetime '{date_input}' (type: {type(date_input)}): {e}"
+                )
                 return None
-        
+
         start_date = parse_datetime_string(data.start_date) if data.start_date else None
-        next_payment_date = parse_datetime_string(data.next_payment_date) if data.next_payment_date else None
+        next_payment_date = (
+            parse_datetime_string(data.next_payment_date)
+            if data.next_payment_date
+            else None
+        )
         end_date = parse_datetime_string(data.end_date) if data.end_date else None
-        
+
         # Connect to database
         conn = await asyncpg.connect(
             "postgresql://lnbits:password@allowance-postgres:5432/lnbits"
         )
-        
+
         # Insert new allowance (created_at will be set automatically by DEFAULT CURRENT_TIMESTAMP)
         await conn.execute(
             """
@@ -401,17 +417,21 @@ async def api_allowance_create(
             data.active,
             end_date,
         )
-        
+
         await conn.close()
-        
+
         logger.info(f"✅ Created allowance: {data.id}")
-        return {"id": data.id, "name": data.name, "message": "Allowance created successfully"}
-        
+        return {
+            "id": data.id,
+            "name": data.name,
+            "message": "Allowance created successfully",
+        }
+
     except Exception as e:
         logger.error(f"🚨 Error creating allowance: {e}")
         raise HTTPException(
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR, 
-            detail=f"Failed to create allowance: {str(e)}"
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create allowance: {str(e)}",
         )
     # data.id = urlsafe_short_hash()
     # data.wallet = data.wallet or wallet.id
@@ -431,11 +451,11 @@ async def api_allowance_delete(
     api_key = request.headers.get("X-Api-Key")
     if not api_key:
         raise HTTPException(status_code=401, detail="API key required")
-    
+
     # Validate the API key and get wallet
     try:
         from lnbits.core.crud import get_wallet_for_key
-        
+
         wallet = await get_wallet_for_key(api_key)
         if not wallet:
             raise HTTPException(status_code=401, detail="Invalid API key")
@@ -446,12 +466,12 @@ async def api_allowance_delete(
     # Get allowance and verify ownership using direct database query
     try:
         import asyncpg
-        
+
         # Connect to database
         conn = await asyncpg.connect(
             "postgresql://lnbits:password@allowance-postgres:5432/lnbits"
         )
-        
+
         # Check if allowance exists and get wallet
         logger.info(f"🔍 Looking for allowance: {allowance_id}")
         row = await conn.fetchrow(
@@ -459,47 +479,47 @@ async def api_allowance_delete(
             SELECT wallet FROM ext_allowance.maintable 
             WHERE id = $1
             """,
-            allowance_id
+            allowance_id,
         )
-        
+
         logger.info(f"🔍 Query result: {row}")
-        
+
         if not row:
             await conn.close()
             logger.warning(f"❌ Allowance not found: {allowance_id}")
             raise HTTPException(
                 status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
             )
-        
+
         # Verify wallet ownership
         if row["wallet"] != wallet.id:
             await conn.close()
             raise HTTPException(
                 status_code=HTTPStatus.FORBIDDEN, detail="Not your Allowance."
             )
-        
+
         # Delete the allowance
         await conn.execute(
             """
             DELETE FROM ext_allowance.maintable 
             WHERE id = $1
             """,
-            allowance_id
+            allowance_id,
         )
-        
+
         await conn.close()
-        
+
         logger.info(f"✅ Deleted allowance: {allowance_id}")
         return {"message": "Allowance deleted successfully"}
-        
+
     except HTTPException:
         # Re-raise HTTP exceptions (404, 403) as-is
         raise
     except Exception as e:
         logger.error(f"🚨 Database error in api_allowance_delete: {e}")
         raise HTTPException(
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR, 
-            detail=f"Failed to delete allowance: {str(e)}"
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete allowance: {str(e)}",
         )
 
 

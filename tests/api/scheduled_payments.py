@@ -33,14 +33,15 @@ async def get_admin_wallet():
         # Get admin API key dynamically
         import sys
         import os
+
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         from get_api_key import get_admin_api_key
-        
+
         admin_key = await get_admin_api_key()
         if not admin_key:
             logger.error("Failed to get admin API key")
             return None, None
-            
+
         # For now, use a hardcoded wallet ID since we know it from other tests
         # The admin_key is all we need for authentication
         wallet_id = "b2a9a06ff45e439d8c00bc6406d48191"
