@@ -201,30 +201,106 @@ async def api_allowance_update(
             status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
         )
     
-    # Get existing allowance to verify ownership
-    allowance = await get_allowance(allowance_id)
-    if not allowance:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
+    # Get existing allowance and update using direct database query
+    try:
+        import asyncpg
+        from datetime import datetime
+        
+        def parse_datetime_string(date_input):
+            """Parse datetime input (string or datetime object) to timezone-naive datetime"""
+            if not date_input:
+                return None
+            try:
+                # If already a datetime object, just remove timezone info
+                if isinstance(date_input, datetime):
+                    return date_input.replace(tzinfo=None)
+                
+                # If it's a string, parse it
+                if isinstance(date_input, str):
+                    # Remove 'Z' suffix and parse as UTC
+                    if date_input.endswith('Z'):
+                        date_input = date_input[:-1] + '+00:00'
+                    # Parse ISO format and remove timezone
+                    dt = datetime.fromisoformat(date_input)
+                    return dt.replace(tzinfo=None)
+                
+                # If it's something else, try to convert to string first
+                date_str = str(date_input)
+                dt = datetime.fromisoformat(date_str)
+                return dt.replace(tzinfo=None)
+                
+            except Exception as e:
+                logger.warning(f"Error parsing datetime '{date_input}' (type: {type(date_input)}): {e}")
+                return None
+        
+        # Connect to database
+        conn = await asyncpg.connect(
+            "postgresql://lnbits:password@allowance-postgres:5432/lnbits"
         )
-    
-    # Verify wallet ownership
-    if wallet.id != allowance.wallet:
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN, detail="Not your Allowance."
+        
+        # Check if allowance exists and verify ownership
+        row = await conn.fetchrow(
+            """
+            SELECT wallet FROM ext_allowance.maintable 
+            WHERE id = $1
+            """,
+            allowance_id
         )
-    
-    # Update the allowance
-    for key, value in data.dict().items():
-        if hasattr(allowance, key) and value is not None:
-            setattr(allowance, key, value)
-    
-    # Ensure wallet ID stays the same
-    allowance.wallet = wallet.id
-    
-    update_data = CreateAllowanceData(**allowance.dict())
-    updated_allowance = await update_allowance(update_data)
-    return updated_allowance.dict()
+        
+        if not row:
+            await conn.close()
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
+            )
+        
+        # Verify wallet ownership
+        if row["wallet"] != wallet.id:
+            await conn.close()
+            raise HTTPException(
+                status_code=HTTPStatus.FORBIDDEN, detail="Not your Allowance."
+            )
+        
+        # Parse datetime fields
+        start_date = parse_datetime_string(data.start_date) if data.start_date else None
+        next_payment_date = parse_datetime_string(data.next_payment_date) if data.next_payment_date else None
+        end_date = parse_datetime_string(data.end_date) if data.end_date else None
+        
+        # Update the allowance
+        await conn.execute(
+            """
+            UPDATE ext_allowance.maintable 
+            SET name = $2, lightning_address = $3, amount = $4, currency = $5,
+                start_date = $6, frequency_type = $7, next_payment_date = $8, 
+                memo = $9, active = $10, end_date = $11
+            WHERE id = $1
+            """,
+            allowance_id,
+            data.name,
+            data.lightning_address,
+            data.amount,
+            data.currency,
+            start_date,
+            data.frequency_type,
+            next_payment_date,
+            data.memo,
+            data.active,
+            end_date,
+        )
+        
+        await conn.close()
+        
+        logger.info(f"✅ Updated allowance: {allowance_id}")
+        return {"id": allowance_id, "name": data.name, "message": "Allowance updated successfully"}
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (404, 403) as-is
+        raise
+    except Exception as e:
+        logger.error(f"🚨 Database error in api_allowance_update: {e}")
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR, 
+            detail=f"Failed to update allowance: {str(e)}"
+        )
 
 
 ## Create a new record
