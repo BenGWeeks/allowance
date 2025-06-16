@@ -37,31 +37,37 @@
 The extension includes comprehensive test suites for both API and UI testing:
 
 #### Test Organization
-- **API Tests**: `/tests/api_*.py` - Python-based API endpoint testing
-- **UI Tests**: `/tests/ui_*.js` - Playwright browser automation testing
+- **API Tests**: `/tests/api/*.py` - Python-based API endpoint testing
+- **UI Tests**: `/tests/ui/*.js` - Playwright browser automation testing
 - **Test Runners**: Shell scripts to orchestrate all testing
 
 #### Test Scripts
 **UI Tests (Playwright):**
-- **ui_create_admin_account.js** - Creates initial superuser account on fresh LNBits install
-- **ui_login_test.js** - Tests admin login functionality
-- **ui_enable_allowance.js** - Enables the allowance extension via UI
-- **ui_create_allowance.js** - End-to-end allowance creation test
-- **ui_edit_allowance.js** - Tests allowance editing through forms
-- **ui_delete_allowance.js** - Tests allowance deletion functionality
+- **tests/ui/create_admin_account.js** - Creates initial superuser account on fresh LNBits install
+- **tests/ui/login_test.js** - Tests admin login functionality
+- **tests/ui/enable_allowance.js** - Enables the allowance extension via UI
+- **tests/ui/create_allowance.js** - End-to-end allowance creation test
+- **tests/ui/edit_allowance.js** - Tests allowance editing through forms
+- **tests/ui/delete_allowance.js** - Tests allowance deletion functionality
+- **tests/ui/check-currencies.js** - Tests currency dropdown functionality
 
 **API Tests (Python):**
-- **api_allowances.py** - Tests core allowance CRUD API endpoints
+- **tests/api/allowance_create.py** - Tests allowance creation API
+- **tests/api/allowance_read.py** - Tests allowance retrieval API
+- **tests/api/allowance_update.py** - Tests allowance update API
+- **tests/api/allowance_delete.py** - Tests allowance deletion API
+- **tests/api/currency_rate.py** - Tests currency conversion API
+- **tests/api/scheduled_payments.py** - Tests scheduled payment execution
 
 **Test Runners:**
 - **run_all_tests.sh** - Runs both API and UI tests in sequence
-- **run_api_tests.sh** - Runs only API tests (Python)
+- **run_api_tests.sh** - Runs only API tests (Python, auto-detects system dependencies)
 - **run_ui_tests.sh** - Runs only UI tests (Playwright)
 
 #### Test Naming Conventions
-- **API Tests**: `api_*.py` - Python files for testing API endpoints
-- **UI Tests**: `ui_*.js` - JavaScript files for testing user interface
-- Use descriptive action-based names (ui_create_allowance.js, not step1.js)
+- **API Tests**: Located in `tests/api/` directory with descriptive names
+- **UI Tests**: Located in `tests/ui/` directory with descriptive names
+- Use descriptive action-based names (create_allowance.js, not step1.js)
 - Single-purpose scripts with clear goals
 - Chain scripts by calling previous scripts when needed
 
@@ -87,8 +93,18 @@ The repository follows a clean structure with proper .gitignore patterns:
 ```
 allowance/
 ├── tests/                    # Comprehensive test suite
-│   ├── api_*.py             # API endpoint tests (Python)
-│   ├── ui_*.js              # UI automation tests (Playwright)
+│   ├── api/                 # API endpoint tests (Python)
+│   │   ├── allowance_*.py   # CRUD operations testing
+│   │   ├── currency_rate.py # Currency conversion testing
+│   │   └── scheduled_payments.py # Scheduled payments testing
+│   ├── ui/                  # UI automation tests (Playwright)
+│   │   ├── create_admin_account.js
+│   │   ├── login_test.js
+│   │   ├── enable_allowance.js
+│   │   ├── create_allowance.js
+│   │   ├── edit_allowance.js
+│   │   ├── delete_allowance.js
+│   │   └── check-currencies.js
 │   ├── run_all_tests.sh     # Run all tests
 │   ├── run_api_tests.sh     # Run API tests only
 │   ├── run_ui_tests.sh      # Run UI tests only

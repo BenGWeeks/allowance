@@ -37,11 +37,28 @@ allowance_api_router = APIRouter()
     "/api/v1/allowance", status_code=HTTPStatus.OK, response_model=None
 )
 async def api_allowances(
+    request: Request,
     all_wallets: bool = Query(False),
-    # wallet = Depends(get_wallet_for_key),  # Causing Pydantic error
 ):
+    # Manual authentication check to avoid Pydantic issues
+    api_key = request.headers.get("X-Api-Key")
+    if not api_key:
+        raise HTTPException(status_code=401, detail="API key required")
+    
+    # Validate the API key and get wallet
+    try:
+        from lnbits.core.models import Wallet
+        from lnbits.core.crud import get_wallet_for_key
+        
+        wallet = await get_wallet_for_key(api_key)
+        if not wallet:
+            raise HTTPException(status_code=401, detail="Invalid API key")
+    except Exception as e:
+        logger.warning(f"Authentication failed: {e}")
+        raise HTTPException(status_code=401, detail="Authentication failed")
+
     # Get real allowances from database
-    logger.info("🔗 API called: Getting real allowances from database")
+    logger.info(f"🔗 API called: Getting allowances for wallet {wallet.id}")
 
     try:
         import asyncpg
@@ -51,16 +68,31 @@ async def api_allowances(
             "postgresql://lnbits:password@allowance-postgres:5432/lnbits"
         )
 
-        # Get all allowances (only select columns that exist)
-        rows = await conn.fetch(
+        # Get allowances for this wallet (only select columns that exist)
+        if all_wallets:
+            # Admin can see all allowances
+            rows = await conn.fetch(
+                """
+                SELECT id, name, wallet, lightning_address, amount, currency,
+                       start_date, frequency_type, next_payment_date, memo, 
+                       active, end_date
+                FROM ext_allowance.maintable 
+                ORDER BY start_date DESC
             """
-            SELECT id, name, wallet, lightning_address, amount, currency,
-                   start_date, frequency_type, next_payment_date, memo, 
-                   active, end_date
-            FROM ext_allowance.maintable 
-            ORDER BY start_date DESC
-        """
-        )
+            )
+        else:
+            # Filter by wallet ID
+            rows = await conn.fetch(
+                """
+                SELECT id, name, wallet, lightning_address, amount, currency,
+                       start_date, frequency_type, next_payment_date, memo, 
+                       active, end_date
+                FROM ext_allowance.maintable 
+                WHERE wallet = $1
+                ORDER BY start_date DESC
+            """,
+                wallet.id
+            )
 
         await conn.close()
 
@@ -105,15 +137,37 @@ async def api_allowances(
 @allowance_api_router.get(
     "/api/v1/allowance/{allowance_id}",
     status_code=HTTPStatus.OK,
-    # dependencies=[Depends(require_invoice_key)],  # Temporarily disabled
     response_model=None,
 )
-async def api_allowance(allowance_id: str):
+async def api_allowance(request: Request, allowance_id: str):
+    # Manual authentication check to avoid Pydantic issues
+    api_key = request.headers.get("X-Api-Key")
+    if not api_key:
+        raise HTTPException(status_code=401, detail="API key required")
+    
+    # Validate the API key and get wallet
+    try:
+        from lnbits.core.crud import get_wallet_for_key
+        
+        wallet = await get_wallet_for_key(api_key)
+        if not wallet:
+            raise HTTPException(status_code=401, detail="Invalid API key")
+    except Exception as e:
+        logger.warning(f"Authentication failed: {e}")
+        raise HTTPException(status_code=401, detail="Authentication failed")
+
     allowance = await get_allowance(allowance_id)
     if not allowance:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
         )
+    
+    # Verify wallet ownership
+    if allowance.wallet != wallet.id:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN, detail="Not your Allowance."
+        )
+    
     return allowance.dict()
 
 
@@ -122,27 +176,55 @@ async def api_allowance(allowance_id: str):
 
 @allowance_api_router.put("/api/v1/allowance/{allowance_id}", response_model=None)
 async def api_allowance_update(
+    request: Request,
     data: CreateAllowanceData,
     allowance_id: str,
-    # wallet = Depends(get_wallet_for_key),  # Temporarily disabled
 ):
-    # Temporary implementation without authentication
-    return {"message": "Update endpoint test - authentication disabled"}
-    # if not allowance_id:
-    #     raise HTTPException(
-    #         status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
-    #     )
-    # allowance = await get_allowance(allowance_id)
-    # assert allowance, "Allowance couldn't be retrieved"
-    # if wallet.id != allowance.wallet:
-    #     raise HTTPException(
-    #         status_code=HTTPStatus.FORBIDDEN, detail="Not your Allowance."
-    #     )
-    # for key, value in data.dict().items():
-    #     setattr(allowance, key, value)
-    # update_data = CreateAllowanceData(**allowance.dict())
-    # updated_allowance = await update_allowance(update_data)
-    # return updated_allowance.dict()
+    # Manual authentication check to avoid Pydantic issues
+    api_key = request.headers.get("X-Api-Key")
+    if not api_key:
+        raise HTTPException(status_code=401, detail="API key required")
+    
+    # Validate the API key and get wallet
+    try:
+        from lnbits.core.crud import get_wallet_for_key
+        
+        wallet = await get_wallet_for_key(api_key)
+        if not wallet:
+            raise HTTPException(status_code=401, detail="Invalid API key")
+    except Exception as e:
+        logger.warning(f"Authentication failed: {e}")
+        raise HTTPException(status_code=401, detail="Authentication failed")
+
+    if not allowance_id:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
+        )
+    
+    # Get existing allowance to verify ownership
+    allowance = await get_allowance(allowance_id)
+    if not allowance:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
+        )
+    
+    # Verify wallet ownership
+    if wallet.id != allowance.wallet:
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN, detail="Not your Allowance."
+        )
+    
+    # Update the allowance
+    for key, value in data.dict().items():
+        if hasattr(allowance, key) and value is not None:
+            setattr(allowance, key, value)
+    
+    # Ensure wallet ID stays the same
+    allowance.wallet = wallet.id
+    
+    update_data = CreateAllowanceData(**allowance.dict())
+    updated_allowance = await update_allowance(update_data)
+    return updated_allowance.dict()
 
 
 ## Create a new record
@@ -154,9 +236,25 @@ async def api_allowance_update(
 async def api_allowance_create(
     request: Request,
     data: CreateAllowanceData,
-    # wallet = Depends(require_admin_key),  # Temporarily disabled
 ):
-    # Create allowance in database (simplified version without full authentication)
+    # Manual authentication check to avoid Pydantic issues
+    api_key = request.headers.get("X-Api-Key")
+    if not api_key:
+        raise HTTPException(status_code=401, detail="API key required")
+    
+    # Validate the API key and get wallet
+    try:
+        from lnbits.core.crud import get_wallet_for_key
+        
+        wallet = await get_wallet_for_key(api_key)
+        if not wallet:
+            raise HTTPException(status_code=401, detail="Invalid API key")
+    except Exception as e:
+        logger.warning(f"Authentication failed: {e}")
+        raise HTTPException(status_code=401, detail="Authentication failed")
+
+    # Create allowance in database
+    logger.info(f"🔗 API called: Creating allowance for wallet {wallet.id}")
     try:
         import asyncpg
         
@@ -178,7 +276,7 @@ async def api_allowance_create(
             """,
             data.id,
             data.name,
-            data.wallet or "test-wallet",
+            wallet.id,
             data.lightning_address,
             data.amount,
             data.currency,
@@ -212,21 +310,83 @@ async def api_allowance_create(
 
 @allowance_api_router.delete("/api/v1/allowance/{allowance_id}", response_model=None)
 async def api_allowance_delete(
-    allowance_id: str,  # , wallet = Depends(require_admin_key)  # Temporarily disabled
+    request: Request,
+    allowance_id: str,
 ):
-    # Temporary implementation without authentication
-    return {"message": "Delete endpoint test - authentication disabled"}
-    # allowance = await get_allowance(allowance_id)
-    # if not allowance:
-    #     raise HTTPException(
-    #         status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
-    #     )
-    # if allowance.wallet != wallet.id:
-    #     raise HTTPException(
-    #         status_code=HTTPStatus.FORBIDDEN, detail="Not your Allowance."
-    #     )
-    # await delete_allowance(allowance_id)
-    # return {"message": "Allowance deleted successfully"}
+    # Manual authentication check to avoid Pydantic issues
+    api_key = request.headers.get("X-Api-Key")
+    if not api_key:
+        raise HTTPException(status_code=401, detail="API key required")
+    
+    # Validate the API key and get wallet
+    try:
+        from lnbits.core.crud import get_wallet_for_key
+        
+        wallet = await get_wallet_for_key(api_key)
+        if not wallet:
+            raise HTTPException(status_code=401, detail="Invalid API key")
+    except Exception as e:
+        logger.warning(f"Authentication failed: {e}")
+        raise HTTPException(status_code=401, detail="Authentication failed")
+
+    # Get allowance and verify ownership using direct database query
+    try:
+        import asyncpg
+        
+        # Connect to database
+        conn = await asyncpg.connect(
+            "postgresql://lnbits:password@allowance-postgres:5432/lnbits"
+        )
+        
+        # Check if allowance exists and get wallet
+        logger.info(f"🔍 Looking for allowance: {allowance_id}")
+        row = await conn.fetchrow(
+            """
+            SELECT wallet FROM ext_allowance.maintable 
+            WHERE id = $1
+            """,
+            allowance_id
+        )
+        
+        logger.info(f"🔍 Query result: {row}")
+        
+        if not row:
+            await conn.close()
+            logger.warning(f"❌ Allowance not found: {allowance_id}")
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND, detail="Allowance does not exist."
+            )
+        
+        # Verify wallet ownership
+        if row["wallet"] != wallet.id:
+            await conn.close()
+            raise HTTPException(
+                status_code=HTTPStatus.FORBIDDEN, detail="Not your Allowance."
+            )
+        
+        # Delete the allowance
+        await conn.execute(
+            """
+            DELETE FROM ext_allowance.maintable 
+            WHERE id = $1
+            """,
+            allowance_id
+        )
+        
+        await conn.close()
+        
+        logger.info(f"✅ Deleted allowance: {allowance_id}")
+        return {"message": "Allowance deleted successfully"}
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (404, 403) as-is
+        raise
+    except Exception as e:
+        logger.error(f"🚨 Database error in api_allowance_delete: {e}")
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR, 
+            detail=f"Failed to delete allowance: {str(e)}"
+        )
 
 
 # ANY OTHER ENDPOINTS YOU NEED

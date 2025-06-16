@@ -25,13 +25,15 @@ async def test_update_allowance():
             return False
 
         async with httpx.AsyncClient() as client:
+            start_date = datetime.utcnow() + timedelta(days=2)
             payload = {
                 "name": "Updated Test Allowance",
                 "lightning_address": "updated@example.com",
                 "amount": 2000,
                 "currency": "sats",
                 "frequency_type": "weekly",
-                "start_date": (datetime.utcnow() + timedelta(days=2)).isoformat(),
+                "start_date": start_date.isoformat(),
+                "next_payment_date": start_date.isoformat(),
                 "active": False,
                 "memo": "Updated via API test",
             }

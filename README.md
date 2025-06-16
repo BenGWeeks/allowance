@@ -42,8 +42,8 @@ The extension includes comprehensive test suites for both API and UI testing.
 
 #### Test Organization
 
-- **API Tests**: `/tests/api_*.py` - Python-based API endpoint testing
-- **UI Tests**: `/tests/ui_*.js` - Playwright browser automation testing  
+- **API Tests**: `/tests/api/*.py` - Python-based API endpoint testing
+- **UI Tests**: `/tests/ui/*.js` - Playwright browser automation testing  
 - **Test Runners**: Shell scripts to orchestrate all testing
 
 #### Prerequisites
@@ -52,28 +52,28 @@ The extension includes comprehensive test suites for both API and UI testing.
 cd tests
 # For UI tests
 npm install
-# For API tests  
-python3 -m venv .api_test_env
-source .api_test_env/bin/activate
-pip install httpx pytest pytest-asyncio
+# For API tests (auto-detects system dependencies or creates virtual environment)
+./run_api_tests.sh
 ```
 
 #### Test Scripts
 
 **API Tests (Python):**
-- **api_allowance_create.py** - Test POST /api/v1/allowance endpoint
-- **api_allowance_read.py** - Test GET /api/v1/allowance endpoints  
-- **api_allowance_update.py** - Test PUT /api/v1/allowance/{id} endpoint
-- **api_allowance_delete.py** - Test DELETE /api/v1/allowance/{id} endpoint
-- **api_currency_rate.py** - Test GET /api/v1/rate/{currency} endpoint
+- **tests/api/allowance_create.py** - Test POST /api/v1/allowance endpoint
+- **tests/api/allowance_read.py** - Test GET /api/v1/allowance endpoints  
+- **tests/api/allowance_update.py** - Test PUT /api/v1/allowance/{id} endpoint
+- **tests/api/allowance_delete.py** - Test DELETE /api/v1/allowance/{id} endpoint
+- **tests/api/currency_rate.py** - Test GET /api/v1/rate/{currency} endpoint
+- **tests/api/scheduled_payments.py** - Test scheduled payment execution
 
 **UI Tests (Playwright):**
-- **ui_create_admin_account.js** - Creates initial superuser account
-- **ui_login_test.js** - Tests admin login functionality
-- **ui_enable_allowance.js** - Enables the allowance extension via UI
-- **ui_create_allowance.js** - End-to-end allowance creation test
-- **ui_edit_allowance.js** - Tests allowance editing through forms
-- **ui_delete_allowance.js** - Tests allowance deletion functionality
+- **tests/ui/create_admin_account.js** - Creates initial superuser account
+- **tests/ui/login_test.js** - Tests admin login functionality
+- **tests/ui/enable_allowance.js** - Enables the allowance extension via UI
+- **tests/ui/create_allowance.js** - End-to-end allowance creation test
+- **tests/ui/edit_allowance.js** - Tests allowance editing through forms
+- **tests/ui/delete_allowance.js** - Tests allowance deletion functionality
+- **tests/ui/check-currencies.js** - Tests currency dropdown functionality
 
 **Test Runners:**
 - **run_all_tests.sh** - Runs both API and UI tests in sequence
@@ -94,11 +94,11 @@ cd tests
 ./run_ui_tests.sh
 
 # Run individual API tests
-python3 api_allowance_create.py
-python3 api_currency_rate.py
+python3 tests/api/allowance_create.py
+python3 tests/api/currency_rate.py
 
 # Run individual UI tests
-npx playwright test ui_create_allowance.js
+node tests/ui/create_allowance.js
 ```
 
 #### Test Results
@@ -150,8 +150,18 @@ rm -rf .test-venv
 allowance/
 ├── .github/workflows/       # CI/CD pipeline configuration
 ├── tests/                   # Comprehensive test suite
-│   ├── api_*.py            # API endpoint tests (Python)
-│   ├── ui_*.js             # UI automation tests (Playwright)
+│   ├── api/                # API endpoint tests (Python)
+│   │   ├── allowance_*.py  # CRUD operations testing
+│   │   ├── currency_rate.py # Currency conversion testing
+│   │   └── scheduled_payments.py # Scheduled payments testing
+│   ├── ui/                 # UI automation tests (Playwright)
+│   │   ├── create_admin_account.js
+│   │   ├── login_test.js
+│   │   ├── enable_allowance.js
+│   │   ├── create_allowance.js
+│   │   ├── edit_allowance.js
+│   │   ├── delete_allowance.js
+│   │   └── check-currencies.js
 │   ├── run_all_tests.sh    # Run all tests
 │   ├── run_api_tests.sh    # Run API tests only
 │   └── run_ui_tests.sh     # Run UI tests only
