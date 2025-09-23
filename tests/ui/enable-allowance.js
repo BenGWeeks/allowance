@@ -1,8 +1,10 @@
 const { chromium } = require('playwright');
+const { login, getConfig } = require('./auth-helper');
 
 (async () => {
   const browser = await chromium.launch({ headless: true, slowMo: 1000 });
   const page = await browser.newPage();
+  const config = getConfig();
 
   try {
     console.log('🚀 Starting enable allowance extension test...');
@@ -20,30 +22,7 @@ const { chromium } = require('playwright');
     
     // Step 1: Login first (reuse login logic)
     console.log('📝 Step 1: Logging in as admin...');
-    await page.goto('http://localhost:5001/');
-    await page.waitForLoadState('networkidle');
-    
-    // Check if we need to switch to login screen
-    const createAccountVisible = await page.locator('text=Create Account').first().isVisible();
-    if (createAccountVisible) {
-      await page.click('text=Login');
-      await page.waitForTimeout(2000);
-    }
-    
-    // Fill login credentials
-    await page.fill('input[type="text"], input[type="email"]', 'ben.weeks');
-    await page.fill('input[type="password"]', 'zUYmy&05&uZ$3kmf*^T8');
-    await page.click('button:has-text("LOGIN")');
-    await page.waitForTimeout(3000);
-    
-    // Verify login success
-    const walletVisible = await page.locator('text="Add a new wallet"').isVisible();
-    if (!walletVisible) {
-      console.log('❌ Login failed');
-      await page.screenshot({ path: 'tests/test-results/enable-allowance-login-failed.png', fullPage: true });
-      process.exit(1);
-    }
-    
+    await login(page);
     console.log('✅ Login successful');
     
     // Close any open dialogs that might be blocking clicks
@@ -130,13 +109,13 @@ const { chromium } = require('playwright');
         console.log(`📡 Response: ${response.status()} ${response.url()}`);
       });
       
-      const response = await page.goto('http://localhost:5001/allowance/');
+      const response = await page.goto(`${config.baseUrl}/allowance/`);
       console.log('📡 Final Response status:', response.status());
       console.log('📡 Final Response URL:', response.url());
       
       // Check for any redirects
       const finalUrl = page.url();
-      if (finalUrl !== 'http://localhost:5001/allowance/') {
+      if (finalUrl !== `${config.baseUrl}/allowance/`) {
         console.log('🔄 Page was redirected to:', finalUrl);
       }
       

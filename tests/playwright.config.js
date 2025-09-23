@@ -1,5 +1,9 @@
 // @ts-check
 const { defineConfig, devices } = require('@playwright/test');
+const { getConfig } = require('./ui/auth-helper');
+
+// Get configuration from environment variables
+const config = getConfig();
 
 /**
  * @see https://playwright.dev/docs/test-configuration
@@ -19,7 +23,7 @@ module.exports = defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: 'http://localhost:5001',
+    baseURL: config.baseUrl,
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -54,8 +58,8 @@ module.exports = defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'echo "LNBits should be running on http://localhost:5001"',
-    url: 'http://localhost:5001',
+    command: `echo "LNBits should be running on ${config.baseUrl}"`,
+    url: config.baseUrl,
     reuseExistingServer: !process.env.CI,
     timeout: 10000,
   },

@@ -8,7 +8,7 @@ import asyncio
 
 async def test_delete_allowance():
     """Test deleting an allowance via API - proper test with count verification"""
-    base_url = "http://localhost:5001"
+    base_url = "https://lnbits-allowance.weeksfamily.me"
 
     try:
         # Get admin API key dynamically
@@ -17,7 +17,7 @@ async def test_delete_allowance():
 
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         from get_api_key import get_admin_api_key
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
         admin_key = await get_admin_api_key()
         if not admin_key:
@@ -46,9 +46,9 @@ async def test_delete_allowance():
                 "amount": 1,
                 "currency": "sats",
                 "frequency_type": "weekly",
-                "start_date": datetime.utcnow().isoformat(),
+                "start_datetime": datetime.now(timezone.utc).isoformat(),
                 "next_payment_date": (
-                    datetime.utcnow() + timedelta(days=7)
+                    datetime.now(timezone.utc) + timedelta(days=7)
                 ).isoformat(),
                 "active": True,
                 "memo": "Test allowance for deletion",

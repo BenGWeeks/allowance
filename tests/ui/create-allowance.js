@@ -1,23 +1,21 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+const { login, getConfig } = require('./auth-helper');
 
-// Get test data from JSON file
+// Get test data using config from .env.local
 const getTestData = () => {
-  // Try to load from create-allowance.json
-  const testDataPath = path.join(__dirname, 'create-allowance.json');
-  if (fs.existsSync(testDataPath)) {
-    const allowances = JSON.parse(fs.readFileSync(testDataPath, 'utf8'));
-    if (Array.isArray(allowances) && allowances.length > 0) {
-      return allowances;
-    }
+  const config = getConfig();
+
+  // Always use Lightning address from .env.local
+  if (!config.payLinkEmail) {
+    throw new Error('PAYLINK_EMAIL must be set in .env.local');
   }
-  
-  // Fallback to single default allowance
+
   return [{
-    name: 'Pocket money',
-    lightningAddress: 'muddledsmell08@walletofsatoshi.com',
-    amount: 100,
+    name: 'Test Allowance',
+    lightningAddress: config.payLinkEmail,
+    amount: 10,
     frequency: 'weekly',
     memo: 'Default test allowance'
   }];
@@ -25,11 +23,13 @@ const getTestData = () => {
 
 (async () => {
   const allowancesToCreate = getTestData();
-  console.log(`🎯 Testing ${allowancesToCreate.length} allowance(s) from create-allowance.json`);
-  
+  console.log(`🎯 Testing ${allowancesToCreate.length} allowance(s) using config from .env.local`);
+  console.log(`📧 Using Lightning address: ${allowancesToCreate[0].lightningAddress}`);
+
   const browser = await chromium.launch({ headless: true, slowMo: 500 });
   const page = await browser.newPage();
-  
+  const config = getConfig();
+
   let successCount = 0;
   let failureCount = 0;
 
@@ -64,25 +64,11 @@ const getTestData = () => {
     
     // Step 1: Login first
     console.log('📝 Step 1: Logging in as admin...');
-    await page.goto('http://localhost:5001/');
-    await page.waitForLoadState('networkidle');
-    
-    // Check if we need to switch to login screen
-    const createAccountVisible = await page.locator('text=Create Account').first().isVisible();
-    if (createAccountVisible) {
-      await page.click('text=Login');
-      await page.waitForTimeout(2000);
-    }
-    
-    // Fill login credentials
-    await page.fill('input[type="text"], input[type="email"]', 'ben.weeks');
-    await page.fill('input[type="password"]', 'zUYmy&05&uZ$3kmf*^T8');
-    await page.click('button:has-text("LOGIN")');
-    await page.waitForTimeout(3000);
-    
+    await login(page);
+
     // Step 2: Navigate to allowance extension
     console.log('📝 Step 2: Navigating to allowance extension...');
-    await page.goto('http://localhost:5001/allowance/');
+    await page.goto(`${config.baseUrl}/allowance/`);
     await page.waitForTimeout(3000);
     
     // Get initial count
@@ -91,7 +77,7 @@ const getTestData = () => {
     
     let initialCount = 0;
     if (adminKey) {
-      const initialResponse = await page.request.get('http://localhost:5001/allowance/api/v1/allowance', {
+      const initialResponse = await page.request.get(`${config.baseUrl}/allowance/api/v1/allowance`, {
         headers: { 'X-Api-Key': adminKey }
       });
       if (initialResponse.ok()) {
@@ -360,7 +346,7 @@ const getTestData = () => {
   console.log(`\n📝 Step 4: Verifying final count...`);
   let finalCount = 0;
   if (adminKey) {
-    const finalResponse = await page.request.get('http://localhost:5001/allowance/api/v1/allowance', {
+    const finalResponse = await page.request.get(`${config.baseUrl}/allowance/api/v1/allowance`, {
       headers: { 'X-Api-Key': adminKey }
     });
     if (finalResponse.ok()) {

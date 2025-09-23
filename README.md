@@ -116,12 +116,35 @@ node tests/ui/create_allowance.js
 - Screenshots are saved to `tests/test-results/` (excluded from Git)
 - Tests are designed for CI/CD integration
 
-#### Test Environment
+#### Test Environment Configuration
 
-Tests assume:
-- LNBits running on `http://localhost:5001` (development environment)
-- Admin credentials: `ben.weeks` / `zUYmy&05&uZ$3kmf*^T8`
-- Fresh database for superuser creation test
+**IMPORTANT**: The `.env.local` configuration is **only needed for running tests** - not for normal extension usage. Before running tests, create a `.env.local` file in the project root with your test environment configuration:
+
+```bash
+# Copy the example file and customize it
+cp .env.example .env.local
+```
+
+Edit `.env.local` with your specific values:
+
+```
+TEST_LNBITS_URL=http://localhost:5001
+LNBITS_ADMIN_USERNAME=your-admin-username
+LNBITS_ADMIN_PASSWORD=your-admin-password
+RECEIVING_WALLET_NAME=Receiving
+PAYLINK_EMAIL=receiving@yourdomain.com
+```
+
+**Security Notes:**
+- `.env.local` is gitignored and will never be committed
+- Never hardcode credentials in test files
+- All tests use the centralized auth-helper.js module
+- Production deployments should use environment variables or secure credential management
+
+**Test Requirements:**
+- LNBits instance running and accessible
+- Valid admin credentials for authentication
+- Fresh database for initial setup tests
 
 ### Testing & Quality
 

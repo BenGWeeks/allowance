@@ -8,7 +8,7 @@ import asyncio
 
 async def test_currency_rate():
     """Test retrieving currency exchange rate via API"""
-    base_url = "http://localhost:5001"
+    base_url = "https://lnbits-allowance.weeksfamily.me"
 
     try:
         async with httpx.AsyncClient() as client:
@@ -33,7 +33,7 @@ async def test_currency_rate():
 
 async def test_invalid_currency():
     """Test retrieving rate for invalid currency"""
-    base_url = "http://localhost:5001"
+    base_url = "https://lnbits-allowance.weeksfamily.me"
 
     try:
         async with httpx.AsyncClient() as client:

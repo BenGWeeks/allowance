@@ -4,12 +4,12 @@ API test for PUT /api/v1/allowance/{id} - Update allowance endpoint
 
 import httpx
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 async def test_update_allowance():
     """Test updating an allowance via API - proper test with create→update→verify"""
-    base_url = "http://localhost:5001"
+    base_url = "https://lnbits-allowance.weeksfamily.me"
 
     try:
         # Get admin API key dynamically
@@ -27,15 +27,15 @@ async def test_update_allowance():
         async with httpx.AsyncClient() as client:
 
             # Step 1: Create a test allowance to update
-            start_date = datetime.utcnow() + timedelta(days=1)
+            start_datetime = datetime.now(timezone.utc) + timedelta(days=1)
             create_data = {
                 "name": "TEST_UPDATE_ALLOWANCE",
                 "lightning_address": "update-test@example.com",
                 "amount": 1000,
                 "currency": "sats",
                 "frequency_type": "weekly",
-                "start_date": start_date.isoformat(),
-                "next_payment_date": (start_date + timedelta(days=7)).isoformat(),
+                "start_datetime": start_datetime.isoformat(),
+                "next_payment_date": (start_datetime + timedelta(days=7)).isoformat(),
                 "active": True,
                 "memo": "Test allowance for update",
             }
@@ -57,16 +57,16 @@ async def test_update_allowance():
             print(f"✅ Created test allowance: {test_id}")
 
             # Step 2: Update the allowance
-            update_start_date = datetime.utcnow() + timedelta(days=2)
+            update_start_datetime = datetime.now(timezone.utc) + timedelta(days=2)
             update_data = {
                 "name": "Updated Test Allowance",
                 "lightning_address": "updated@example.com",
                 "amount": 2000,
                 "currency": "sats",
                 "frequency_type": "monthly",
-                "start_date": update_start_date.isoformat(),
+                "start_datetime": update_start_datetime.isoformat(),
                 "next_payment_date": (
-                    update_start_date + timedelta(days=30)
+                    update_start_datetime + timedelta(days=30)
                 ).isoformat(),
                 "active": False,
                 "memo": "Updated via API test",

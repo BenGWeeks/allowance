@@ -1,14 +1,16 @@
 const { chromium } = require('playwright');
+const { login, getConfig } = require('./auth-helper');
 
 (async () => {
   const browser = await chromium.launch({ headless: true, slowMo: 1000 });
   const page = await browser.newPage();
+  const config = getConfig();
 
   try {
     console.log('🚀 Starting admin account creation...');
-    
+
     // Go to LNBits
-    await page.goto('http://localhost:5001/');
+    await page.goto(config.baseUrl);
     await page.waitForLoadState('networkidle');
     
     // Check if we see the superuser setup screen or if already logged in
@@ -60,7 +62,7 @@ const { chromium } = require('playwright');
     let filled = false;
     for (const selector of usernameSelectors) {
       try {
-        await page.fill(selector, 'ben.weeks', { timeout: 5000 });
+        await page.fill(selector, config.username, { timeout: 5000 });
         console.log(`✅ Filled username using selector: ${selector}`);
         filled = true;
         break;
@@ -78,9 +80,9 @@ const { chromium } = require('playwright');
     // Fill passwords
     const passwordFields = await page.locator('input[type="password"]').all();
     if (passwordFields.length >= 2) {
-      await passwordFields[0].fill('zUYmy&05&uZ$3kmf*^T8');
+      await passwordFields[0].fill(config.password);
       console.log('✅ Filled password field');
-      await passwordFields[1].fill('zUYmy&05&uZ$3kmf*^T8');
+      await passwordFields[1].fill(config.password);
       console.log('✅ Filled password confirmation field');
     } else {
       console.log('❌ Could not find password fields');

@@ -4,13 +4,15 @@
  */
 
 const { chromium } = require('playwright');
+const { login, getConfig } = require('./auth-helper');
 
 (async () => {
   console.log('🧪 End-to-End Edit Allowance Test');
   console.log('===================================');
-  
+
   const browser = await chromium.launch({ headless: true, slowMo: 500 });
   const page = await browser.newPage();
+  const config = getConfig();
 
   try {
     // Step 1: Create allowance via API
@@ -31,13 +33,13 @@ const { chromium } = require('playwright');
       amount: 500,
       currency: 'sats',
       frequency_type: 'weekly',
-      start_date: new Date().toISOString(),
+      start_datetime: new Date().toISOString(),
       next_payment_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       active: true,
       memo: 'Created via API for UI editing test'
     };
     
-    const createResponse = await page.request.post('http://localhost:5001/allowance/api/v1/allowance', {
+    const createResponse = await page.request.post(`${config.baseUrl}/allowance/api/v1/allowance`, {
       headers: { 'X-Api-Key': adminKey },
       data: createData
     });
@@ -56,28 +58,13 @@ const { chromium } = require('playwright');
     
     // Step 2: Login to UI
     console.log('\n📝 Step 2: Logging into UI...');
-    
-    await page.goto('http://localhost:5001/');
-    await page.waitForLoadState('networkidle');
-    
-    // Check if we need to switch to login screen
-    const createAccountVisible = await page.locator('text=Create Account').first().isVisible();
-    if (createAccountVisible) {
-      await page.click('text=Login');
-      await page.waitForTimeout(1000);
-    }
-    
-    await page.fill('input[type="text"], input[type="email"]', 'ben.weeks');
-    await page.fill('input[type="password"]', 'zUYmy&05&uZ$3kmf*^T8');
-    await page.click('button:has-text("LOGIN")');
-    await page.waitForTimeout(2000);
-    
+    await login(page);
     console.log('✅ Logged into UI');
-    
+
     // Step 3: Navigate to allowance page and find our allowance
     console.log('\n📝 Step 3: Finding allowance in UI...');
-    
-    await page.goto('http://localhost:5001/allowance/');
+
+    await page.goto(`${config.baseUrl}/allowance/`);
     await page.waitForTimeout(3000);
     
     // Find the allowance row
@@ -154,7 +141,7 @@ const { chromium } = require('playwright');
     // Step 5: Verify changes via API
     console.log('\n📝 Step 5: Verifying changes via API...');
     
-    const verifyResponse = await page.request.get('http://localhost:5001/allowance/api/v1/allowance', {
+    const verifyResponse = await page.request.get(`${config.baseUrl}/allowance/api/v1/allowance`, {
       headers: { 'X-Api-Key': adminKey }
     });
     

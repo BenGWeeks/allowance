@@ -1,35 +1,22 @@
 const { chromium } = require('playwright');
+const { login, getConfig } = require('./auth-helper');
 
 (async () => {
-  const browser = await chromium.launch({ 
-    headless: false, 
-    slowMo: 300 
+  const browser = await chromium.launch({
+    headless: false,
+    slowMo: 300
   });
   const page = await browser.newPage();
+  const config = getConfig();
 
   try {
     console.log('🚀 Direct currency check...\n');
-    
+
     // Login first
-    await page.goto('http://localhost:5001/');
-    await page.waitForTimeout(1000);
-    
-    try {
-      await page.click('text=Login', { timeout: 2000 });
-      await page.waitForTimeout(500);
-    } catch (e) {
-      console.log('Already on login screen');
-    }
-    
-    await page.fill('input[type="text"], input[type="email"]', 'ben.weeks');
-    await page.fill('input[type="password"]', 'zUYmy&05&uZ$3kmf*^T8');
-    await page.click('button:has-text("LOGIN")');
-    
-    await page.waitForSelector('text=Lightning', { timeout: 10000 });
-    console.log('✅ Logged in\n');
-    
+    await login(page);
+
     // Go directly to allowance page
-    await page.goto('http://localhost:5001/allowance');
+    await page.goto(`${config.baseUrl}/allowance`);
     await page.waitForTimeout(2000);
     console.log('✅ On Allowance page\n');
     

@@ -199,8 +199,8 @@
               type="number"
               label="Amount *"
               :rules="[val => val > 0 || 'Amount must be greater than 0']"
-              min="1"
-              step="1"
+              :min="formDialog.data.currency === 'sats' ? '1' : '0.01'"
+              :step="formDialog.data.currency === 'sats' ? '1' : '0.01'"
               input-style="text-align: left"
               :hint="formDialog.data.currency && formDialog.data.currency !== 'sats' && fiatRates[formDialog.data.currency] ? (formDialog.data.amount || 0) + ' ' + formDialog.data.currency + ' = ' + Math.round((formDialog.data.amount || 0) * fiatRates[formDialog.data.currency]) + ' sats (actual conversion calculated at the time of sending)' : ''"
             >
@@ -249,19 +249,19 @@
             <q-input
               filled
               dense
-              v-model="formDialog.data.start_date"
-              label="Start Date *"
-              type="date"
-              :rules="[val => !!val || 'Start date is required']"
+              v-model="formDialog.data.start_datetime"
+              label="Start date & time (optional)"
+              type="datetime-local"
+              hint="Leave blank to start immediately"
             ></q-input>
           </div>
           <div class="col">
             <q-input
               filled
               dense
-              v-model="formDialog.data.end_date"
-              label="End Date (Optional)"
-              type="date"
+              v-model="formDialog.data.end_datetime"
+              label="End date & time (optional)"
+              type="datetime-local"
             ></q-input>
           </div>
         </div>

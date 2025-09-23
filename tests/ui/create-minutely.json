@@ -1,0 +1,10 @@
+{
+  "name": "Auto Payment Test - Minutely",
+  "wallet": "WALLET_ID_PLACEHOLDER",
+  "lightning_address": "RECEIVING_ADDRESS_PLACEHOLDER",
+  "amount": 3,
+  "currency": "sats",
+  "frequency_type": "minutely",
+  "memo": "Testing automatic minutely payments",
+  "active": true
+}

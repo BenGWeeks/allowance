@@ -4,12 +4,12 @@ API test for POST /api/v1/allowance - Create allowance endpoint
 
 import httpx
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 async def test_create_allowance():
     """Test creating a new allowance via API"""
-    base_url = "http://localhost:5001"
+    base_url = "https://lnbits-allowance.weeksfamily.me"
 
     try:
         # Get admin API key dynamically
@@ -40,15 +40,15 @@ async def test_create_allowance():
             print(f"📊 Initial allowance count: {initial_count}")
 
             # Step 2: Create allowance
-            start_date = datetime.utcnow() + timedelta(days=1)
+            start_datetime = datetime.now(timezone.utc) + timedelta(days=1)
             payload = {
                 "name": "Test API Create Allowance",
                 "lightning_address": "test@example.com",
                 "amount": 1000,
                 "currency": "sats",
                 "frequency_type": "daily",
-                "start_date": start_date.isoformat(),
-                "next_payment_date": start_date.isoformat(),
+                "start_datetime": start_datetime.isoformat(),
+                "next_payment_date": start_datetime.isoformat(),
                 "active": True,
                 "memo": "Created via API test",
             }

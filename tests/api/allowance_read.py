@@ -8,7 +8,7 @@ import asyncio
 
 async def test_list_allowances():
     """Test retrieving list of allowances via API"""
-    base_url = "http://localhost:5001"
+    base_url = "https://lnbits-allowance.weeksfamily.me"
 
     try:
         # Get admin API key dynamically
@@ -48,7 +48,7 @@ async def test_list_allowances():
 
 async def test_get_single_allowance():
     """Test retrieving a single allowance by ID via API"""
-    base_url = "http://localhost:5001"
+    base_url = "https://lnbits-allowance.weeksfamily.me"
     test_id = "test_allowance_id"
 
     try:

@@ -15,12 +15,12 @@ Usage: python test_scheduled_payments.py
 
 import asyncio
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import httpx
 from loguru import logger
 
 # Configuration
-LNBITS_URL = "http://localhost:5001"
+LNBITS_URL = "https://lnbits-allowance.weeksfamily.me"
 LIGHTNING_ADDRESS = "muddledsmell08@walletofsatoshi.com"
 TEST_ALLOWANCE_NAME = f"DEV_TEST_Scheduled_Payment_{int(time.time())}"
 AMOUNT_SATS = 1  # 1 sat to minimize cost
@@ -55,7 +55,7 @@ async def get_admin_wallet():
 async def create_test_allowance(wallet_id: str, admin_key: str):
     """Create a test allowance via API"""
     try:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         end_time = now + timedelta(minutes=2)  # Stop after 2 minutes
 
         allowance_data = {
@@ -64,12 +64,12 @@ async def create_test_allowance(wallet_id: str, admin_key: str):
             "lightning_address": LIGHTNING_ADDRESS,
             "amount": AMOUNT_SATS,
             "currency": "sats",
-            "start_date": now.isoformat(),
+            "start_datetime": now.isoformat(),
             "frequency_type": "minutely",
             "next_payment_date": now.isoformat(),  # Start immediately
             "memo": "Automated test payment - VoidWallet will cause failure",
             "active": True,
-            "end_date": end_time.isoformat(),
+            "end_datetime": end_time.isoformat(),
         }
 
         headers = {"X-Api-Key": admin_key, "Content-Type": "application/json"}

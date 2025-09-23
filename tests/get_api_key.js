@@ -3,9 +3,10 @@
  * This avoids hardcoding API keys in tests.
  */
 
-const USERNAME = 'ben.weeks';
-const PASSWORD = 'zUYmy&05&uZ$3kmf*^T8';
-const LNBITS_URL = 'http://localhost:5001';
+const { getConfig } = require('./ui/auth-helper');
+
+// Get configuration from environment variables
+const config = getConfig();
 
 /**
  * Get the admin API key using username/password authentication
@@ -24,10 +25,10 @@ async function getAdminApiKey(page = null) {
     }
     
     // Step 1: Login to get access token
-    const loginResponse = await apiContext.post(`${LNBITS_URL}/api/v1/auth`, {
+    const loginResponse = await apiContext.post(`${config.baseUrl}/api/v1/auth`, {
       data: {
-        username: USERNAME,
-        password: PASSWORD
+        username: config.username,
+        password: config.password
       }
     });
     
@@ -45,7 +46,7 @@ async function getAdminApiKey(page = null) {
     }
     
     // Step 2: Get wallets using the access token
-    const walletsResponse = await apiContext.get(`${LNBITS_URL}/api/v1/wallets`, {
+    const walletsResponse = await apiContext.get(`${config.baseUrl}/api/v1/wallets`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`
       }

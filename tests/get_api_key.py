@@ -7,7 +7,7 @@ This avoids hardcoding API keys in tests.
 import httpx
 import asyncio
 
-LNBITS_URL = "http://localhost:5001"
+LNBITS_URL = "https://lnbits-allowance.weeksfamily.me"
 USERNAME = "ben.weeks"
 PASSWORD = "zUYmy&05&uZ$3kmf*^T8"
 

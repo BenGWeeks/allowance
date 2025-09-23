@@ -1,6 +1,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+const { login, getConfig } = require('./auth-helper');
 
 // Get test data from command line args or default values
 const getTestData = () => {
@@ -27,9 +28,10 @@ const getTestData = () => {
 (async () => {
   const testData = getTestData();
   console.log(`🎯 Testing allowance edit: "${testData.originalName}" -> "${testData.newName}"`);
-  
+
   const browser = await chromium.launch({ headless: true, slowMo: 500 });
   const page = await browser.newPage();
+  const config = getConfig();
 
   try {
     console.log('🚀 Starting edit allowance test...');
@@ -60,25 +62,11 @@ const getTestData = () => {
     
     // Step 1: Login first
     console.log('📝 Step 1: Logging in as admin...');
-    await page.goto('http://localhost:5001/');
-    await page.waitForLoadState('networkidle');
-    
-    // Check if we need to switch to login screen
-    const createAccountVisible = await page.locator('text=Create Account').first().isVisible();
-    if (createAccountVisible) {
-      await page.click('text=Login');
-      await page.waitForTimeout(2000);
-    }
-    
-    // Fill login credentials
-    await page.fill('input[type="text"], input[type="email"]', 'ben.weeks');
-    await page.fill('input[type="password"]', 'zUYmy&05&uZ$3kmf*^T8');
-    await page.click('button:has-text("LOGIN")');
-    await page.waitForTimeout(3000);
-    
+    await login(page);
+
     // Step 2: Navigate to allowance extension
     console.log('📝 Step 2: Navigating to allowance extension...');
-    await page.goto('http://localhost:5001/allowance/');
+    await page.goto(`${config.baseUrl}/allowance/`);
     await page.waitForTimeout(3000);
     
     // Step 3: Find and edit existing allowance
@@ -160,7 +148,7 @@ const getTestData = () => {
     if (apiKey) {
       console.log('🔍 Getting initial allowance state from API...');
       try {
-        const initialResponse = await page.request.get(`http://localhost:5001/allowance/api/v1/allowance/${allowanceId}`, {
+        const initialResponse = await page.request.get(`${config.baseUrl}/allowance/api/v1/allowance/${allowanceId}`, {
           headers: { 'X-API-Key': apiKey }
         });
         
@@ -286,7 +274,7 @@ const getTestData = () => {
       if (apiKey && allowanceId) {
         console.log('\n🔍 Verifying update via API...');
         try {
-          const verifyResponse = await page.request.get(`http://localhost:5001/allowance/api/v1/allowance/${allowanceId}`, {
+          const verifyResponse = await page.request.get(`${config.baseUrl}/allowance/api/v1/allowance/${allowanceId}`, {
             headers: { 'X-API-Key': apiKey }
           });
           
@@ -337,7 +325,7 @@ const getTestData = () => {
       if (apiKey && allowanceId) {
         console.log('\n🔍 Checking database state via API (failure case)...');
         try {
-          const verifyResponse = await page.request.get(`http://localhost:5001/allowance/api/v1/allowance/${allowanceId}`, {
+          const verifyResponse = await page.request.get(`${config.baseUrl}/allowance/api/v1/allowance/${allowanceId}`, {
             headers: { 'X-API-Key': apiKey }
           });
           

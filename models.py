@@ -13,12 +13,12 @@ class CreateAllowanceData(BaseModel):
     lightning_address: str  # Lightning address like user@domain.com or LNURL
     amount: int = 0
     currency: str = "sats"
-    start_date: datetime
+    start_datetime: datetime
     frequency_type: str
     next_payment_date: datetime
     memo: str
     active: bool = True
-    end_date: Optional[datetime] = None
+    end_datetime: Optional[datetime] = None
     lnurlpay: Optional[str] = None  # LNURL pay string for compatibility
     total: int = 0  # Total amount processed
     created_at: Optional[datetime] = None  # Auto-set by database
@@ -37,12 +37,12 @@ class Allowance(BaseModel):
     lightning_address: str
     amount: int = 0
     currency: str = "sats"
-    start_date: datetime
+    start_datetime: datetime
     frequency_type: str
     next_payment_date: datetime
     memo: Optional[str] = ""
     active: bool = True
-    end_date: Optional[datetime] = None
+    end_datetime: Optional[datetime] = None
     lnurlpay: Optional[str] = None  # LNURL pay string for compatibility
     total: Optional[int] = 0  # Total amount processed
     created_at: Optional[datetime] = None  # When the allowance was created

@@ -77,7 +77,7 @@ window.app = Vue.createApp({
         currency: 'sats',
         frequency_type: 'weekly', // Default to weekly to help with testing
         active: true,
-        start_date: today
+        start_datetime: today
       }
       this.formDialog.show = true
       console.log('📅 Form opened with default start date:', today)
@@ -106,7 +106,7 @@ window.app = Vue.createApp({
       if (!this.formDialog.data.lightning_address) errors.push('Lightning address is required')
       if (!this.formDialog.data.amount || this.formDialog.data.amount <= 0) errors.push('Amount must be greater than 0')
       if (!this.formDialog.data.frequency_type) errors.push('Frequency is required')
-      if (!this.formDialog.data.start_date) errors.push('Start date is required')
+      if (!this.formDialog.data.start_datetime) errors.push('Start date is required')
       
       console.log('🔍 Validation check:', {
         name: this.formDialog.data.name,
@@ -114,7 +114,7 @@ window.app = Vue.createApp({
         lightning_address: this.formDialog.data.lightning_address,
         amount: this.formDialog.data.amount,
         frequency_type: this.formDialog.data.frequency_type,
-        start_date: this.formDialog.data.start_date,
+        start_datetime: this.formDialog.data.start_datetime,
         errors: errors
       })
       
@@ -144,10 +144,10 @@ window.app = Vue.createApp({
       
       const data = _.clone(this.formDialog.data)
       
-      // Set start_date to current date if not specified
-      if (!data.start_date) {
-        data.start_date = new Date().toISOString().split('T')[0]
-        console.log('📅 Set start_date to:', data.start_date)
+      // Set start_datetime to current date if not specified
+      if (!data.start_datetime) {
+        data.start_datetime = new Date().toISOString().split('T')[0]
+        console.log('📅 Set start_datetime to:', data.start_datetime)
       }
       
       // Transform data to match backend model
@@ -162,10 +162,10 @@ window.app = Vue.createApp({
         amount: parseInt(data.amount),
         currency: data.currency || 'sats',
         frequency_type: data.frequency_type,
-        start_date: new Date(data.start_date).toISOString(),  // Convert to ISO datetime
-        next_payment_date: this.calculateNextPaymentDate(data.start_date, data.frequency_type),
+        start_datetime: new Date(data.start_datetime).toISOString(),  // Convert to ISO datetime
+        next_payment_date: this.calculateNextPaymentDate(data.start_datetime, data.frequency_type),
         active: Boolean(data.active),  // Ensure boolean type
-        end_date: data.end_date ? new Date(data.end_date).toISOString() : null
+        end_datetime: data.end_datetime ? new Date(data.end_datetime).toISOString() : null
       }
       
       console.log('🔥 Backend data active field:', backendData.active, '(type:', typeof backendData.active, ')')
@@ -173,9 +173,9 @@ window.app = Vue.createApp({
       // For minutely payments, set end date based on duration
       if (data.frequency_type === 'minutely') {
         // Default to 5 minutes for testing
-        const endDate = new Date(data.start_date)
+        const endDate = new Date(data.start_datetime)
         endDate.setMinutes(endDate.getMinutes() + 5)
-        backendData.end_date = endDate.toISOString()
+        backendData.end_datetime = endDate.toISOString()
       }
       
       console.log('📤 Final data to send:', backendData)
@@ -257,31 +257,31 @@ window.app = Vue.createApp({
         amount: clonedData.amount,
         currency: clonedData.currency,
         frequency_type: clonedData.frequency_type,
-        start_date: clonedData.start_date, // Add missing start_date
+        start_datetime: clonedData.start_datetime, // Add missing start_datetime
         next_payment_date: clonedData.next_payment_date,
         memo: clonedData.memo,
-        end_date: clonedData.end_date
+        end_datetime: clonedData.end_datetime
       }
       
       console.log('📋 After cloning:', this.formDialog.data)
       
-      // Ensure start_date is in proper format for date input
-      if (this.formDialog.data.start_date) {
-        const date = new Date(this.formDialog.data.start_date)
-        this.formDialog.data.start_date = date.toISOString().split('T')[0]
-        console.log('📅 Converted start_date to:', this.formDialog.data.start_date)
+      // Ensure start_datetime is in proper format for date input
+      if (this.formDialog.data.start_datetime) {
+        const date = new Date(this.formDialog.data.start_datetime)
+        this.formDialog.data.start_datetime = date.toISOString().split('T')[0]
+        console.log('📅 Converted start_datetime to:', this.formDialog.data.start_datetime)
       } else {
-        // Default to today if no start_date exists
+        // Default to today if no start_datetime exists
         const today = new Date().toISOString().split('T')[0]
-        this.formDialog.data.start_date = today
-        console.log('📅 No start_date found, defaulted to today:', today)
+        this.formDialog.data.start_datetime = today
+        console.log('📅 No start_datetime found, defaulted to today:', today)
       }
       
-      // Ensure end_date is in proper format for date input if it exists
-      if (this.formDialog.data.end_date) {
-        const endDate = new Date(this.formDialog.data.end_date)
-        this.formDialog.data.end_date = endDate.toISOString().split('T')[0]
-        console.log('📅 Converted end_date to:', this.formDialog.data.end_date)
+      // Ensure end_datetime is in proper format for date input if it exists
+      if (this.formDialog.data.end_datetime) {
+        const endDate = new Date(this.formDialog.data.end_datetime)
+        this.formDialog.data.end_datetime = endDate.toISOString().split('T')[0]
+        console.log('📅 Converted end_datetime to:', this.formDialog.data.end_datetime)
       }
       
       // Set active field separately to ensure proper reactivity

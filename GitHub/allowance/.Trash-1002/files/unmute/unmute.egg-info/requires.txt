@@ -1,0 +1,12 @@
+fastapi[standard]>=0.115.12
+fastrtc==0.0.23
+mistralai>=1.5.1
+msgpack>=1.1.0
+msgpack-types>=0.5.0
+openai>=1.70.0
+plotly>=6.0.1
+sphn>=0.2.0
+prometheus-fastapi-instrumentator==7.1.0
+prometheus-client==0.21.0
+ruamel-yaml>=0.18.10
+redis>=6.0.0

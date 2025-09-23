@@ -2,6 +2,11 @@
  * Test helper functions for UI tests
  */
 
+const { getConfig } = require('./auth-helper');
+
+// Get configuration from environment variables
+const config = getConfig();
+
 /**
  * Get admin API key by extracting from the LNBits UI
  * @param {Page} page - Playwright page object
@@ -10,7 +15,7 @@
 async function getAdminApiKey(page) {
   try {
     // Navigate to the main wallet page where API keys are displayed
-    await page.goto('http://localhost:5001/');
+    await page.goto(config.baseUrl);
     await page.waitForTimeout(2000);
     
     // Look for API key in the UI (it might be in a data attribute or text content)
@@ -53,7 +58,7 @@ async function getAllowanceCount(page) {
       return 0;
     }
     
-    const response = await page.request.get('http://localhost:5001/allowance/api/v1/allowance', {
+    const response = await page.request.get(`${config.baseUrl}/allowance/api/v1/allowance`, {
       headers: {
         'X-Api-Key': adminKey
       }
@@ -88,7 +93,7 @@ async function getAllowances(page) {
       return [];
     }
     
-    const response = await page.request.get('http://localhost:5001/allowance/api/v1/allowance', {
+    const response = await page.request.get(`${config.baseUrl}/allowance/api/v1/allowance`, {
       headers: {
         'X-Api-Key': adminKey
       }
@@ -132,13 +137,13 @@ async function getAllowanceById(page, id) {
 /**
  * Login helper function
  * @param {Page} page - Playwright page object
- * @param {string} username - Username (default: ben.weeks)
- * @param {string} password - Password (default: zUYmy&05&uZ$3kmf*^T8)
+ * @param {string} username - Username (uses config.username if not provided)
+ * @param {string} password - Password (uses config.password if not provided)
  */
-async function loginAsAdmin(page, username = 'ben.weeks', password = 'zUYmy&05&uZ$3kmf*^T8') {
+async function loginAsAdmin(page, username = config.username, password = config.password) {
   console.log('📝 Logging in as admin...');
   
-  await page.goto('http://localhost:5001/');
+  await page.goto(config.baseUrl);
   await page.waitForLoadState('networkidle');
   
   // Check if we need to switch to login screen
@@ -170,7 +175,7 @@ async function loginAsAdmin(page, username = 'ben.weeks', password = 'zUYmy&05&u
 async function navigateToAllowance(page) {
   console.log('📝 Navigating to allowance extension...');
   
-  await page.goto('http://localhost:5001/allowance/');
+  await page.goto(`${config.baseUrl}/allowance/`);
   await page.waitForTimeout(3000);
   
   // Verify we're on the allowance page by looking for the heading

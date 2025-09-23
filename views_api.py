@@ -74,9 +74,9 @@ async def api_allowances(
             rows = await conn.fetch(
                 """
                 SELECT id, name, wallet, lightning_address, amount, currency,
-                       start_date, frequency_type, next_payment_date, memo, 
-                       active, end_date, created_at
-                FROM ext_allowance.maintable 
+                       start_datetime, frequency_type, next_payment_date, memo,
+                       active, end_datetime, created_at
+                FROM ext_allowance.maintable
                 ORDER BY created_at DESC, id DESC
             """
             )
@@ -85,9 +85,9 @@ async def api_allowances(
             rows = await conn.fetch(
                 """
                 SELECT id, name, wallet, lightning_address, amount, currency,
-                       start_date, frequency_type, next_payment_date, memo, 
-                       active, end_date, created_at
-                FROM ext_allowance.maintable 
+                       start_datetime, frequency_type, next_payment_date, memo,
+                       active, end_datetime, created_at
+                FROM ext_allowance.maintable
                 WHERE wallet = $1
                 ORDER BY created_at DESC, id DESC
             """,
@@ -106,8 +106,8 @@ async def api_allowances(
                 "lightning_address": row["lightning_address"],
                 "amount": row["amount"],
                 "currency": row["currency"],
-                "start_date": (
-                    row["start_date"].isoformat() if row["start_date"] else None
+                "start_datetime": (
+                    row["start_datetime"].isoformat() if row["start_datetime"] else None
                 ),
                 "frequency_type": row["frequency_type"],
                 "next_payment_date": (
@@ -117,7 +117,7 @@ async def api_allowances(
                 ),
                 "memo": row["memo"] or "",
                 "active": row["active"],
-                "end_date": row["end_date"].isoformat() if row["end_date"] else None,
+                "end_datetime": row["end_datetime"].isoformat() if row["end_datetime"] else None,
                 "created_at": (
                     row["created_at"].isoformat() if row["created_at"] else None
                 ),
@@ -266,21 +266,21 @@ async def api_allowance_update(
             )
 
         # Parse datetime fields
-        start_date = parse_datetime_string(data.start_date) if data.start_date else None
+        start_datetime = parse_datetime_string(data.start_datetime) if data.start_datetime else None
         next_payment_date = (
             parse_datetime_string(data.next_payment_date)
             if data.next_payment_date
             else None
         )
-        end_date = parse_datetime_string(data.end_date) if data.end_date else None
+        end_datetime = parse_datetime_string(data.end_datetime) if data.end_datetime else None
 
         # Update the allowance
         await conn.execute(
             """
             UPDATE ext_allowance.maintable 
             SET name = $2, lightning_address = $3, amount = $4, currency = $5,
-                start_date = $6, frequency_type = $7, next_payment_date = $8, 
-                memo = $9, active = $10, end_date = $11
+                start_datetime = $6, frequency_type = $7, next_payment_date = $8, 
+                memo = $9, active = $10, end_datetime = $11
             WHERE id = $1
             """,
             allowance_id,
@@ -288,12 +288,12 @@ async def api_allowance_update(
             data.lightning_address,
             data.amount,
             data.currency,
-            start_date,
+            start_datetime,
             data.frequency_type,
             next_payment_date,
             data.memo,
             data.active,
-            end_date,
+            end_datetime,
         )
 
         await conn.close()
@@ -383,13 +383,13 @@ async def api_allowance_create(
                 )
                 return None
 
-        start_date = parse_datetime_string(data.start_date) if data.start_date else None
+        start_datetime = parse_datetime_string(data.start_datetime) if data.start_datetime else None
         next_payment_date = (
             parse_datetime_string(data.next_payment_date)
             if data.next_payment_date
             else None
         )
-        end_date = parse_datetime_string(data.end_date) if data.end_date else None
+        end_datetime = parse_datetime_string(data.end_datetime) if data.end_datetime else None
 
         # Connect to database
         conn = await asyncpg.connect(
@@ -400,8 +400,8 @@ async def api_allowance_create(
         await conn.execute(
             """
             INSERT INTO ext_allowance.maintable 
-            (id, name, wallet, lightning_address, amount, currency, start_date, 
-             frequency_type, next_payment_date, memo, active, end_date)
+            (id, name, wallet, lightning_address, amount, currency, start_datetime, 
+             frequency_type, next_payment_date, memo, active, end_datetime)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             """,
             data.id,
@@ -410,12 +410,12 @@ async def api_allowance_create(
             data.lightning_address,
             data.amount,
             data.currency,
-            start_date,
+            start_datetime,
             data.frequency_type,
             next_payment_date,
             data.memo,
             data.active,
-            end_date,
+            end_datetime,
         )
 
         await conn.close()
@@ -575,3 +575,114 @@ async def api_allowance_create_invoice(
         ) from exc
 
     return {"payment_hash": payment_hash, "payment_request": payment_request}
+
+
+## Manual trigger endpoint for development - process scheduled payments
+
+
+@allowance_api_router.post(
+    "/api/v1/allowance/trigger_payments",
+    status_code=HTTPStatus.OK,
+    response_model=None,
+)
+async def api_trigger_scheduled_payments():
+    """
+    Manual trigger for scheduled payments processing - for development use.
+    This runs the same logic as the background scheduler.
+    """
+    try:
+        from .tasks import check_and_process_allowances
+        from .crud import get_all_active_allowances
+        from datetime import datetime, timezone
+        import asyncio
+
+        logger.info("🔧 Manual trigger: Processing scheduled payments...")
+
+        # Get all active allowances
+        allowances = await get_all_active_allowances()
+        current_time = datetime.now(timezone.utc)
+
+        processed_count = 0
+        success_count = 0
+
+        for allowance in allowances:
+            # Skip inactive allowances
+            if not getattr(allowance, "active", True):
+                continue
+
+            # Check if payment is due (ensure timezone awareness)
+            next_payment_date = allowance.next_payment_date
+            if next_payment_date.tzinfo is None:
+                next_payment_date = next_payment_date.replace(tzinfo=timezone.utc)
+
+            if current_time >= next_payment_date:
+                logger.info(f"💸 Processing payment for allowance: {allowance.name}")
+                processed_count += 1
+
+                try:
+                    from .tasks import execute_lightning_address_payment
+                    from .models import CreateAllowanceData
+                    from .crud import update_allowance
+                    from datetime import timedelta
+                    from dateutil.relativedelta import relativedelta
+
+                    # Execute Lightning address payment
+                    success = await execute_lightning_address_payment(allowance)
+
+                    if success:
+                        success_count += 1
+                        # Update next payment date
+                        if allowance.frequency_type == "minutely":
+                            allowance.next_payment_date = current_time + timedelta(minutes=1)
+                        elif allowance.frequency_type == "hourly":
+                            allowance.next_payment_date = current_time + timedelta(hours=1)
+                        elif allowance.frequency_type == "daily":
+                            allowance.next_payment_date = current_time + timedelta(days=1)
+                        elif allowance.frequency_type == "weekly":
+                            allowance.next_payment_date = current_time + timedelta(weeks=1)
+                        elif allowance.frequency_type == "monthly":
+                            allowance.next_payment_date = current_time + relativedelta(months=1)
+                        elif allowance.frequency_type == "yearly":
+                            allowance.next_payment_date = current_time + relativedelta(years=1)
+
+                        # Convert to CreateAllowanceData for update
+                        update_data = CreateAllowanceData(
+                            id=allowance.id,
+                            name=allowance.name,
+                            wallet=allowance.wallet,
+                            lightning_address=allowance.lightning_address,
+                            amount=allowance.amount,
+                            currency=allowance.currency,
+                            start_datetime=allowance.start_datetime,
+                            frequency_type=allowance.frequency_type,
+                            next_payment_date=allowance.next_payment_date,
+                            memo=allowance.memo or "",
+                            active=allowance.active,
+                            end_datetime=allowance.end_datetime,
+                            total=allowance.total or 0
+                        )
+                        await update_allowance(update_data)
+                        logger.info(f"✅ Payment successful, next payment: {allowance.next_payment_date}")
+                    else:
+                        logger.error(f"❌ Payment failed for allowance: {allowance.name}")
+
+                except Exception as e:
+                    logger.error(f"❌ Error processing allowance {allowance.name}: {e}")
+
+        result = {
+            "message": "Payment processing completed",
+            "total_allowances": len(allowances),
+            "processed_count": processed_count,
+            "success_count": success_count,
+            "timestamp": current_time.isoformat()
+        }
+
+        logger.info(f"🎯 Manual trigger completed: {result}")
+        return result
+
+    except Exception as e:
+        logger.error(f"❌ Error in manual payment trigger: {str(e)}")
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail=f"Payment processing failed: {str(e)}"
+        )
