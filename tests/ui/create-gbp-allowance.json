@@ -1,0 +1,11 @@
+{
+  "name": "GBP Scheduled Payment Test",
+  "wallet": "WALLET_ID_PLACEHOLDER",
+  "lightning_address": "RECEIVING_ADDRESS_PLACEHOLDER",
+  "amount": 0.02,
+  "currency": "GBP",
+  "frequency_type": "minutely",
+  "memo": "Testing £0.02 GBP conversion to sats",
+  "active": true,
+  "comment": "This will convert £0.02 to sats at current exchange rate and pay every minute"
+}
