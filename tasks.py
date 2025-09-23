@@ -1,6 +1,7 @@
 import asyncio
 import httpx
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from dateutil.relativedelta import relativedelta
 from typing import List, Tuple, Dict, Any
 
 from lnbits.core.models import Payment
@@ -10,7 +11,7 @@ from lnbits.tasks import register_invoice_listener
 from loguru import logger
 from lnurl import decode as lnurl_decode
 
-from .crud import get_all_active_allowances, get_allowance, update_allowance
+from .crud import get_all_active_allowances, get_allowance, update_allowance, update_next_payment_date, deactivate_allowance
 from .models import CreateAllowanceData, Allowance
 
 #######################################
@@ -168,11 +169,12 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
             allowance.lightning_address
         )
 
-        # Step 2: Validate amount limits (if provided by LNURL endpoint)
+        # Step 2: Validate amount limits and comment capability
         min_sendable = lnurl_data.get("minSendable", 1000)  # Default 1 sat minimum
         max_sendable = lnurl_data.get(
             "maxSendable", 100000000000
         )  # Default 100k sats max
+        comment_allowed = lnurl_data.get("commentAllowed", 0)  # Max comment length
 
         if amount_msats < min_sendable:
             raise Exception(
@@ -183,24 +185,40 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
                 f"Amount {allowance.amount} sats exceeds maximum {max_sendable // 1000} sats"
             )
 
-        # Step 3: Get invoice from LNURL-pay endpoint
+        # Step 3: Get invoice from LNURL-pay endpoint with appropriate memo
         logger.info(f"📋 Getting invoice for {allowance.amount} sats")
+
+        # Prepare memo based on comment allowance
+        memo = ""
+        if comment_allowed > 0:
+            desired_memo = allowance.memo or f"#allowance: {allowance.name}"
+            memo = desired_memo[:comment_allowed]  # Truncate to allowed length
+            if len(desired_memo) > comment_allowed:
+                logger.info(f"⚠️ Memo truncated from {len(desired_memo)} to {comment_allowed} characters")
+        else:
+            logger.info(f"ℹ️ LNURL endpoint doesn't accept comments, sending without memo")
+
         payment_request = await get_invoice_from_lnurl(
             callback_url,
             amount_msats,
-            allowance.memo or f"Allowance payment: {allowance.name}",
+            memo,
         )
 
         # Step 4: Execute payment using LNBits pay_invoice
         logger.info(f"💸 Executing payment...")
+
+        # Create a descriptive tag for the payment
+        payment_tag = f"allowance: {allowance.name}"
+
         payment_result = await pay_invoice(
             wallet_id=allowance.wallet,
             payment_request=payment_request,
             extra={
-                "tag": "allowance",
+                "tag": payment_tag,
                 "allowance_id": allowance.id,
+                "allowance_name": allowance.name,
                 "lightning_address": allowance.lightning_address,
-                "memo": allowance.memo,
+                "memo": allowance.memo or payment_tag,
                 "scheduled": True,
             },
         )
@@ -230,70 +248,85 @@ async def check_and_process_allowances():
 
             # Get all active allowances
             allowances = await get_all_active_allowances()
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
 
+            # Process each allowance
             for allowance in allowances:
-                # Skip inactive allowances
-                if not getattr(allowance, "active", True):
-                    continue
-
-                # Check if end_date has passed
-                if hasattr(allowance, "end_date") and allowance.end_date:
-                    if current_time > allowance.end_date:
-                        logger.info(f"⏰ Allowance {allowance.name} has expired")
-                        allowance.active = False
-                        update_data = CreateAllowanceData(**allowance.dict())
-                        await update_allowance(update_data)
+                try:
+                    # Skip inactive allowances
+                    if not getattr(allowance, "active", True):
                         continue
 
-                # Check if payment is due
-                if current_time >= allowance.next_payment_date:
-                    logger.info(
-                        f"💸 Processing payment for allowance: {allowance.name}"
-                    )
+                    # Check if end_datetime has passed
+                    if hasattr(allowance, "end_datetime") and allowance.end_datetime:
+                        # Ensure timezone awareness for comparison
+                        end_datetime = allowance.end_datetime
+                        if end_datetime.tzinfo is None:
+                            end_datetime = end_datetime.replace(tzinfo=timezone.utc)
 
-                    try:
-                        # Execute Lightning address payment
-                        success = await execute_lightning_address_payment(allowance)
+                        if current_time > end_datetime:
+                            logger.info(f"⏰ Allowance {allowance.name} has expired")
+                            allowance.active = False
 
-                        if success:
-                            # Update next payment date only if payment succeeded
-                            if allowance.frequency_type == "minutely":
-                                allowance.next_payment_date = current_time + timedelta(
-                                    minutes=1
-                                )
-                            elif allowance.frequency_type == "hourly":
-                                allowance.next_payment_date = current_time + timedelta(
-                                    hours=1
-                                )
-                            elif allowance.frequency_type == "daily":
-                                allowance.next_payment_date = current_time + timedelta(
-                                    days=1
-                                )
-                            elif allowance.frequency_type == "weekly":
-                                allowance.next_payment_date = current_time + timedelta(
-                                    weeks=1
-                                )
-                            elif allowance.frequency_type == "monthly":
-                                allowance.next_payment_date = current_time + timedelta(
-                                    days=30
-                                )
-                            elif allowance.frequency_type == "yearly":
-                                allowance.next_payment_date = current_time + timedelta(
-                                    days=365
-                                )
+                            # Deactivate the expired allowance
+                            await deactivate_allowance(allowance.id)
+                            continue
 
-                            await update_allowance(allowance)
-                            logger.info(
-                                f"✅ Next payment scheduled for: {allowance.next_payment_date}"
-                            )
-                        else:
-                            logger.error(f"❌ Payment failed, will retry on next cycle")
+                    # Check if payment is due
+                    # Ensure timezone awareness for comparison
+                    next_payment_date = allowance.next_payment_date
+                    if next_payment_date.tzinfo is None:
+                        next_payment_date = next_payment_date.replace(tzinfo=timezone.utc)
 
-                    except Exception as e:
-                        logger.error(
-                            f"❌ Error processing allowance {allowance.name}: {e!s}"
+                    if current_time >= next_payment_date:
+                        logger.info(
+                            f"💸 Processing payment for allowance: {allowance.name}"
                         )
+
+                        try:
+                            # Execute Lightning address payment
+                            success = await execute_lightning_address_payment(allowance)
+
+                            if success:
+                                # Update next payment date only if payment succeeded
+                                if allowance.frequency_type == "minutely":
+                                    allowance.next_payment_date = current_time + timedelta(
+                                        minutes=1
+                                    )
+                                elif allowance.frequency_type == "hourly":
+                                    allowance.next_payment_date = current_time + timedelta(
+                                        hours=1
+                                    )
+                                elif allowance.frequency_type == "daily":
+                                    allowance.next_payment_date = current_time + timedelta(
+                                        days=1
+                                    )
+                                elif allowance.frequency_type == "weekly":
+                                    allowance.next_payment_date = current_time + timedelta(
+                                        weeks=1
+                                    )
+                                elif allowance.frequency_type == "monthly":
+                                    allowance.next_payment_date = current_time + relativedelta(months=1)
+                                elif allowance.frequency_type == "yearly":
+                                    allowance.next_payment_date = current_time + relativedelta(years=1)
+
+                                # Update the next payment date
+                                await update_next_payment_date(allowance.id, allowance.next_payment_date)
+                                logger.info(
+                                    f"✅ Next payment scheduled for: {allowance.next_payment_date}"
+                                )
+                            else:
+                                logger.error(f"❌ Payment failed, will retry on next cycle")
+
+                        except Exception as e:
+                            logger.error(
+                                f"❌ Error processing allowance {allowance.name}: {e!s}"
+                            )
+
+                except Exception as e:
+                    logger.error(f"❌ Error handling allowance {getattr(allowance, 'name', 'unknown')}: {str(e)}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
 
         except Exception as e:
             logger.error(f"❌ Error in allowance scheduler: {str(e)}")
