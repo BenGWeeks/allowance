@@ -266,7 +266,9 @@ async def api_allowance_update(
             )
 
         # Parse datetime fields
-        start_datetime = parse_datetime_string(data.start_datetime) if data.start_datetime else None
+        # If start_datetime is not provided, keep existing value (don't overwrite with None)
+        from datetime import datetime, timezone
+        start_datetime = parse_datetime_string(data.start_datetime) if data.start_datetime else row["start_datetime"]
         next_payment_date = (
             parse_datetime_string(data.next_payment_date)
             if data.next_payment_date
@@ -383,7 +385,9 @@ async def api_allowance_create(
                 )
                 return None
 
-        start_datetime = parse_datetime_string(data.start_datetime) if data.start_datetime else None
+        # If start_datetime is not provided, default to now for new allowances
+        from datetime import datetime, timezone
+        start_datetime = parse_datetime_string(data.start_datetime) if data.start_datetime else datetime.now(timezone.utc)
         next_payment_date = (
             parse_datetime_string(data.next_payment_date)
             if data.next_payment_date

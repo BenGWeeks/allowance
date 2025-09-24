@@ -257,6 +257,17 @@ async def check_and_process_allowances():
                     if not getattr(allowance, "active", True):
                         continue
 
+                    # Check if start_datetime hasn't been reached yet
+                    if hasattr(allowance, "start_datetime") and allowance.start_datetime:
+                        # Ensure timezone awareness for comparison
+                        start_datetime = allowance.start_datetime
+                        if start_datetime.tzinfo is None:
+                            start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+
+                        if current_time < start_datetime:
+                            logger.info(f"⏳ Allowance {allowance.name} hasn't started yet (starts at {start_datetime})")
+                            continue
+
                     # Check if end_datetime has passed
                     if hasattr(allowance, "end_datetime") and allowance.end_datetime:
                         # Ensure timezone awareness for comparison

@@ -109,11 +109,11 @@ window.app = Vue.createApp({
       // Validate required fields
       const errors = []
       if (!this.formDialog.data.name) errors.push('Description is required')
-      if (!this.formDialog.data.wallet) errors.push('Wallet is required') 
+      if (!this.formDialog.data.wallet) errors.push('Wallet is required')
       if (!this.formDialog.data.lightning_address) errors.push('Lightning address is required')
       if (!this.formDialog.data.amount || this.formDialog.data.amount <= 0) errors.push('Amount must be greater than 0')
       if (!this.formDialog.data.frequency_type) errors.push('Frequency is required')
-      if (!this.formDialog.data.start_datetime) errors.push('Start date is required')
+      // start_datetime is optional - backend will default to now() if not provided
       
       console.log('🔍 Validation check:', {
         name: this.formDialog.data.name,
@@ -304,11 +304,10 @@ window.app = Vue.createApp({
       
       // Set active field separately to ensure proper reactivity
       const originalActive = row.active
-      
-      // Force active to true for editing (since we're editing an existing allowance)
-      // More robust boolean conversion but default to true for edits
-      let activeValue = true  // Default for editing
-      
+
+      // Convert active field to boolean value
+      let activeValue = false  // Default to false if not set
+
       if (originalActive !== null && originalActive !== undefined) {
         if (typeof originalActive === 'boolean') {
           activeValue = originalActive
@@ -327,7 +326,6 @@ window.app = Vue.createApp({
       console.log('🔘 Active conversion:')
       console.log('  Original value:', originalActive, '(type:', typeof originalActive, ')')
       console.log('  Converted to:', this.formDialog.data.active, '(type:', typeof this.formDialog.data.active, ')')
-      console.log('  Forced to true for editing:', activeValue)
       
       console.log('✅ Final form data:', JSON.stringify(this.formDialog.data, null, 2))
       this.formDialog.show = true
