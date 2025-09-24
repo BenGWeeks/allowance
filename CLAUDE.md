@@ -192,11 +192,23 @@ allowance/
 - Repository excludes temporary files (data/, temp/, test results, screenshots)
 - Clean commit history with descriptive messages
 
-### API Authentication Fix
-Fixed critical authentication issue in `views_api.py`:
-- Changed `wallet.id` to `wallet.wallet.id` for proper wallet ID access
-- Fixed 403 Forbidden errors when creating/editing allowances
-- Improved delete endpoint to return proper JSON response
+### Recent Fixes & Improvements
+
+#### API Architecture Refactoring (COMPLETED)
+- **Removed hardcoded database credentials** - No more `postgresql://lnbits:password@...` connections
+- **Now uses crud.py functions** - All database operations go through LNBits abstraction layer
+- **Proper LNBits decorators** - Using `require_admin_key` and `require_invoice_key` instead of manual auth
+- **Removed duplicate code** - Single `parse_datetime_string` function
+- **Follows LNBits patterns** - Consistent with other official extensions
+
+#### Scheduler Bug Fix (COMPLETED)
+- **Fixed repeated deactivation bug** - Scheduler was repeatedly trying to deactivate expired allowances
+- **Added deactivation tracking** - Tracks already deactivated IDs to prevent reprocessing
+- **Improved timezone handling** - Helper function for timezone awareness
+
+#### DateTime Display Fix (COMPLETED)
+- **Fixed empty datetime fields in edit popup** - JavaScript now handles Python's microsecond timestamps
+- **Simplified datetime conversion** - Uses simple Date constructor instead of complex parsing
 
 ### Code Quality and Testing
 
@@ -291,6 +303,20 @@ Following LNBits extension guidelines:
 - Verify transactions after tests using `verify_transactions.py`
 - Test scripts should be descriptive: `create-paylink.js` not `step1.js`
 - Chain scripts when needed (e.g., paylink creation requires wallet creation first)
+
+### Extension Configuration (config.json)
+The extension uses a `config.json` file for metadata that enables features like the "MORE" button in the extensions page. Required fields:
+- **name**: Extension name
+- **version**: Version number (e.g., "0.1.0")
+- **short_description**: Brief description with keywords (pocket money, allowances, etc.)
+- **tile**: Path to extension icon
+- **min_lnbits_version**: Minimum compatible LNBits version
+- **contributors**: Array with name, uri, and role
+- **description_md**: URL to description markdown file
+- **terms_and_conditions_md**: URL to terms markdown file
+- **license**: License type
+
+Note: The MORE button may not appear immediately after config changes - may require container restart.
 
 ### Repo Interaction Guidelines
 - Do not send or create pull requests to https://github.com/lnbits/myextension (or make any changes to that repo)

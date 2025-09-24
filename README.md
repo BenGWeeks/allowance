@@ -2,13 +2,14 @@
 
 ## Introduction
 
-This is an LNBits extension that allows you to setup recurring payments from your LNBits wallet to any Lightning address (user@domain.com) or LNURL-pay endpoint. This enables scheduled payments to external services and Lightning addresses, not just wallet-to-wallet transfers within the same LNBits instance.
+This is an LNBits extension that allows you to setup recurring payments from your LNBits wallet to any Lightning address (user@domain.com) or LNURL-pay endpoint. Perfect for allowances, pocket money, subscriptions, and regular transfers. This enables scheduled payments to external services and Lightning addresses, not just wallet-to-wallet transfers within the same LNBits instance.
 
 ✅ CI/CD Status: Tests configured and working
+✅ API Architecture: Refactored to use LNBits best practices
 
 ### Installation
 
-Install and enable the "Allowance" extension either through the official LNbits manifest (**not yet vetted**) or by adding https://raw.githubusercontent.com/bengweeks/allowance/main/manifest.json to `Server`/ `Server` / `Extension Sources`.
+Install and enable the "Allowance" extension either through the official LNbits manifest (**not yet vetted**) or by adding https://raw.githubusercontent.com/BenGWeeks/allowance/main/manifest.json to `Server`/ `Server` / `Extension Sources`.
 
 ### Development
 
@@ -35,10 +36,12 @@ When ready to share your extension:
 - **Lightning Address Support**: Send recurring payments to any Lightning address (user@domain.com) or LNURL-pay endpoint
 - **Scheduled Payments**: Automated payment execution with 1-minute minimum frequency using background tasks
 - **Flexible Scheduling**: Support for various frequencies (minutely, hourly, daily, weekly, monthly, yearly)
-- **Payment Tracking**: All payments are tagged as "allowance" payments in the LNBits payment history
+- **Payment Tracking**: All payments are tagged as "#allowance: {name}" in the LNBits payment history
 - **Currency Support**: Multi-currency support with real-time conversion hints
 - **Vue.js Frontend**: Modern reactive interface following LNBits patterns
 - **Comprehensive Testing**: Full Playwright test suite for automated testing
+- **API Architecture**: Uses LNBits decorators and database abstraction (no hardcoded credentials)
+- **Scheduler Logic**: Smart deactivation of expired allowances with tracking to prevent reprocessing
 
 ### Testing
 
