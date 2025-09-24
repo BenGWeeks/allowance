@@ -1,9 +1,0 @@
-[
-  {
-    "name": "Weekly Pocket Money",
-    "lightningAddress": "receiving@lnbits-allowance.weeksfamily.me",
-    "amount": 100,
-    "frequency": "weekly",
-    "memo": "Weekly allowance for testing"
-  }
-]
