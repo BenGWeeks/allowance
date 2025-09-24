@@ -11,8 +11,12 @@
       "role": "Lead dev"
     }
   ],
-  "images": [],
+  "images": [
+    {
+      "uri": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/1.png"
+    }
+  ],
   "description_md": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/description.md",
   "terms_and_conditions_md": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/toc.md",
-  "license": "DON'T BE A DICK PUBLIC LICENSE"
+  "license": "MIT"
 }
