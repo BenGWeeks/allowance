@@ -1,0 +1,17 @@
+{
+    "featured": [],
+    "extensions": [
+        {
+            "id": "allowance",
+            "repo": "https://github.com/BenGWeeks/allowance",
+            "name": "Allowance",
+            "version": "0.1.0",
+            "min_lnbits_version": "1.0.0",
+            "short_description": "Setup recurring payments to lightning addresses. Perfect for allowances, pocket money, subscriptions, and regular transfers.",
+            "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/allowance.png",
+            "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/config.json",
+            "archive": "https://github.com/BenGWeeks/allowance/archive/refs/heads/main.zip",
+            "hash": "placeholder"
+        }
+    ]
+}
