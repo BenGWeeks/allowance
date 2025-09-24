@@ -7,13 +7,7 @@ const path = require('path');
 // Load config from .env.local
 function loadConfig() {
   const envPath = path.join(__dirname, '../../.env.local');
-  const config = {
-    baseUrl: 'https://lnbits-allowance.weeksfamily.me',
-    username: '',
-    password: '',
-    walletId: '768a7da8063046d98cd5ee6f42621038',
-    lightningAddress: 'receiving@lnbits-allowance.weeksfamily.me'
-  };
+  const config = {};
 
   if (fs.existsSync(envPath)) {
     const content = fs.readFileSync(envPath, 'utf-8');

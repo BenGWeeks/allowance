@@ -117,12 +117,12 @@ const { getConfig, login } = require('./auth-helper');
     }
 
     // Take screenshot
-    await page.screenshot({ path: 'hourly-allowance-created.png' });
+    await page.screenshot({ path: 'test-screenshots/hourly-allowance-created.png' });
     console.log('📸 Screenshot saved: hourly-allowance-created.png');
 
   } catch (error) {
     console.error('❌ Failed to create hourly allowance:', error.message);
-    await page.screenshot({ path: 'hourly-allowance-error.png' });
+    await page.screenshot({ path: 'test-screenshots/hourly-allowance-error.png' });
     process.exit(1);
   } finally {
     await browser.close();

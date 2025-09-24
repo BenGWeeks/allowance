@@ -9,7 +9,29 @@ from datetime import datetime, timedelta, timezone
 
 async def test_update_allowance():
     """Test updating an allowance via API - proper test with create→update→verify"""
-    base_url = "https://lnbits-allowance.weeksfamily.me"
+    # Load config from .env.local
+    from pathlib import Path
+    env_path = Path(__file__).parent.parent.parent / '.env.local'
+    config = {}
+
+    if not env_path.exists():
+        print(f"❌ .env.local not found at {env_path}")
+        return False
+
+    with open(env_path, 'r') as f:
+        for line in f:
+            if '=' in line and not line.startswith('#'):
+                key, value = line.strip().split('=', 1)
+                if key == 'PAYLINK_EMAIL':
+                    config['lightning_address'] = value
+                elif key == 'TEST_LNBITS_URL':
+                    config['base_url'] = value
+
+    if 'base_url' not in config or 'lightning_address' not in config:
+        print("❌ Missing required config values in .env.local (TEST_LNBITS_URL or PAYLINK_EMAIL)")
+        return False
+
+    base_url = config['base_url']
 
     try:
         # Get admin API key dynamically
@@ -30,8 +52,8 @@ async def test_update_allowance():
             start_datetime = datetime.now(timezone.utc) + timedelta(days=1)
             create_data = {
                 "name": "TEST_UPDATE_ALLOWANCE",
-                "lightning_address": "update-test@example.com",
-                "amount": 1000,
+                "lightning_address": config['lightning_address'],
+                "amount": 10,  # Small amount < 100 sats
                 "currency": "sats",
                 "frequency_type": "weekly",
                 "start_datetime": start_datetime.isoformat(),
@@ -60,8 +82,8 @@ async def test_update_allowance():
             update_start_datetime = datetime.now(timezone.utc) + timedelta(days=2)
             update_data = {
                 "name": "Updated Test Allowance",
-                "lightning_address": "updated@example.com",
-                "amount": 2000,
+                "lightning_address": config['lightning_address'],
+                "amount": 20,  # Updated small amount < 100 sats
                 "currency": "sats",
                 "frequency_type": "monthly",
                 "start_datetime": update_start_datetime.isoformat(),
@@ -117,14 +139,14 @@ async def test_update_allowance():
                     f"❌ Name not updated: expected 'Updated Test Allowance', got '{updated_allowance['name']}'"
                 )
                 success = False
-            if updated_allowance["lightning_address"] != "updated@example.com":
+            if updated_allowance["lightning_address"] != config['lightning_address']:
                 print(
-                    f"❌ Address not updated: expected 'updated@example.com', got '{updated_allowance['lightning_address']}'"
+                    f"❌ Address not updated: expected '{config['lightning_address']}', got '{updated_allowance['lightning_address']}'"
                 )
                 success = False
-            if updated_allowance["amount"] != 2000:
+            if updated_allowance["amount"] != 20:
                 print(
-                    f"❌ Amount not updated: expected 2000, got {updated_allowance['amount']}"
+                    f"❌ Amount not updated: expected 20, got {updated_allowance['amount']}"
                 )
                 success = False
             if updated_allowance["active"] != False:
@@ -132,6 +154,18 @@ async def test_update_allowance():
                     f"❌ Active status not updated: expected False, got {updated_allowance['active']}"
                 )
                 success = False
+
+            # Verify datetime fields are present and updated
+            if "start_datetime" not in updated_allowance:
+                print(f"❌ start_datetime field missing from response")
+                success = False
+            else:
+                print(f"✅ start_datetime present: {updated_allowance['start_datetime']}")
+
+            if "end_datetime" in updated_allowance and updated_allowance["end_datetime"]:
+                print(f"✅ end_datetime present: {updated_allowance['end_datetime']}")
+            else:
+                print(f"ℹ️ end_datetime not set (optional field)")
 
             if success:
                 print("✅ All update verifications passed")

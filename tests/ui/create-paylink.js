@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Create Paylink for Receiving Wallet
- * Creates a paylink with Lightning address receiving@lnbits-allowance.weeksfamily.me
+ * Creates a paylink with Lightning address from .env.local PAYLINK_EMAIL
  */
 
 const { chromium } = require('playwright');
@@ -101,12 +101,12 @@ async function createPaylink() {
       console.log('✓ Set minimum amount: 1 sat');
 
       // Set Max amount
-      await numberInputs[1].fill('1000000');
-      console.log('✓ Set maximum amount: 1000000 sats');
+      await numberInputs[1].fill('99');
+      console.log('✓ Set maximum amount: 99 sats');
     } else if (numberInputs.length === 1) {
       // If only one field, it's the Amount field for fixed amount
-      await numberInputs[0].fill('1000');
-      console.log('✓ Set amount: 1000 sats');
+      await numberInputs[0].fill('10');
+      console.log('✓ Set amount: 10 sats');
     }
 
     // Take screenshot of dialog

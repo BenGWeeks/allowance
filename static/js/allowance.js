@@ -56,6 +56,12 @@ window.app = Vue.createApp({
         )
         .then(response => {
           console.log('✅ Allowances loaded:', response.data)
+          // Log first allowance to see what fields are available
+          if (response.data && response.data.length > 0) {
+            console.log('📊 First allowance fields:', Object.keys(response.data[0]))
+            console.log('📅 First allowance start_datetime:', response.data[0].start_datetime)
+            console.log('📅 First allowance end_datetime:', response.data[0].end_datetime)
+          }
           this.allowances = response.data
         })
         .catch(err => {
@@ -71,16 +77,17 @@ window.app = Vue.createApp({
       this.formDialog.data = {}
     },
     openCreateDialog() {
-      const today = new Date().toISOString().split('T')[0]
+      // For datetime-local input, we need YYYY-MM-DDTHH:MM format
+      const now = new Date().toISOString().slice(0, 16)
       this.formDialog.data = {
         wallet: this.g.user.wallets[0].id,
         currency: 'sats',
         frequency_type: 'weekly', // Default to weekly to help with testing
         active: true,
-        start_datetime: today
+        start_datetime: now
       }
       this.formDialog.show = true
-      console.log('📅 Form opened with default start date:', today)
+      console.log('📅 Form opened with default start datetime:', now)
       console.log('🔘 Active state set to:', this.formDialog.data.active)
     },
     saveAllowance(event) {
@@ -241,10 +248,12 @@ window.app = Vue.createApp({
     openUpdateDialog(row) {
       console.log('🔄 openUpdateDialog called with row:', row)
       console.log('🔍 Row active field:', row.active, '(type:', typeof row.active, ')')
-      
+      console.log('📅 Row start_datetime:', row.start_datetime)
+      console.log('📅 Row end_datetime:', row.end_datetime)
+
       // Reset form dialog first
       this.formDialog.data = {}
-      
+
       // Deep clone the row data to avoid reference issues
       const clonedData = JSON.parse(JSON.stringify(row))
       
@@ -265,22 +274,31 @@ window.app = Vue.createApp({
       
       console.log('📋 After cloning:', this.formDialog.data)
       
-      // Ensure start_datetime is in proper format for date input
+      // Ensure start_datetime is in proper format for datetime-local input
       if (this.formDialog.data.start_datetime) {
-        const date = new Date(this.formDialog.data.start_datetime)
-        this.formDialog.data.start_datetime = date.toISOString().split('T')[0]
+        // Handle timestamps with microseconds (e.g., 2025-09-26T21:34:43.595856)
+        let dateStr = this.formDialog.data.start_datetime
+        // Remove microseconds if present (keep only up to milliseconds)
+        if (dateStr.includes('.') && dateStr.split('.')[1].length > 3) {
+          dateStr = dateStr.substring(0, dateStr.lastIndexOf('.') + 4) + 'Z'
+        }
+        const date = new Date(dateStr)
+        // Format for datetime-local: YYYY-MM-DDTHH:MM
+        this.formDialog.data.start_datetime = date.toISOString().slice(0, 16)
         console.log('📅 Converted start_datetime to:', this.formDialog.data.start_datetime)
-      } else {
-        // Default to today if no start_datetime exists
-        const today = new Date().toISOString().split('T')[0]
-        this.formDialog.data.start_datetime = today
-        console.log('📅 No start_datetime found, defaulted to today:', today)
       }
-      
-      // Ensure end_datetime is in proper format for date input if it exists
+
+      // Ensure end_datetime is in proper format for datetime-local input
       if (this.formDialog.data.end_datetime) {
-        const endDate = new Date(this.formDialog.data.end_datetime)
-        this.formDialog.data.end_datetime = endDate.toISOString().split('T')[0]
+        // Handle timestamps with microseconds
+        let dateStr = this.formDialog.data.end_datetime
+        // Remove microseconds if present (keep only up to milliseconds)
+        if (dateStr.includes('.') && dateStr.split('.')[1].length > 3) {
+          dateStr = dateStr.substring(0, dateStr.lastIndexOf('.') + 4) + 'Z'
+        }
+        const date = new Date(dateStr)
+        // Format for datetime-local: YYYY-MM-DDTHH:MM
+        this.formDialog.data.end_datetime = date.toISOString().slice(0, 16)
         console.log('📅 Converted end_datetime to:', this.formDialog.data.end_datetime)
       }
       

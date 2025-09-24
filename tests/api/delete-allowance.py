@@ -8,7 +8,29 @@ import asyncio
 
 async def test_delete_allowance():
     """Test deleting an allowance via API - proper test with count verification"""
-    base_url = "https://lnbits-allowance.weeksfamily.me"
+    # Load config from .env.local
+    from pathlib import Path
+    env_path = Path(__file__).parent.parent.parent / '.env.local'
+    config = {}
+
+    if not env_path.exists():
+        print(f"❌ .env.local not found at {env_path}")
+        return False
+
+    with open(env_path, 'r') as f:
+        for line in f:
+            if '=' in line and not line.startswith('#'):
+                key, value = line.strip().split('=', 1)
+                if key == 'PAYLINK_EMAIL':
+                    config['lightning_address'] = value
+                elif key == 'TEST_LNBITS_URL':
+                    config['base_url'] = value
+
+    if 'base_url' not in config or 'lightning_address' not in config:
+        print("❌ Missing required config values in .env.local (TEST_LNBITS_URL or PAYLINK_EMAIL)")
+        return False
+
+    base_url = config['base_url']
 
     try:
         # Get admin API key dynamically
@@ -42,7 +64,7 @@ async def test_delete_allowance():
             # Step 2: Create a test allowance to delete
             create_data = {
                 "name": "TEST_DELETE_ALLOWANCE",
-                "lightning_address": "test@example.com",
+                "lightning_address": config['lightning_address'],
                 "amount": 1,
                 "currency": "sats",
                 "frequency_type": "weekly",

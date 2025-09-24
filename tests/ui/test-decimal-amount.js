@@ -97,7 +97,7 @@ const { getConfig, login } = require('./auth-helper');
     if (await errorToast.count() > 0) {
       const errorText = await errorToast.textContent();
       console.error(`❌ Error creating allowance: ${errorText}`);
-      await page.screenshot({ path: 'decimal-amount-error.png' });
+      await page.screenshot({ path: 'test-screenshots/decimal-amount-error.png' });
       process.exit(1);
     }
 
@@ -108,11 +108,11 @@ const { getConfig, login } = require('./auth-helper');
       console.log('   The fix for float amounts is working!');
     }
 
-    await page.screenshot({ path: 'decimal-amount-success.png' });
+    await page.screenshot({ path: 'test-screenshots/decimal-amount-success.png' });
 
   } catch (error) {
     console.error('❌ Test failed:', error.message);
-    await page.screenshot({ path: 'decimal-amount-error.png' });
+    await page.screenshot({ path: 'test-screenshots/decimal-amount-error.png' });
     process.exit(1);
   } finally {
     await browser.close();

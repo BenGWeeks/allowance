@@ -155,7 +155,35 @@ const getTestData = () => {
       await page.fill('input[placeholder*="Weekly allowance"]', testData.name);
       console.log(`✅ Filled description field: ${testData.name}`);
       
-      await page.fill('input[placeholder*="alice@getalby.com"]', testData.lightningAddress);
+      // Try multiple selectors for lightning address field
+      const addressSelectors = [
+        'input[placeholder*="Lightning address"]',
+        'input[placeholder*="lightning address"]',
+        'input[placeholder*="@"]',
+        'input[type="text"]:not([placeholder*="allowance"])'
+      ];
+
+      let filled = false;
+      for (const selector of addressSelectors) {
+        try {
+          const inputs = await page.locator(selector).all();
+          if (inputs.length > 0) {
+            await inputs[0].fill(testData.lightningAddress);
+            filled = true;
+            break;
+          }
+        } catch (e) {
+          // Try next selector
+        }
+      }
+
+      if (!filled) {
+        // Fallback to index-based selection
+        const inputs = await page.locator('input[type="text"]').all();
+        if (inputs.length >= 2) {
+          await inputs[1].fill(testData.lightningAddress);
+        }
+      }
       console.log(`✅ Filled lightning address field: ${testData.lightningAddress}`);
       
       await page.fill('input[type="number"]', testData.amount.toString());

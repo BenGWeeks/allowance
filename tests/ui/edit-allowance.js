@@ -110,7 +110,7 @@ async function testEditMetadata() {
 
     if (!editButton) {
       console.log('❌ Could not find edit button');
-      await page.screenshot({ path: 'edit-metadata-no-button.png', fullPage: true });
+      await page.screenshot({ path: 'test-screenshots/edit-metadata-no-button.png', fullPage: true });
       process.exit(1);
     }
 
@@ -146,23 +146,27 @@ async function testEditMetadata() {
     const datetimeInputs = await page.locator('.q-dialog input[type="datetime-local"]');
     const datetimeCount = await datetimeInputs.count();
 
+    let datetimeSuccess = true;
     if (datetimeCount > 0) {
       for (let i = 0; i < datetimeCount; i++) {
         const input = datetimeInputs.nth(i);
         const value = await input.inputValue();
-        const placeholder = await input.getAttribute('placeholder') || '';
+        const label = await input.getAttribute('label') || '';
 
         if (i === 0) {
-          if (value) {
-            console.log(`  ✓ Start datetime: ${value}`);
+          // Start datetime is required and should be populated
+          if (value && value !== '') {
+            console.log(`  ✅ Start datetime: ${value} (format: YYYY-MM-DDTHH:MM)`);
           } else {
-            console.log(`  ⚠️ Start datetime: EMPTY (${placeholder})`);
+            console.log(`  ❌ Start datetime: EMPTY - This should be populated!`);
+            datetimeSuccess = false;
           }
         } else if (i === 1) {
-          if (value) {
-            console.log(`  ✓ End datetime: ${value}`);
+          // End datetime is optional
+          if (value && value !== '') {
+            console.log(`  ✅ End datetime: ${value} (format: YYYY-MM-DDTHH:MM)`);
           } else {
-            console.log(`  ⚠️ End datetime: EMPTY (${placeholder})`);
+            console.log(`  ℹ️ End datetime: Not set (optional field)`);
           }
         }
       }
@@ -197,8 +201,58 @@ async function testEditMetadata() {
       console.log('  ⚠️ Active toggle not found');
     }
 
+    // Test editing the active status
+    console.log('\n🔄 Testing Active status persistence:');
+
+    // Toggle the active status if it exists
+    const activeToggle = await page.locator('.q-dialog .q-toggle').first();
+    if (await activeToggle.isVisible()) {
+      const wasActive = await activeToggle.evaluate(el => el.classList.contains('q-toggle--truthy'));
+      console.log(`  Current status: ${wasActive ? 'ACTIVE' : 'INACTIVE'}`);
+
+      // Toggle to opposite state
+      await activeToggle.click();
+      await page.waitForTimeout(500);
+
+      const shouldBeActive = !wasActive;
+      console.log(`  Changed to: ${shouldBeActive ? 'ACTIVE' : 'INACTIVE'}`);
+
+      // Save the changes
+      const updateButton = page.locator('.q-dialog button:has-text("Update Allowance")').first();
+      if (await updateButton.isVisible()) {
+        await updateButton.click();
+        console.log('  ✓ Clicked Update Allowance');
+        await page.waitForTimeout(2000);
+
+        // Refresh the page to reload data
+        await page.reload();
+        await page.waitForLoadState('networkidle');
+        console.log('  ✓ Page refreshed');
+        await page.waitForTimeout(2000);
+
+        // Open edit dialog again to check if status persisted
+        const editButtonAgain = firstRow.locator('button').filter({ hasText: 'edit' }).or(firstRow.locator('button:has(.q-icon:text("edit"))')).first();
+        await editButtonAgain.click();
+        await page.waitForSelector('.q-dialog', { state: 'visible' });
+        console.log('  ✓ Re-opened edit dialog');
+
+        // Check if active status persisted
+        const activeToggleAfter = await page.locator('.q-dialog .q-toggle').first();
+        const isActiveAfter = await activeToggleAfter.evaluate(el => el.classList.contains('q-toggle--truthy'));
+
+        if (isActiveAfter === shouldBeActive) {
+          console.log(`  ✅ Active status persisted correctly: ${isActiveAfter ? 'ACTIVE' : 'INACTIVE'}`);
+        } else {
+          console.log(`  ❌ Active status DID NOT persist!`);
+          console.log(`     Expected: ${shouldBeActive ? 'ACTIVE' : 'INACTIVE'}`);
+          console.log(`     Got: ${isActiveAfter ? 'ACTIVE' : 'INACTIVE'}`);
+          datetimeSuccess = false; // Mark test as failed
+        }
+      }
+    }
+
     // Take screenshot of edit form
-    await page.screenshot({ path: 'edit-metadata-test.png', fullPage: true });
+    await page.screenshot({ path: 'test-screenshots/edit-metadata-test.png', fullPage: true });
     console.log('\n📸 Screenshot saved: edit-metadata-test.png');
 
     // Close dialog
@@ -206,8 +260,15 @@ async function testEditMetadata() {
     await page.waitForSelector('.q-dialog', { state: 'hidden' });
 
     await browser.close();
-    console.log('\n✅ Edit metadata test completed successfully!');
-    process.exit(0);
+
+    // Check if datetime fields passed validation
+    if (!datetimeSuccess) {
+      console.log('\n❌ Edit metadata test FAILED - datetime fields are not populated!');
+      process.exit(1);
+    } else {
+      console.log('\n✅ Edit metadata test completed successfully!');
+      process.exit(0);
+    }
 
   } catch (error) {
     console.error('❌ Test failed:', error.message);

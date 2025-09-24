@@ -49,12 +49,15 @@ TOTAL=${#API_TESTS[@]}
 echo
 echo "Running API tests..."
 
-# Only run core tests to avoid false failures
+# Run all core tests
 CORE_TESTS=(
-    "./api/allowance_create.py"
-    "./api/allowance_read.py"
-    "./api/allowance_update.py"
-    "./api/allowance_delete.py"
+    "./api/create-allowance.py"
+    "./api/read-allowance.py"
+    "./api/update-allowance.py"
+    "./api/delete-allowance.py"
+    "./api/create-currency-allowance.py"
+    "./api/check-currency-rate.py"
+    "./api/check-scheduled-payments.py"
 )
 
 for test in "${CORE_TESTS[@]}"; do
