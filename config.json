@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "short_description": "Setup recurring payments to lightning addresses. Perfect for allowances, pocket money, subscriptions, and regular transfers.",
   "tile": "/allowance/static/image/allowance.png",
-  "min_lnbits_version": "0.12.5",
+  "min_lnbits_version": "1.0.0",
   "contributors": [
     {
       "name": "Ben Weeks",
