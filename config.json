@@ -1,27 +1,17 @@
 {
   "name": "Allowance",
-  "short_description": "Setup recurring payments between wallets",
+  "version": "0.1.0",
+  "short_description": "Setup recurring payments to lightning addresses. Perfect for allowances, pocket money, subscriptions, and regular transfers.",
   "tile": "/allowance/static/image/allowance.png",
   "min_lnbits_version": "0.12.5",
   "contributors": [
     {
       "name": "Ben Weeks",
-      "uri": "https://github.com/bengweeks",
+      "uri": "https://github.com/BenGWeeks",
       "role": "Lead dev"
     }
   ],
-  "images": [
-    {
-      "uri": "https://raw.githubusercontent.com/bengweeks/allowance/main/static/image/1.png"
-    },
-    {
-      "uri": "https://raw.githubusercontent.com/bengweeks/allowance/main/static/image/2.png"
-    },
-    {
-      "uri": "https://raw.githubusercontent.com/bengweeks/allowance/main/static/image/3.png"
-    }
-  ],
-  "description_md": "https://raw.githubusercontent.com/bengweeks/allowance/main/description.md",
-  "terms_and_conditions_md": "https://raw.githubusercontent.com/bengweeks/allowance/main/toc.md",
+  "description_md": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/description.md",
+  "terms_and_conditions_md": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/toc.md",
   "license": "DON'T BE A DICK PUBLIC LICENSE"
 }
