@@ -237,11 +237,21 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
         return False
 
 
+def ensure_timezone_aware(dt):
+    """Helper to ensure datetime is timezone aware"""
+    if dt and dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 async def check_and_process_allowances():
     """
     Background task to check and process scheduled allowance payments.
     Runs every 60 seconds (1 minute minimum frequency).
     """
+    # Keep track of already deactivated allowances to prevent repeated processing
+    deactivated_ids = set()
+
     while True:
         try:
             logger.info("🔄 Checking allowances for scheduled payments...")
@@ -253,41 +263,33 @@ async def check_and_process_allowances():
             # Process each allowance
             for allowance in allowances:
                 try:
-                    # Skip inactive allowances
-                    if not getattr(allowance, "active", True):
+                    # Skip if we've already deactivated this in a previous run
+                    if allowance.id in deactivated_ids:
+                        logger.debug(f"⏩ Skipping already-deactivated allowance: {allowance.name}")
                         continue
+
+                    # The query already filters for active=true, so no need to check again
 
                     # Check if start_datetime hasn't been reached yet
                     if hasattr(allowance, "start_datetime") and allowance.start_datetime:
-                        # Ensure timezone awareness for comparison
-                        start_datetime = allowance.start_datetime
-                        if start_datetime.tzinfo is None:
-                            start_datetime = start_datetime.replace(tzinfo=timezone.utc)
-
+                        start_datetime = ensure_timezone_aware(allowance.start_datetime)
                         if current_time < start_datetime:
                             logger.info(f"⏳ Allowance {allowance.name} hasn't started yet (starts at {start_datetime})")
                             continue
 
                     # Check if end_datetime has passed
                     if hasattr(allowance, "end_datetime") and allowance.end_datetime:
-                        # Ensure timezone awareness for comparison
-                        end_datetime = allowance.end_datetime
-                        if end_datetime.tzinfo is None:
-                            end_datetime = end_datetime.replace(tzinfo=timezone.utc)
-
+                        end_datetime = ensure_timezone_aware(allowance.end_datetime)
                         if current_time > end_datetime:
                             logger.info(f"⏰ Allowance {allowance.name} has expired")
-                            allowance.active = False
-
                             # Deactivate the expired allowance
                             await deactivate_allowance(allowance.id)
+                            # Track that we've deactivated this one
+                            deactivated_ids.add(allowance.id)
                             continue
 
                     # Check if payment is due
-                    # Ensure timezone awareness for comparison
-                    next_payment_date = allowance.next_payment_date
-                    if next_payment_date.tzinfo is None:
-                        next_payment_date = next_payment_date.replace(tzinfo=timezone.utc)
+                    next_payment_date = ensure_timezone_aware(allowance.next_payment_date)
 
                     if current_time >= next_payment_date:
                         logger.info(
@@ -341,6 +343,10 @@ async def check_and_process_allowances():
 
         except Exception as e:
             logger.error(f"❌ Error in allowance scheduler: {str(e)}")
+
+        # Clean up deactivated list periodically (keep last 100 to prevent memory growth)
+        if len(deactivated_ids) > 100:
+            deactivated_ids = set(list(deactivated_ids)[-100:])
 
         # Check every 60 seconds (1 minute minimum payment frequency)
         await asyncio.sleep(60)
