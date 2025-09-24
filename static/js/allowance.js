@@ -274,79 +274,19 @@ window.app = Vue.createApp({
       
       console.log('📋 After cloning:', this.formDialog.data)
       
-      // Ensure start_datetime is in proper format for datetime-local input
+      // Convert datetime fields to format required by datetime-local input
       if (this.formDialog.data.start_datetime) {
-        try {
-          // Handle timestamps with microseconds (e.g., 2025-09-26T21:34:43.595856)
-          let dateStr = this.formDialog.data.start_datetime
-
-          // Check if it has timezone info (Z or +/-offset)
-          const hasTimezone = dateStr.includes('Z') || /[+-]\d{2}:\d{2}$/.test(dateStr)
-
-          // Remove microseconds if present (keep only up to milliseconds)
-          if (dateStr.includes('.')) {
-            const parts = dateStr.split('.')
-            if (parts[1].length > 3) {
-              // Keep only 3 digits for milliseconds
-              const beforeDot = parts[0]
-              const afterDot = parts[1].substring(0, 3)
-              // Add back timezone if it existed
-              dateStr = beforeDot + '.' + afterDot + (hasTimezone ? '' : 'Z')
-            } else if (!hasTimezone) {
-              dateStr += 'Z'
-            }
-          } else if (!hasTimezone) {
-            dateStr += 'Z'
-          }
-
-          const date = new Date(dateStr)
-          // Format for datetime-local: YYYY-MM-DDTHH:MM
-          if (!isNaN(date.getTime())) {
-            this.formDialog.data.start_datetime = date.toISOString().slice(0, 16)
-            console.log('📅 Converted start_datetime to:', this.formDialog.data.start_datetime)
-          } else {
-            console.warn('⚠️ Could not parse start_datetime:', this.formDialog.data.start_datetime)
-          }
-        } catch (e) {
-          console.error('❌ Error parsing start_datetime:', e)
+        const date = new Date(this.formDialog.data.start_datetime)
+        if (!isNaN(date)) {
+          // datetime-local needs YYYY-MM-DDTHH:MM format
+          this.formDialog.data.start_datetime = date.toISOString().slice(0, 16)
         }
       }
 
-      // Ensure end_datetime is in proper format for datetime-local input
       if (this.formDialog.data.end_datetime) {
-        try {
-          // Handle timestamps with microseconds
-          let dateStr = this.formDialog.data.end_datetime
-
-          // Check if it has timezone info (Z or +/-offset)
-          const hasTimezone = dateStr.includes('Z') || /[+-]\d{2}:\d{2}$/.test(dateStr)
-
-          // Remove microseconds if present (keep only up to milliseconds)
-          if (dateStr.includes('.')) {
-            const parts = dateStr.split('.')
-            if (parts[1].length > 3) {
-              // Keep only 3 digits for milliseconds
-              const beforeDot = parts[0]
-              const afterDot = parts[1].substring(0, 3)
-              // Add back timezone if it existed
-              dateStr = beforeDot + '.' + afterDot + (hasTimezone ? '' : 'Z')
-            } else if (!hasTimezone) {
-              dateStr += 'Z'
-            }
-          } else if (!hasTimezone) {
-            dateStr += 'Z'
-          }
-
-          const date = new Date(dateStr)
-          // Format for datetime-local: YYYY-MM-DDTHH:MM
-          if (!isNaN(date.getTime())) {
-            this.formDialog.data.end_datetime = date.toISOString().slice(0, 16)
-            console.log('📅 Converted end_datetime to:', this.formDialog.data.end_datetime)
-          } else {
-            console.warn('⚠️ Could not parse end_datetime:', this.formDialog.data.end_datetime)
-          }
-        } catch (e) {
-          console.error('❌ Error parsing end_datetime:', e)
+        const date = new Date(this.formDialog.data.end_datetime)
+        if (!isNaN(date)) {
+          this.formDialog.data.end_datetime = date.toISOString().slice(0, 16)
         }
       }
       
