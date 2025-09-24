@@ -11,7 +11,7 @@ class CreateAllowanceData(BaseModel):
     name: str
     wallet: Optional[str]
     lightning_address: str  # Lightning address like user@domain.com or LNURL
-    amount: int = 0
+    amount: float = 0
     currency: str = "sats"
     start_datetime: datetime
     frequency_type: str
@@ -20,7 +20,7 @@ class CreateAllowanceData(BaseModel):
     active: bool = True
     end_datetime: Optional[datetime] = None
     lnurlpay: Optional[str] = None  # LNURL pay string for compatibility
-    total: int = 0  # Total amount processed
+    total: float = 0  # Total amount processed
     created_at: Optional[datetime] = None  # Auto-set by database
 
     @validator("amount")
@@ -35,7 +35,7 @@ class Allowance(BaseModel):
     name: str
     wallet: Optional[str] = None
     lightning_address: str
-    amount: int = 0
+    amount: float = 0
     currency: str = "sats"
     start_datetime: datetime
     frequency_type: str
@@ -44,7 +44,7 @@ class Allowance(BaseModel):
     active: bool = True
     end_datetime: Optional[datetime] = None
     lnurlpay: Optional[str] = None  # LNURL pay string for compatibility
-    total: Optional[int] = 0  # Total amount processed
+    total: Optional[float] = 0  # Total amount processed
     created_at: Optional[datetime] = None  # When the allowance was created
 
     @validator("amount")
