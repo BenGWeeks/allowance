@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from loguru import logger
 
 from .crud import db
-from .tasks import check_and_process_allowances, wait_for_paid_invoices
+from .tasks import check_and_process_allowances
 from .views import allowance_generic_router
 from .views_api import allowance_api_router
 
@@ -41,9 +41,6 @@ def allowance_stop():
 
 def allowance_start():
     from lnbits.tasks import create_permanent_unique_task
-
-    task = create_permanent_unique_task("ext_allowance", wait_for_paid_invoices)
-    scheduled_tasks.append(task)
 
     # Start the allowance payment scheduler
     scheduler_task = create_permanent_unique_task(
