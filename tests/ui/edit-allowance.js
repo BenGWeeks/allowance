@@ -46,10 +46,16 @@ async function testEditMetadata() {
     try {
       // Extract what we can from the visible cells
       if (cellCount >= 4) {
-        allowanceInfo.description = await cells.nth(0).textContent() || 'N/A';
-        allowanceInfo.amount = await cells.nth(1).textContent() || 'N/A';
-        allowanceInfo.recipient = await cells.nth(2).textContent() || 'N/A';
-        allowanceInfo.frequency = await cells.nth(3).textContent() || 'N/A';
+        allowanceInfo.description = (await cells.nth(0).textContent() || 'N/A').trim();
+        allowanceInfo.amount = (await cells.nth(1).textContent() || 'N/A').trim();
+        allowanceInfo.recipient = (await cells.nth(2).textContent() || 'N/A').trim();
+        allowanceInfo.frequency = (await cells.nth(3).textContent() || 'N/A').trim();
+
+        // Parse amount to get just the number
+        const amountMatch = allowanceInfo.amount.match(/(\d+)/);
+        if (amountMatch) {
+          allowanceInfo.amountNumber = parseInt(amountMatch[1]);
+        }
       }
     } catch (e) {
       console.log('⚠️ Could not extract all table data');
@@ -127,17 +133,100 @@ async function testEditMetadata() {
     const inputCount = await inputs.count();
     console.log(`  Found ${inputCount} input fields`);
 
+    // Track which required fields we found and validate their values
+    const requiredFields = {
+      'Description *': false,
+      'Lightning Address *': false,
+      'Amount *': false
+    };
+
+    // Track actual values for validation
+    let formValues = {};
+
     for (let i = 0; i < inputCount; i++) {
       const input = inputs.nth(i);
       const value = await input.inputValue();
       const type = await input.getAttribute('type');
       const label = await input.getAttribute('aria-label') || await input.getAttribute('label') || `Input ${i}`;
 
+      // Check if this is a required field
+      if (requiredFields.hasOwnProperty(label)) {
+        requiredFields[label] = !!value;
+      }
+
+      // Store values for validation
+      if (label === 'Description *') {
+        formValues.description = value;
+      } else if (label === 'Lightning Address *') {
+        formValues.recipient = value;
+      } else if (label === 'Amount *') {
+        formValues.amount = value;
+      }
+
       if (value) {
         console.log(`  ✓ ${label} (${type}): ${value}`);
       } else {
         console.log(`  ⚠️ ${label} (${type}): EMPTY`);
       }
+    }
+
+    // Verify all required fields are populated
+    console.log('\n📋 Required fields check:');
+    let allRequiredPresent = true;
+    for (const [field, isPresent] of Object.entries(requiredFields)) {
+      if (!isPresent) {
+        console.log(`  ❌ ${field} is MISSING or EMPTY`);
+        allRequiredPresent = false;
+      } else {
+        console.log(`  ✅ ${field} is populated`);
+      }
+    }
+
+    if (!allRequiredPresent) {
+      datetimeSuccess = false;
+    }
+
+    // Validate that form values match table values
+    console.log('\n🔍 Validating form values match table data:');
+    let valuesMatch = true;
+
+    if (formValues.description && allowanceInfo.description !== 'N/A') {
+      if (formValues.description === allowanceInfo.description) {
+        console.log(`  ✅ Description matches: "${formValues.description}"`);
+      } else {
+        console.log(`  ❌ Description mismatch!`);
+        console.log(`     Table shows: "${allowanceInfo.description}"`);
+        console.log(`     Form shows: "${formValues.description}"`);
+        valuesMatch = false;
+      }
+    }
+
+    if (formValues.recipient && allowanceInfo.recipient !== 'N/A') {
+      if (formValues.recipient === allowanceInfo.recipient) {
+        console.log(`  ✅ Recipient matches: "${formValues.recipient}"`);
+      } else {
+        console.log(`  ❌ Recipient mismatch!`);
+        console.log(`     Table shows: "${allowanceInfo.recipient}"`);
+        console.log(`     Form shows: "${formValues.recipient}"`);
+        valuesMatch = false;
+      }
+    }
+
+    if (formValues.amount && allowanceInfo.amountNumber) {
+      const formAmount = parseInt(formValues.amount);
+      if (formAmount === allowanceInfo.amountNumber) {
+        console.log(`  ✅ Amount matches: ${formAmount}`);
+      } else {
+        console.log(`  ❌ Amount mismatch!`);
+        console.log(`     Table shows: ${allowanceInfo.amountNumber}`);
+        console.log(`     Form shows: ${formAmount}`);
+        valuesMatch = false;
+      }
+    }
+
+    if (!valuesMatch) {
+      console.log('\n⚠️ WARNING: Form values do not match table data!');
+      datetimeSuccess = false;
     }
 
     // Specifically check datetime fields
@@ -156,7 +245,19 @@ async function testEditMetadata() {
         if (i === 0) {
           // Start datetime is required and should be populated
           if (value && value !== '') {
-            console.log(`  ✅ Start datetime: ${value} (format: YYYY-MM-DDTHH:MM)`);
+            // Check if the date is reasonable (not 1970 which indicates timestamp conversion error)
+            const dateObj = new Date(value);
+            const year = dateObj.getFullYear();
+
+            if (year === 1970) {
+              console.log(`  ❌ Start datetime: ${value} - TIMESTAMP CONVERSION ERROR (showing 1970)!`);
+              datetimeSuccess = false;
+            } else if (year < 2020 || year > 2030) {
+              console.log(`  ⚠️ Start datetime: ${value} - Suspicious year ${year}`);
+              datetimeSuccess = false;
+            } else {
+              console.log(`  ✅ Start datetime: ${value} (format: YYYY-MM-DDTHH:MM)`);
+            }
           } else {
             console.log(`  ❌ Start datetime: EMPTY - This should be populated!`);
             datetimeSuccess = false;
@@ -164,7 +265,19 @@ async function testEditMetadata() {
         } else if (i === 1) {
           // End datetime is optional
           if (value && value !== '') {
-            console.log(`  ✅ End datetime: ${value} (format: YYYY-MM-DDTHH:MM)`);
+            // Check if the date is reasonable
+            const dateObj = new Date(value);
+            const year = dateObj.getFullYear();
+
+            if (year === 1970) {
+              console.log(`  ❌ End datetime: ${value} - TIMESTAMP CONVERSION ERROR (showing 1970)!`);
+              datetimeSuccess = false;
+            } else if (year < 2020 || year > 2030) {
+              console.log(`  ⚠️ End datetime: ${value} - Suspicious year ${year}`);
+              datetimeSuccess = false;
+            } else {
+              console.log(`  ✅ End datetime: ${value} (format: YYYY-MM-DDTHH:MM)`);
+            }
           } else {
             console.log(`  ℹ️ End datetime: Not set (optional field)`);
           }
@@ -172,6 +285,7 @@ async function testEditMetadata() {
       }
     } else {
       console.log('  ❌ No datetime-local inputs found!');
+      datetimeSuccess = false;
     }
 
     // Check select dropdowns

@@ -5,6 +5,8 @@ window.app = Vue.createApp({
   mixins: [window.windowMixin],
   data() {
     return {
+      // Detect user's locale for date formatting
+      userLocale: navigator.language || 'en-GB',
       allowances: [],
       currencies: [],
       fiatRates: {},
@@ -159,32 +161,32 @@ window.app = Vue.createApp({
       
       // Transform data to match backend model
       console.log('🔥 Processing active field:', data.active, '(type:', typeof data.active, ')')
-      
+
+      // Don't convert currency amounts here - conversion happens at payment time
+      let amount = parseFloat(data.amount) || 0
+
+      // For sats, ensure integer
+      if (!data.currency || data.currency === 'sats' || data.currency === 'satoshis') {
+        amount = Math.round(amount)
+      }
+      // For fiat currencies, keep the decimal amount as-is (e.g., 0.02 for GBP)
+
       const backendData = {
         id: data.id,
         name: data.name,  // Keep name field as expected by backend
         memo: data.name,  // Also include memo field
         wallet: data.wallet,
         lightning_address: data.lightning_address,
-        amount: parseInt(data.amount),
+        amount: amount,  // Store the original amount (0.02 for GBP, 10 for sats)
         currency: data.currency || 'sats',
         frequency_type: data.frequency_type,
-        start_datetime: new Date(data.start_datetime).toISOString(),  // Convert to ISO datetime
+        start_datetime: data.start_datetime ? new Date(data.start_datetime).toISOString() : new Date().toISOString(),  // Convert to ISO datetime
         next_payment_date: this.calculateNextPaymentDate(data.start_datetime, data.frequency_type),
         active: Boolean(data.active),  // Ensure boolean type
         end_datetime: data.end_datetime ? new Date(data.end_datetime).toISOString() : null
       }
       
       console.log('🔥 Backend data active field:', backendData.active, '(type:', typeof backendData.active, ')')
-      
-      // For minutely payments, set end date based on duration
-      if (data.frequency_type === 'minutely') {
-        // Default to 5 minutes for testing
-        const endDate = new Date(data.start_datetime)
-        endDate.setMinutes(endDate.getMinutes() + 5)
-        backendData.end_datetime = endDate.toISOString()
-      }
-      
       console.log('📤 Final data to send:', backendData)
       console.log('🔍 Decision point - has ID?', !!backendData.id, 'ID value:', backendData.id)
       
@@ -256,14 +258,14 @@ window.app = Vue.createApp({
 
       // Deep clone the row data to avoid reference issues
       const clonedData = JSON.parse(JSON.stringify(row))
-      
+
       // Set data piece by piece to ensure reactivity
       this.formDialog.data = {
         id: clonedData.id,
         name: clonedData.name,
         wallet: clonedData.wallet,
         lightning_address: clonedData.lightning_address,
-        amount: clonedData.amount,
+        amount: clonedData.amount,  // Amount is already in the correct format (0.02 for GBP, 10 for sats)
         currency: clonedData.currency,
         frequency_type: clonedData.frequency_type,
         start_datetime: clonedData.start_datetime, // Add missing start_datetime
@@ -276,17 +278,38 @@ window.app = Vue.createApp({
       
       // Convert datetime fields to format required by datetime-local input
       if (this.formDialog.data.start_datetime) {
-        const date = new Date(this.formDialog.data.start_datetime)
+        // Database returns timestamps in seconds, JS needs milliseconds
+        const timestamp = typeof this.formDialog.data.start_datetime === 'number'
+          ? this.formDialog.data.start_datetime * 1000
+          : this.formDialog.data.start_datetime
+        const date = new Date(timestamp)
         if (!isNaN(date)) {
-          // datetime-local needs YYYY-MM-DDTHH:MM format
-          this.formDialog.data.start_datetime = date.toISOString().slice(0, 16)
+          // datetime-local needs YYYY-MM-DDTHH:MM format in LOCAL time, not UTC
+          // Format as local time string
+          const year = date.getFullYear()
+          const month = String(date.getMonth() + 1).padStart(2, '0')
+          const day = String(date.getDate()).padStart(2, '0')
+          const hours = String(date.getHours()).padStart(2, '0')
+          const minutes = String(date.getMinutes()).padStart(2, '0')
+          this.formDialog.data.start_datetime = `${year}-${month}-${day}T${hours}:${minutes}`
         }
       }
 
       if (this.formDialog.data.end_datetime) {
-        const date = new Date(this.formDialog.data.end_datetime)
+        // Database returns timestamps in seconds, JS needs milliseconds
+        const timestamp = typeof this.formDialog.data.end_datetime === 'number'
+          ? this.formDialog.data.end_datetime * 1000
+          : this.formDialog.data.end_datetime
+        const date = new Date(timestamp)
         if (!isNaN(date)) {
-          this.formDialog.data.end_datetime = date.toISOString().slice(0, 16)
+          // datetime-local needs YYYY-MM-DDTHH:MM format in LOCAL time, not UTC
+          // Format as local time string
+          const year = date.getFullYear()
+          const month = String(date.getMonth() + 1).padStart(2, '0')
+          const day = String(date.getDate()).padStart(2, '0')
+          const hours = String(date.getHours()).padStart(2, '0')
+          const minutes = String(date.getMinutes()).padStart(2, '0')
+          this.formDialog.data.end_datetime = `${year}-${month}-${day}T${hours}:${minutes}`
         }
       }
       

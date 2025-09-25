@@ -1,0 +1,362 @@
+= Troubleshooting Guide
+:toc:
+:toc-placement: preamble
+:toclevels: 2
+
+This guide helps you resolve common issues with the LNBits Allowance extension.
+
+== Installation Issues
+
+=== Extension Not Appearing in LNBits
+
+If the Allowance extension doesn't appear in your LNBits extensions list:
+
+. Check the extension is properly installed:
++
+[source,bash]
+----
+ls -la /app/lnbits/extensions/allowance
+----
+
+. Verify the extension structure:
++
+[source,bash]
+----
+# Required files must exist:
+allowance/
+├── __init__.py
+├── config.json
+├── manifest.json
+└── migrations.py
+----
+
+. Restart the LNBits container:
++
+[source,bash]
+----
+docker restart lnbits
+# or
+docker-compose restart
+----
+
+. Check container logs for errors:
++
+[source,bash]
+----
+docker logs lnbits 2>&1 | grep -i allowance
+----
+
+=== Database Migration Errors
+
+If you see errors related to database tables or columns:
+
+. Check migration status:
++
+[source,bash]
+----
+docker exec lnbits psql -U lnbits -d lnbits -c "SELECT * FROM dbversions WHERE ext = 'allowance';"
+----
+
+. If migrations haven't run, restart the container
+. If you see column errors like `column 'lnurlpay' does not exist`:
+  - This usually means the container is running old code
+  - Restart the container to load updated code
+
+== Payment Issues
+
+=== Allowances Not Sending Payments
+
+If scheduled payments aren't being sent:
+
+. Verify the scheduler is running:
++
+[source,bash]
+----
+docker logs lnbits 2>&1 | grep -i "allowance payment scheduler"
+----
+
+. Check allowance status:
+  - Ensure the allowance is marked as "Active"
+  - Verify start_datetime has been reached
+  - Check end_datetime hasn't passed
+
+. Check Lightning address validity:
+  - Test the Lightning address manually
+  - Ensure it accepts the payment amount
+
+. Monitor scheduler logs:
++
+[source,bash]
+----
+docker logs -f lnbits 2>&1 | grep -E "allowance|payment|scheduler"
+----
+
+=== Payments Failing with Amount Errors
+
+If you see errors like `value is not a valid integer`:
+
+. Check the amount field:
+  - Must be a positive integer for sats
+  - Can be decimal for fiat currencies
+
+. Verify currency conversion:
+  - Fiat amounts are converted to sats at payment time
+  - Ensure currency rates are available
+
+=== Automatic Deactivation
+
+Allowances may be automatically deactivated if:
+
+. The end_datetime is in the past
+. Payment failures exceed retry limits
+. The wallet balance is insufficient
+
+== Form and UI Issues
+
+=== Datetime Fields Showing Wrong Values
+
+If dates appear incorrect when editing:
+
+. This is often a timezone display issue
+. Dates are stored in UTC and converted for display
+. The actual stored values are usually correct
+
+To verify:
+[source,bash]
+----
+# Check what's actually stored in the database
+docker logs lnbits 2>&1 | grep "Update request"
+----
+
+=== Active Toggle Not Persisting
+
+If the Active status doesn't save:
+
+. Check if the allowance has expired:
+  - Expired allowances (end_datetime in past) cannot be reactivated
+  - Update the end_datetime to a future date first
+
+. Verify the update request succeeds:
+  - Check browser console for errors
+  - Monitor container logs during save
+
+=== Form Values Not Loading
+
+If edit forms show empty fields:
+
+. Check browser console for JavaScript errors
+. Verify the allowance data is loading:
++
+[source,javascript]
+----
+// In browser console:
+console.log(window.app.allowances)
+----
+
+. Clear browser cache and reload
+
+== API Issues
+
+=== 404 Not Found Errors
+
+If API calls return 404:
+
+. Verify the correct endpoint:
+  - Use `/allowance/api/v1/allowance` (singular)
+  - Not `/allowance/api/v1/allowances` (plural)
+
+. Check API key validity:
+  - Use admin key for write operations
+  - Use invoice key for read operations
+
+. Ensure wallet exists and has permissions
+
+=== 500 Internal Server Errors
+
+If API calls return 500 errors:
+
+. Check container logs for detailed error:
++
+[source,bash]
+----
+docker logs lnbits 2>&1 | tail -100 | grep -i error
+----
+
+. Common causes:
+  - Database connection issues
+  - Missing required fields
+  - Data type mismatches
+
+== Docker and Container Issues
+
+=== Container Won't Start
+
+If the LNBits container fails to start:
+
+. Check port conflicts:
++
+[source,bash]
+----
+netstat -tlnp | grep 5000
+----
+
+. Verify environment variables in `.env`
+. Check Docker logs:
++
+[source,bash]
+----
+docker-compose logs lnbits
+----
+
+=== Extension Code Not Updating
+
+If changes to the extension aren't reflected:
+
+. The container needs to be restarted:
++
+[source,bash]
+----
+docker-compose restart lnbits
+----
+
+. Verify the volume mount is correct:
++
+[source,yaml]
+----
+volumes:
+  - ./allowance:/app/lnbits/extensions/allowance
+----
+
+. Check file permissions:
++
+[source,bash]
+----
+ls -la allowance/*.py
+----
+
+== Database Issues
+
+=== PostgreSQL Connection Errors
+
+If you see database connection errors:
+
+. Verify PostgreSQL is running:
++
+[source,bash]
+----
+docker ps | grep postgres
+----
+
+. Check database credentials in `.env`
+. Test connection manually:
++
+[source,bash]
+----
+docker exec lnbits psql -U lnbits -d lnbits -c "SELECT 1;"
+----
+
+=== Table or Column Doesn't Exist
+
+If you see schema-related errors:
+
+. This usually means migrations haven't run
+. Check the migrations.py file exists
+. Restart the container to trigger migrations
+. For development, you may need to drop and recreate tables:
++
+[source,sql]
+----
+-- CAUTION: This deletes all allowance data!
+DROP TABLE IF EXISTS ext_allowance.maintable;
+----
+
+== Testing Issues
+
+=== Playwright Tests Failing
+
+If UI tests fail:
+
+. Ensure LNBits is running and accessible
+. Verify test credentials in `.env.local`
+. Check for UI changes that broke selectors
+. Run tests with visible browser:
++
+[source,javascript]
+----
+// Change headless: true to false in test files
+const browser = await chromium.launch({ headless: false });
+----
+
+=== API Tests Failing
+
+If API tests fail:
+
+. Verify the test wallet exists
+. Check API keys are valid
+. Ensure test data doesn't conflict
+. Run tests individually to isolate issues
+
+== Common Error Messages
+
+[cols="1,2", options="header"]
+|===
+|Error Message |Solution
+
+|`WalletTypeInfo object has no attribute 'id'`
+|Restart container to load monkey-patch fix
+
+|`column 'lnurlpay' does not exist`
+|Container running old code, restart needed
+
+|`Failed to get invoice from LNURL`
+|Check Lightning address is valid and accepts the amount
+
+|`Allowance has expired`
+|Update end_datetime to future date
+
+|`Not authorized`
+|Check wallet ownership and API keys
+
+|`Amount must be greater than 0`
+|Ensure amount field is positive number
+|===
+
+== Getting Help
+
+If you can't resolve an issue:
+
+. Check the https://github.com/lnbits/lnbits[LNBits documentation]
+. Search for similar issues on https://github.com/BenGWeeks/allowance/issues[GitHub Issues]
+. Enable debug logging:
++
+[source,bash]
+----
+export LNBITS_DEBUG=true
+docker-compose restart
+----
+
+. Collect relevant information:
+  - Error messages from browser console
+  - Container logs during the error
+  - Steps to reproduce the issue
+
+. Create a detailed issue report on GitHub
+
+== Prevention Tips
+
+. Always restart containers after code changes
+. Test in development before production
+. Keep backups of your database
+. Monitor logs regularly:
++
+[source,bash]
+----
+docker logs -f lnbits 2>&1 | grep -i allowance
+----
+
+. Use the test suite to verify changes:
++
+[source,bash]
+----
+./tests/run_all_tests.sh
+----

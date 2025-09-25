@@ -30,3 +30,15 @@ async def m001_initial(db: Any) -> None:
         );
     """
     )
+
+
+async def m002_decimal_amounts(db: Any) -> None:
+    """
+    Support decimal amounts for fiat currencies.
+    """
+    await db.execute(
+        """
+        ALTER TABLE maintable
+        ALTER COLUMN amount TYPE NUMERIC(12,4);
+    """
+    )

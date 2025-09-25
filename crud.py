@@ -9,7 +9,26 @@ db = Database("ext_allowance")
 
 
 async def create_allowance(data: CreateAllowanceData) -> Allowance:
+    from datetime import datetime
+
     data.id = urlsafe_short_hash()
+
+    # Convert datetime objects to timestamps (integers) for database
+    start_ts = data.start_datetime
+    if isinstance(start_ts, datetime):
+        start_ts = int(start_ts.timestamp())
+
+    next_ts = data.next_payment_date
+    if isinstance(next_ts, datetime):
+        next_ts = int(next_ts.timestamp())
+
+    end_ts = data.end_datetime
+    if end_ts and isinstance(end_ts, datetime):
+        end_ts = int(end_ts.timestamp())
+
+    created_ts = data.created_at
+    if created_ts and isinstance(created_ts, datetime):
+        created_ts = int(created_ts.timestamp())
 
     # Use direct SQL to avoid field name mapping issues
     await db.execute(
@@ -19,8 +38,8 @@ async def create_allowance(data: CreateAllowanceData) -> Allowance:
          start_datetime, frequency_type, next_payment_date, memo,
          active, end_datetime, lnurlpay, total, created_at)
         VALUES (:id, :name, :wallet, :lightning_address, :amount, :currency,
-         :start_datetime, :frequency_type, :next_payment_date, :memo,
-         :active, :end_datetime, :lnurlpay, :total, :created_at)
+         to_timestamp(:start_datetime), :frequency_type, to_timestamp(:next_payment_date), :memo,
+         :active, to_timestamp(:end_datetime), :lnurlpay, :total, to_timestamp(:created_at))
         """,
         {
             "id": data.id,
@@ -29,15 +48,15 @@ async def create_allowance(data: CreateAllowanceData) -> Allowance:
             "lightning_address": data.lightning_address,
             "amount": data.amount,
             "currency": data.currency,
-            "start_datetime": data.start_datetime,
+            "start_datetime": start_ts,
             "frequency_type": data.frequency_type,
-            "next_payment_date": data.next_payment_date,
+            "next_payment_date": next_ts,
             "memo": data.memo,
             "active": data.active,
-            "end_datetime": data.end_datetime,
+            "end_datetime": end_ts,
             "lnurlpay": data.lnurlpay,
             "total": data.total,
-            "created_at": data.created_at
+            "created_at": created_ts
         },
     )
     return Allowance(**data.dict())
@@ -83,12 +102,28 @@ async def get_allowances(wallet_ids: Union[str, list[str]]) -> list[Allowance]:
 
 async def update_allowance(data: CreateAllowanceData) -> Allowance:
     # Use direct SQL to avoid field name mapping issues
+    # Convert datetime objects to timestamps (integers) for database
+    from datetime import datetime
+
+    start_ts = data.start_datetime
+    if isinstance(start_ts, datetime):
+        start_ts = int(start_ts.timestamp())
+
+    next_ts = data.next_payment_date
+    if isinstance(next_ts, datetime):
+        next_ts = int(next_ts.timestamp())
+
+    end_ts = data.end_datetime
+    if end_ts and isinstance(end_ts, datetime):
+        end_ts = int(end_ts.timestamp())
+
     await db.execute(
         """
         UPDATE ext_allowance.maintable
         SET name = :name, wallet = :wallet, lightning_address = :lightning_address, amount = :amount, currency = :currency,
-            start_datetime = :start_datetime, frequency_type = :frequency_type, next_payment_date = :next_payment_date, memo = :memo,
-            active = :active, end_datetime = :end_datetime, lnurlpay = :lnurlpay, total = :total
+            start_datetime = to_timestamp(:start_datetime), frequency_type = :frequency_type,
+            next_payment_date = to_timestamp(:next_payment_date), memo = :memo,
+            active = :active, end_datetime = to_timestamp(:end_datetime)
         WHERE id = :id
         """,
         {
@@ -97,14 +132,12 @@ async def update_allowance(data: CreateAllowanceData) -> Allowance:
             "lightning_address": data.lightning_address,
             "amount": data.amount,
             "currency": data.currency,
-            "start_datetime": data.start_datetime,
+            "start_datetime": start_ts,
             "frequency_type": data.frequency_type,
-            "next_payment_date": data.next_payment_date,
+            "next_payment_date": next_ts,
             "memo": data.memo,
             "active": data.active,
-            "end_datetime": data.end_datetime,
-            "lnurlpay": data.lnurlpay,
-            "total": data.total,
+            "end_datetime": end_ts,
             "id": data.id
         },
     )

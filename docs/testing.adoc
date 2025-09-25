@@ -1,0 +1,581 @@
+= Testing Guide
+:toc:
+:toc-placement: preamble
+:toclevels: 3
+
+Comprehensive guide for testing the LNBits Allowance extension.
+
+== Overview
+
+The Allowance extension includes extensive test suites:
+
+* **UI Tests** - Playwright browser automation tests
+* **API Tests** - Python-based endpoint testing
+* **Integration Tests** - End-to-end workflow validation
+
+== Test Environment Setup
+
+=== Prerequisites
+
+Install required dependencies:
+
+[source,bash]
+----
+# System packages (Ubuntu/Debian)
+sudo apt install python3-httpx python3-pytest python3-loguru nodejs npm
+
+# Node packages (for UI tests)
+npm install playwright
+npx playwright install chromium
+----
+
+=== Configuration
+
+Create `.env.local` with test credentials:
+
+[source,bash]
+----
+TEST_LNBITS_URL=http://localhost:5001
+LNBITS_ADMIN_USERNAME=testuser
+LNBITS_ADMIN_PASSWORD=testpass123
+RECEIVING_WALLET_NAME=TestReceiving
+PAYLINK_EMAIL=test@example.com
+----
+
+IMPORTANT: Never commit `.env.local` to version control!
+
+== Running Tests
+
+=== Quick Start
+
+Run all tests:
+
+[source,bash]
+----
+./tests/run_all_tests.sh
+----
+
+Run specific test suites:
+
+[source,bash]
+----
+# UI tests only
+./tests/run_ui_tests.sh
+
+# API tests only
+./tests/run_api_tests.sh
+----
+
+=== UI Testing
+
+==== Available UI Tests
+
+[cols="1,2", options="header"]
+|===
+|Test File |Purpose
+
+|`create-account.js`
+|Creates admin account on fresh install
+
+|`login-test.js`
+|Tests authentication flow
+
+|`enable-allowance.js`
+|Enables extension via UI
+
+|`create-allowance.js`
+|Tests allowance creation
+
+|`edit-allowance.js`
+|Tests editing and metadata display
+
+|`delete-allowance.js`
+|Tests deletion functionality
+
+|`test-date-persistence.js`
+|Verifies date changes persist
+
+|`check-currencies.js`
+|Tests currency conversion
+|===
+
+==== Running Individual UI Tests
+
+[source,bash]
+----
+# Run specific test
+node tests/ui/create-allowance.js
+
+# Run with visible browser (debugging)
+# Edit test file: headless: false
+node tests/ui/edit-allowance.js
+
+# Save screenshots
+# Tests automatically save to test-screenshots/
+----
+
+==== Writing New UI Tests
+
+Template for new UI test:
+
+[source,javascript]
+----
+const { chromium } = require('playwright');
+const { getConfig, login } = require('./auth-helper');
+
+async function testFeature() {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage();
+  const { baseUrl } = getConfig();
+
+  try {
+    // Login
+    await login(page);
+
+    // Navigate to extension
+    await page.goto(`${baseUrl}/allowance`);
+
+    // Your test logic here
+
+    console.log('✅ Test passed!');
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Test failed:', error);
+    await page.screenshot({ path: 'test-screenshots/error.png' });
+    process.exit(1);
+  } finally {
+    await browser.close();
+  }
+}
+
+testFeature();
+----
+
+=== API Testing
+
+==== Available API Tests
+
+[cols="1,2", options="header"]
+|===
+|Test File |Endpoints Tested
+
+|`allowance_create.py`
+|POST /api/v1/allowance
+
+|`allowance_read.py`
+|GET /api/v1/allowance
+
+|`allowance_update.py`
+|PUT /api/v1/allowance/{id}
+
+|`allowance_delete.py`
+|DELETE /api/v1/allowance/{id}
+
+|`currency_rate.py`
+|GET /api/v1/rate/{currency}
+
+|`scheduled_payments.py`
+|Payment scheduler functionality
+|===
+
+==== Running Individual API Tests
+
+[source,bash]
+----
+# Run specific test
+python3 tests/api/allowance_create.py
+
+# Run with verbose output
+python3 -v tests/api/allowance_update.py
+
+# Run all API tests
+python3 -m pytest tests/api/
+----
+
+==== Writing New API Tests
+
+Template for new API test:
+
+[source,python]
+----
+import httpx
+import json
+from datetime import datetime, timedelta
+
+BASE_URL = "http://localhost:5001"
+API_KEY = "your-admin-key"
+
+def test_feature():
+    """Test description"""
+
+    # Setup
+    headers = {"X-Api-Key": API_KEY}
+
+    # Make request
+    response = httpx.post(
+        f"{BASE_URL}/allowance/api/v1/endpoint",
+        headers=headers,
+        json={"key": "value"}
+    )
+
+    # Assertions
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] == True
+
+    print("✅ Test passed!")
+
+if __name__ == "__main__":
+    test_feature()
+----
+
+== Test Scenarios
+
+=== Basic Functionality Tests
+
+. **Create Allowance**
+   - Valid Lightning address
+   - Correct amount and currency
+   - Proper frequency setting
+   - Date validation
+
+. **Edit Allowance**
+   - All fields editable
+   - Changes persist
+   - Validation works
+
+. **Delete Allowance**
+   - Confirmation required
+   - Properly removed from list
+   - Scheduler stops
+
+=== Payment Flow Tests
+
+. **Scheduled Payments**
+   - Payments sent on schedule
+   - Correct amounts
+   - Proper memo included
+   - Transaction logged
+
+. **Currency Conversion**
+   - Fiat amounts convert correctly
+   - Exchange rates applied
+   - Sats calculation accurate
+
+. **Failure Handling**
+   - Invalid addresses handled
+   - Insufficient funds logged
+   - Retries work correctly
+
+=== Edge Case Tests
+
+. **Timezone Handling**
+   - Dates display correctly
+   - Payments scheduled properly
+   - DST changes handled
+
+. **Concurrent Operations**
+   - Multiple allowances work
+   - Simultaneous edits handled
+   - Race conditions prevented
+
+. **Large Data Sets**
+   - Performance with many allowances
+   - Pagination works
+   - Search/filter functions
+
+== Manual Testing
+
+=== Test Checklist
+
+Before releasing, manually verify:
+
+☐ Create new allowance with all fields
+☐ Edit existing allowance
+☐ Toggle active status
+☐ Delete allowance
+☐ Verify payment sent (minutely frequency)
+☐ Check transaction history
+☐ Test with different currencies
+☐ Verify date picker works
+☐ Test with expired dates
+☐ Check responsive design
+☐ Test keyboard navigation
+☐ Verify error messages
+
+=== Testing Payment Scheduler
+
+. Create test allowance:
+[source,javascript]
+----
+{
+  "name": "Test Payment",
+  "lightning_address": "test@getalby.com",
+  "amount": 1,
+  "currency": "sats",
+  "frequency_type": "minutely"
+}
+----
+
+. Monitor logs:
+[source,bash]
+----
+docker logs -f lnbits | grep -i allowance
+----
+
+. Verify payment after 1 minute
+
+. Check transaction includes memo: `#allowance: Test Payment`
+
+=== Testing Currency Conversion
+
+. Create allowance with fiat amount:
+   - Amount: 1.00
+   - Currency: USD
+
+. Check conversion:
+[source,bash]
+----
+# Monitor logs for conversion
+docker logs lnbits | grep "Converting"
+----
+
+. Verify sats amount is reasonable
+
+== Continuous Integration
+
+=== GitHub Actions Setup
+
+Create `.github/workflows/test.yml`:
+
+[source,yaml]
+----
+name: Test Suite
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Setup Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'
+
+    - name: Install dependencies
+      run: |
+        pip install httpx pytest
+        npm install playwright
+
+    - name: Run API tests
+      run: python -m pytest tests/api/
+
+    - name: Run UI tests
+      run: npm test
+----
+
+=== Pre-commit Hooks
+
+Setup automatic testing before commits:
+
+[source,bash]
+----
+# Install pre-commit
+pip install pre-commit
+
+# Create .pre-commit-config.yaml
+cat > .pre-commit-config.yaml << EOF
+repos:
+  - repo: local
+    hooks:
+      - id: tests
+        name: Run tests
+        entry: ./tests/run_all_tests.sh
+        language: system
+        pass_filenames: false
+EOF
+
+# Install hooks
+pre-commit install
+----
+
+== Debugging Tests
+
+=== UI Test Debugging
+
+. **Run with visible browser**:
+[source,javascript]
+----
+const browser = await chromium.launch({
+  headless: false,
+  slowMo: 100  // Slow down actions
+});
+----
+
+. **Add breakpoints**:
+[source,javascript]
+----
+await page.pause();  // Pauses execution
+----
+
+. **Take screenshots**:
+[source,javascript]
+----
+await page.screenshot({
+  path: 'debug.png',
+  fullPage: true
+});
+----
+
+. **Log browser console**:
+[source,javascript]
+----
+page.on('console', msg => console.log('Browser:', msg.text()));
+----
+
+=== API Test Debugging
+
+. **Verbose logging**:
+[source,python]
+----
+import logging
+logging.basicConfig(level=logging.DEBUG)
+----
+
+. **Print full responses**:
+[source,python]
+----
+print(f"Status: {response.status_code}")
+print(f"Headers: {response.headers}")
+print(f"Body: {json.dumps(response.json(), indent=2)}")
+----
+
+. **Check container logs**:
+[source,bash]
+----
+docker logs lnbits --tail 100 | grep ERROR
+----
+
+== Test Data Management
+
+=== Cleanup Between Tests
+
+[source,bash]
+----
+# Delete all test allowances
+node tests/ui/delete-all-allowances.js
+
+# Reset database (CAUTION: deletes all data)
+docker exec lnbits psql -U lnbits -d lnbits \
+  -c "TRUNCATE ext_allowance.maintable;"
+----
+
+=== Test Data Fixtures
+
+Create consistent test data:
+
+[source,javascript]
+----
+const TEST_ALLOWANCE = {
+  name: "Test Allowance " + Date.now(),
+  lightning_address: "test@getalby.com",
+  amount: 10,
+  currency: "sats",
+  frequency_type: "weekly"
+};
+----
+
+== Performance Testing
+
+=== Load Testing
+
+Test with many allowances:
+
+[source,python]
+----
+import httpx
+import time
+
+def load_test(count=100):
+    """Create many allowances"""
+    start = time.time()
+
+    for i in range(count):
+        response = httpx.post(
+            f"{BASE_URL}/allowance/api/v1/allowance",
+            headers=headers,
+            json={
+                "name": f"Load Test {i}",
+                "lightning_address": "test@getalby.com",
+                "amount": 1,
+                "frequency_type": "yearly"
+            }
+        )
+        assert response.status_code == 201
+
+    elapsed = time.time() - start
+    print(f"Created {count} allowances in {elapsed:.2f}s")
+    print(f"Average: {elapsed/count:.3f}s per allowance")
+----
+
+=== Scheduler Performance
+
+Monitor scheduler with many active allowances:
+
+[source,bash]
+----
+# Create test allowances
+for i in {1..50}; do
+  curl -X POST ... # Create allowance
+done
+
+# Monitor performance
+docker stats lnbits
+
+# Check processing time
+docker logs lnbits | grep "Checking allowances"
+----
+
+== Best Practices
+
+. **Always use test wallets** - Never test on production wallets
+. **Clean up test data** - Delete test allowances after tests
+. **Use meaningful names** - Include "TEST" in allowance names
+. **Test incrementally** - Build tests step by step
+. **Document failures** - Screenshot and log errors
+. **Version your tests** - Keep tests in sync with code
+. **Test edge cases** - Don't just test happy paths
+. **Monitor resources** - Check CPU/memory during tests
+
+== Troubleshooting Test Failures
+
+Common issues and solutions:
+
+[cols="1,2", options="header"]
+|===
+|Issue |Solution
+
+|Login fails
+|Check credentials in .env.local
+
+|Element not found
+|UI may have changed, update selectors
+
+|API returns 404
+|Check endpoint URL and method
+
+|Timeout errors
+|Increase timeout or add waits
+
+|Permission denied
+|Check API key permissions
+
+|Database errors
+|Reset database or clean test data
+|===
+
+For more help, see link:troubleshooting.adoc[Troubleshooting Guide].

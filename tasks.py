@@ -107,8 +107,39 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
     Returns True if successful, False otherwise
     """
     try:
-        # Convert sats to millisatoshis
-        amount_msats = allowance.amount * 1000
+        # Convert amount to sats if using fiat currency
+        amount_sats = allowance.amount
+
+        if allowance.currency and allowance.currency not in ['sats', 'satoshis']:
+            # Need to convert fiat to sats
+            logger.info(f"💱 Converting {allowance.amount} {allowance.currency} to sats")
+
+            # Get exchange rate from CoinGecko API
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    "https://api.coingecko.com/api/v3/simple/price",
+                    params={
+                        "ids": "bitcoin",
+                        "vs_currencies": allowance.currency.lower()
+                    }
+                )
+                response.raise_for_status()
+                data = response.json()
+
+                if "bitcoin" in data and allowance.currency.lower() in data["bitcoin"]:
+                    btc_price_in_currency = data["bitcoin"][allowance.currency.lower()]
+                    # Convert: amount in currency -> BTC -> sats
+                    btc_amount = allowance.amount / btc_price_in_currency
+                    amount_sats = int(btc_amount * 100_000_000)  # Convert BTC to sats
+                    logger.info(f"💱 Converted to {amount_sats} sats (rate: 1 BTC = {btc_price_in_currency} {allowance.currency})")
+                else:
+                    raise Exception(f"Could not get exchange rate for {allowance.currency}")
+        else:
+            # Already in sats, ensure integer
+            amount_sats = int(amount_sats)
+
+        # Convert sats to millisatoshis (ensure integer)
+        amount_msats = int(amount_sats * 1000)
 
         # Step 1: Resolve Lightning address to LNURL-pay endpoint
         logger.info(f"🔍 Resolving Lightning address: {allowance.lightning_address}")
@@ -124,16 +155,19 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
         comment_allowed = lnurl_data.get("commentAllowed", 0)  # Max comment length
 
         if amount_msats < min_sendable:
+            currency_display = f"{allowance.amount} {allowance.currency}" if allowance.currency and allowance.currency != 'sats' else f"{allowance.amount} sats"
             raise Exception(
-                f"Amount {allowance.amount} sats is below minimum {min_sendable // 1000} sats"
+                f"Amount {currency_display} ({amount_sats} sats) is below minimum {min_sendable // 1000} sats"
             )
         if amount_msats > max_sendable:
+            currency_display = f"{allowance.amount} {allowance.currency}" if allowance.currency and allowance.currency != 'sats' else f"{allowance.amount} sats"
             raise Exception(
-                f"Amount {allowance.amount} sats exceeds maximum {max_sendable // 1000} sats"
+                f"Amount {currency_display} ({amount_sats} sats) exceeds maximum {max_sendable // 1000} sats"
             )
 
         # Step 3: Get invoice from LNURL-pay endpoint with appropriate memo
-        logger.info(f"📋 Getting invoice for {allowance.amount} sats")
+        currency_display = f"{allowance.amount} {allowance.currency}" if allowance.currency and allowance.currency != 'sats' else f"{amount_sats} sats"
+        logger.info(f"📋 Getting invoice for {currency_display} ({amount_sats} sats)")
 
         # Prepare memo based on comment allowance
         memo = ""
@@ -205,6 +239,7 @@ async def check_and_process_allowances():
 
             # Get all active allowances
             allowances = await get_all_active_allowances()
+            logger.info(f"📊 Found {len(allowances)} active allowances to process")
             current_time = datetime.now(timezone.utc)
 
             # Process each allowance
