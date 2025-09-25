@@ -8,6 +8,7 @@ from typing import Any
 async def m001_initial(db: Any) -> None:
     """
     Initial templates table with lightning address and currency support.
+    Supports decimal amounts for fiat currencies.
     """
     await db.execute(
         """
@@ -16,29 +17,15 @@ async def m001_initial(db: Any) -> None:
             name TEXT NOT NULL,
             wallet TEXT NOT NULL,
             lightning_address TEXT NOT NULL,
-            amount INTEGER DEFAULT 0,
+            amount NUMERIC(12,4) DEFAULT 0,
             currency TEXT DEFAULT 'sats',
-            start_datetime TIMESTAMP NOT NULL, -- includes day, month, hour, etc.
-            frequency_type TEXT NOT NULL, -- daily, weekly, monthly, yearly, per_second
+            start_datetime TIMESTAMP NOT NULL,
+            frequency_type TEXT NOT NULL,
             next_payment_date TIMESTAMP NOT NULL,
             memo TEXT,
             active BOOLEAN DEFAULT TRUE,
             end_datetime TIMESTAMP,
-            lnurlpay TEXT, -- LNURL pay string for compatibility
-            total INTEGER DEFAULT 0, -- Total amount processed
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- When the allowance was created
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
-    """
-    )
-
-
-async def m002_decimal_amounts(db: Any) -> None:
-    """
-    Support decimal amounts for fiat currencies.
-    """
-    await db.execute(
-        """
-        ALTER TABLE maintable
-        ALTER COLUMN amount TYPE NUMERIC(12,4);
     """
     )
