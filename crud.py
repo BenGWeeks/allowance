@@ -36,10 +36,10 @@ async def create_allowance(data: CreateAllowanceData) -> Allowance:
         INSERT INTO ext_allowance.maintable
         (id, name, wallet, lightning_address, amount, currency,
          start_datetime, frequency_type, next_payment_date, memo,
-         active, end_datetime, lnurlpay, total, created_at)
+         active, end_datetime, created_at)
         VALUES (:id, :name, :wallet, :lightning_address, :amount, :currency,
          to_timestamp(:start_datetime), :frequency_type, to_timestamp(:next_payment_date), :memo,
-         :active, to_timestamp(:end_datetime), :lnurlpay, :total, to_timestamp(:created_at))
+         :active, to_timestamp(:end_datetime), to_timestamp(:created_at))
         """,
         {
             "id": data.id,
@@ -54,9 +54,7 @@ async def create_allowance(data: CreateAllowanceData) -> Allowance:
             "memo": data.memo,
             "active": data.active,
             "end_datetime": end_ts,
-            "lnurlpay": data.lnurlpay,
-            "total": data.total,
-            "created_at": created_ts
+            "created_at": created_ts or int(datetime.now().timestamp())
         },
     )
     return Allowance(**data.dict())
