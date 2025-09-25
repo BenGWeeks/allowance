@@ -7,36 +7,39 @@ import httpx
 import asyncio
 from datetime import datetime, timedelta, timezone
 
+
 async def create_active_minutely():
     """Create an active minutely allowance that should start paying immediately"""
     # Load config from .env.local
     from pathlib import Path
-    env_path = Path(__file__).parent.parent.parent / '.env.local'
+
+    env_path = Path(__file__).parent.parent.parent / ".env.local"
     config = {}
 
     if not env_path.exists():
         print(f"❌ .env.local not found at {env_path}")
         return False
 
-    with open(env_path, 'r') as f:
+    with open(env_path, "r") as f:
         for line in f:
-            if '=' in line and not line.startswith('#'):
-                key, value = line.strip().split('=', 1)
-                if key == 'PAYLINK_EMAIL':
-                    config['lightning_address'] = value
-                elif key == 'TEST_LNBITS_URL':
-                    config['base_url'] = value
+            if "=" in line and not line.startswith("#"):
+                key, value = line.strip().split("=", 1)
+                if key == "PAYLINK_EMAIL":
+                    config["lightning_address"] = value
+                elif key == "TEST_LNBITS_URL":
+                    config["base_url"] = value
 
-    if 'base_url' not in config or 'lightning_address' not in config:
+    if "base_url" not in config or "lightning_address" not in config:
         print("❌ Missing required config values in .env.local")
         return False
 
-    base_url = config['base_url']
+    base_url = config["base_url"]
 
     try:
         # Get admin API key dynamically
         import sys
         import os
+
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         from get_api_key import get_admin_api_key
 
@@ -55,7 +58,7 @@ async def create_active_minutely():
 
             test_data = {
                 "name": f"ACTIVE_Minutely_Test_{int(now.timestamp())}",
-                "lightning_address": config['lightning_address'],
+                "lightning_address": config["lightning_address"],
                 "amount": 2,  # 2 sats per minute
                 "currency": "sats",
                 "frequency_type": "minutely",
@@ -98,11 +101,15 @@ async def create_active_minutely():
                 if fetch_response.status_code == 200:
                     allowances = fetch_response.json()
                     for allowance in allowances:
-                        if allowance['id'] == created['id']:
+                        if allowance["id"] == created["id"]:
                             print(f"\n📊 Allowance status after 1 minute:")
-                            print(f"   Active: {'✅' if allowance.get('active') else '❌'}")
-                            print(f"   Next payment: {allowance.get('next_payment_date')}")
-                            total = allowance.get('total', 0)
+                            print(
+                                f"   Active: {'✅' if allowance.get('active') else '❌'}"
+                            )
+                            print(
+                                f"   Next payment: {allowance.get('next_payment_date')}"
+                            )
+                            total = allowance.get("total", 0)
                             if total > 0:
                                 print(f"   💰 Total paid: {total} sats ✅")
                                 print(f"\n✅ MINUTELY PAYMENTS ARE WORKING!")
@@ -119,8 +126,10 @@ async def create_active_minutely():
     except Exception as e:
         print(f"❌ Error: {e}")
         import traceback
+
         traceback.print_exc()
         return False
+
 
 if __name__ == "__main__":
     success = asyncio.run(create_active_minutely())

@@ -9,36 +9,39 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 import time
 
+
 async def test_scheduler_deactivation():
     """Test that scheduler deactivation persists properly"""
     # Load config from .env.local
     from pathlib import Path
-    env_path = Path(__file__).parent.parent.parent / '.env.local'
+
+    env_path = Path(__file__).parent.parent.parent / ".env.local"
     config = {}
 
     if not env_path.exists():
         print(f"❌ .env.local not found at {env_path}")
         return False
 
-    with open(env_path, 'r') as f:
+    with open(env_path, "r") as f:
         for line in f:
-            if '=' in line and not line.startswith('#'):
-                key, value = line.strip().split('=', 1)
-                if key == 'PAYLINK_EMAIL':
-                    config['lightning_address'] = value
-                elif key == 'TEST_LNBITS_URL':
-                    config['base_url'] = value
+            if "=" in line and not line.startswith("#"):
+                key, value = line.strip().split("=", 1)
+                if key == "PAYLINK_EMAIL":
+                    config["lightning_address"] = value
+                elif key == "TEST_LNBITS_URL":
+                    config["base_url"] = value
 
-    if 'base_url' not in config or 'lightning_address' not in config:
+    if "base_url" not in config or "lightning_address" not in config:
         print("❌ Missing required config values in .env.local")
         return False
 
-    base_url = config['base_url']
+    base_url = config["base_url"]
 
     try:
         # Get admin API key dynamically
         import sys
         import os
+
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         from get_api_key import get_admin_api_key
 
@@ -54,7 +57,7 @@ async def test_scheduler_deactivation():
 
             test_data = {
                 "name": f"DEACTIVATION_TEST_{int(time.time())}",
-                "lightning_address": config['lightning_address'],
+                "lightning_address": config["lightning_address"],
                 "amount": 1,  # Minimal amount
                 "currency": "sats",
                 "frequency_type": "minutely",
@@ -73,11 +76,13 @@ async def test_scheduler_deactivation():
             )
 
             if create_response.status_code != 201:
-                print(f"❌ Failed to create test allowance: {create_response.status_code}")
+                print(
+                    f"❌ Failed to create test allowance: {create_response.status_code}"
+                )
                 return False
 
             created = create_response.json()
-            test_id = created['id']
+            test_id = created["id"]
             print(f"✅ Created test allowance: {test_id}")
             print(f"   Will expire at: {end_time.strftime('%H:%M:%S')}")
 
@@ -91,7 +96,9 @@ async def test_scheduler_deactivation():
 
             deactivation_checks = []
             for minute in range(3):
-                await asyncio.sleep(60 if minute > 0 else 0)  # Wait 1 minute between checks
+                await asyncio.sleep(
+                    60 if minute > 0 else 0
+                )  # Wait 1 minute between checks
 
                 # Fetch the allowance
                 response = await client.get(
@@ -102,41 +109,52 @@ async def test_scheduler_deactivation():
                 if response.status_code == 200:
                     allowances = response.json()
                     for a in allowances:
-                        if a['id'] == test_id:
-                            is_active = a.get('active', False)
-                            deactivation_checks.append({
-                                'minute': minute + 1,
-                                'active': is_active,
-                                'start_datetime': a.get('start_datetime'),
-                                'end_datetime': a.get('end_datetime')
-                            })
+                        if a["id"] == test_id:
+                            is_active = a.get("active", False)
+                            deactivation_checks.append(
+                                {
+                                    "minute": minute + 1,
+                                    "active": is_active,
+                                    "start_datetime": a.get("start_datetime"),
+                                    "end_datetime": a.get("end_datetime"),
+                                }
+                            )
 
-                            print(f"   Minute {minute + 1}: Active={is_active}, "
-                                  f"Start={a.get('start_datetime', 'NONE')}, "
-                                  f"End={a.get('end_datetime', 'NONE')}")
+                            print(
+                                f"   Minute {minute + 1}: Active={is_active}, "
+                                f"Start={a.get('start_datetime', 'NONE')}, "
+                                f"End={a.get('end_datetime', 'NONE')}"
+                            )
                             break
 
             # Analyze results
             print(f"\n📊 Test Results:")
-            all_inactive = all(not check['active'] for check in deactivation_checks)
+            all_inactive = all(not check["active"] for check in deactivation_checks)
             datetimes_preserved = all(
-                check['start_datetime'] and check['end_datetime']
+                check["start_datetime"] and check["end_datetime"]
                 for check in deactivation_checks
             )
 
             if all_inactive:
-                print(f"✅ Allowance stayed inactive for all {len(deactivation_checks)} checks")
+                print(
+                    f"✅ Allowance stayed inactive for all {len(deactivation_checks)} checks"
+                )
             else:
-                active_checks = [c for c in deactivation_checks if c['active']]
-                print(f"❌ BUG DETECTED: Allowance was active in {len(active_checks)} checks after expiry!")
+                active_checks = [c for c in deactivation_checks if c["active"]]
+                print(
+                    f"❌ BUG DETECTED: Allowance was active in {len(active_checks)} checks after expiry!"
+                )
                 for check in active_checks:
                     print(f"   Minute {check['minute']}: Was incorrectly ACTIVE")
 
             if datetimes_preserved:
                 print(f"✅ Datetime fields preserved in all checks")
             else:
-                missing_checks = [c for c in deactivation_checks
-                                 if not c['start_datetime'] or not c['end_datetime']]
+                missing_checks = [
+                    c
+                    for c in deactivation_checks
+                    if not c["start_datetime"] or not c["end_datetime"]
+                ]
                 print(f"❌ Datetime fields missing in {len(missing_checks)} checks!")
 
             # Clean up
@@ -150,12 +168,14 @@ async def test_scheduler_deactivation():
     except Exception as e:
         print(f"❌ Test error: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
+
 if __name__ == "__main__":
     print("🧪 Testing scheduler deactivation persistence")
-    print("="*60)
+    print("=" * 60)
     success = asyncio.run(test_scheduler_deactivation())
 
     if success:

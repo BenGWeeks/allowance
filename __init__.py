@@ -11,11 +11,16 @@ try:
     # Add properties that delegate to the wrapped wallet
     def make_property(attr_name):
         def getter(self):
-            return getattr(self.wallet, attr_name, None) if hasattr(self, 'wallet') else None
+            return (
+                getattr(self.wallet, attr_name, None)
+                if hasattr(self, "wallet")
+                else None
+            )
+
         return property(getter)
 
     # Add all common wallet attributes
-    for attr in ['id', 'name', 'adminkey', 'inkey', 'user', 'balance_msat']:
+    for attr in ["id", "name", "adminkey", "inkey", "user", "balance_msat"]:
         if not hasattr(WalletTypeInfo, attr):
             setattr(WalletTypeInfo, attr, make_property(attr))
 
@@ -29,11 +34,16 @@ except ImportError:
         # Add properties that delegate to the wrapped wallet
         def make_property(attr_name):
             def getter(self):
-                return getattr(self.wallet, attr_name, None) if hasattr(self, 'wallet') else None
+                return (
+                    getattr(self.wallet, attr_name, None)
+                    if hasattr(self, "wallet")
+                    else None
+                )
+
             return property(getter)
 
         # Add all common wallet attributes
-        for attr in ['id', 'name', 'adminkey', 'inkey', 'user', 'balance_msat']:
+        for attr in ["id", "name", "adminkey", "inkey", "user", "balance_msat"]:
             if not hasattr(WalletTypeInfo, attr):
                 setattr(WalletTypeInfo, attr, make_property(attr))
 

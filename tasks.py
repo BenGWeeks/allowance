@@ -8,7 +8,11 @@ from lnbits.core.services import pay_invoice
 from loguru import logger
 from lnurl import decode as lnurl_decode
 
-from .crud import get_all_active_allowances, update_next_payment_date, deactivate_allowance
+from .crud import (
+    get_all_active_allowances,
+    update_next_payment_date,
+    deactivate_allowance,
+)
 from .models import Allowance
 
 
@@ -110,9 +114,11 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
         # Convert amount to sats if using fiat currency
         amount_sats = allowance.amount
 
-        if allowance.currency and allowance.currency not in ['sats', 'satoshis']:
+        if allowance.currency and allowance.currency not in ["sats", "satoshis"]:
             # Need to convert fiat to sats
-            logger.info(f"💱 Converting {allowance.amount} {allowance.currency} to sats")
+            logger.info(
+                f"💱 Converting {allowance.amount} {allowance.currency} to sats"
+            )
 
             # Get exchange rate from CoinGecko API
             async with httpx.AsyncClient() as client:
@@ -120,8 +126,8 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
                     "https://api.coingecko.com/api/v3/simple/price",
                     params={
                         "ids": "bitcoin",
-                        "vs_currencies": allowance.currency.lower()
-                    }
+                        "vs_currencies": allowance.currency.lower(),
+                    },
                 )
                 response.raise_for_status()
                 data = response.json()
@@ -131,9 +137,13 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
                     # Convert: amount in currency -> BTC -> sats
                     btc_amount = allowance.amount / btc_price_in_currency
                     amount_sats = int(btc_amount * 100_000_000)  # Convert BTC to sats
-                    logger.info(f"💱 Converted to {amount_sats} sats (rate: 1 BTC = {btc_price_in_currency} {allowance.currency})")
+                    logger.info(
+                        f"💱 Converted to {amount_sats} sats (rate: 1 BTC = {btc_price_in_currency} {allowance.currency})"
+                    )
                 else:
-                    raise Exception(f"Could not get exchange rate for {allowance.currency}")
+                    raise Exception(
+                        f"Could not get exchange rate for {allowance.currency}"
+                    )
         else:
             # Already in sats, ensure integer
             amount_sats = int(amount_sats)
@@ -155,18 +165,30 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
         comment_allowed = lnurl_data.get("commentAllowed", 0)  # Max comment length
 
         if amount_msats < min_sendable:
-            currency_display = f"{allowance.amount} {allowance.currency}" if allowance.currency and allowance.currency != 'sats' else f"{allowance.amount} sats"
+            currency_display = (
+                f"{allowance.amount} {allowance.currency}"
+                if allowance.currency and allowance.currency != "sats"
+                else f"{allowance.amount} sats"
+            )
             raise Exception(
                 f"Amount {currency_display} ({amount_sats} sats) is below minimum {min_sendable // 1000} sats"
             )
         if amount_msats > max_sendable:
-            currency_display = f"{allowance.amount} {allowance.currency}" if allowance.currency and allowance.currency != 'sats' else f"{allowance.amount} sats"
+            currency_display = (
+                f"{allowance.amount} {allowance.currency}"
+                if allowance.currency and allowance.currency != "sats"
+                else f"{allowance.amount} sats"
+            )
             raise Exception(
                 f"Amount {currency_display} ({amount_sats} sats) exceeds maximum {max_sendable // 1000} sats"
             )
 
         # Step 3: Get invoice from LNURL-pay endpoint with appropriate memo
-        currency_display = f"{allowance.amount} {allowance.currency}" if allowance.currency and allowance.currency != 'sats' else f"{amount_sats} sats"
+        currency_display = (
+            f"{allowance.amount} {allowance.currency}"
+            if allowance.currency and allowance.currency != "sats"
+            else f"{amount_sats} sats"
+        )
         logger.info(f"📋 Getting invoice for {currency_display} ({amount_sats} sats)")
 
         # Prepare memo based on comment allowance
@@ -175,9 +197,13 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
             desired_memo = allowance.memo or f"#allowance: {allowance.name}"
             memo = desired_memo[:comment_allowed]  # Truncate to allowed length
             if len(desired_memo) > comment_allowed:
-                logger.info(f"⚠️ Memo truncated from {len(desired_memo)} to {comment_allowed} characters")
+                logger.info(
+                    f"⚠️ Memo truncated from {len(desired_memo)} to {comment_allowed} characters"
+                )
         else:
-            logger.info(f"ℹ️ LNURL endpoint doesn't accept comments, sending without memo")
+            logger.info(
+                f"ℹ️ LNURL endpoint doesn't accept comments, sending without memo"
+            )
 
         payment_request = await get_invoice_from_lnurl(
             callback_url,
@@ -247,16 +273,23 @@ async def check_and_process_allowances():
                 try:
                     # Skip if we've already deactivated this in a previous run
                     if allowance.id in deactivated_ids:
-                        logger.debug(f"⏩ Skipping already-deactivated allowance: {allowance.name}")
+                        logger.debug(
+                            f"⏩ Skipping already-deactivated allowance: {allowance.name}"
+                        )
                         continue
 
                     # The query already filters for active=true, so no need to check again
 
                     # Check if start_datetime hasn't been reached yet
-                    if hasattr(allowance, "start_datetime") and allowance.start_datetime:
+                    if (
+                        hasattr(allowance, "start_datetime")
+                        and allowance.start_datetime
+                    ):
                         start_datetime = ensure_timezone_aware(allowance.start_datetime)
                         if current_time < start_datetime:
-                            logger.info(f"⏳ Allowance {allowance.name} hasn't started yet (starts at {start_datetime})")
+                            logger.info(
+                                f"⏳ Allowance {allowance.name} hasn't started yet (starts at {start_datetime})"
+                            )
                             continue
 
                     # Check if end_datetime has passed
@@ -271,7 +304,9 @@ async def check_and_process_allowances():
                             continue
 
                     # Check if payment is due
-                    next_payment_date = ensure_timezone_aware(allowance.next_payment_date)
+                    next_payment_date = ensure_timezone_aware(
+                        allowance.next_payment_date
+                    )
 
                     if current_time >= next_payment_date:
                         logger.info(
@@ -285,33 +320,41 @@ async def check_and_process_allowances():
                             if success:
                                 # Update next payment date only if payment succeeded
                                 if allowance.frequency_type == "minutely":
-                                    allowance.next_payment_date = current_time + timedelta(
-                                        minutes=1
+                                    allowance.next_payment_date = (
+                                        current_time + timedelta(minutes=1)
                                     )
                                 elif allowance.frequency_type == "hourly":
-                                    allowance.next_payment_date = current_time + timedelta(
-                                        hours=1
+                                    allowance.next_payment_date = (
+                                        current_time + timedelta(hours=1)
                                     )
                                 elif allowance.frequency_type == "daily":
-                                    allowance.next_payment_date = current_time + timedelta(
-                                        days=1
+                                    allowance.next_payment_date = (
+                                        current_time + timedelta(days=1)
                                     )
                                 elif allowance.frequency_type == "weekly":
-                                    allowance.next_payment_date = current_time + timedelta(
-                                        weeks=1
+                                    allowance.next_payment_date = (
+                                        current_time + timedelta(weeks=1)
                                     )
                                 elif allowance.frequency_type == "monthly":
-                                    allowance.next_payment_date = current_time + relativedelta(months=1)
+                                    allowance.next_payment_date = (
+                                        current_time + relativedelta(months=1)
+                                    )
                                 elif allowance.frequency_type == "yearly":
-                                    allowance.next_payment_date = current_time + relativedelta(years=1)
+                                    allowance.next_payment_date = (
+                                        current_time + relativedelta(years=1)
+                                    )
 
                                 # Update the next payment date
-                                await update_next_payment_date(allowance.id, allowance.next_payment_date)
+                                await update_next_payment_date(
+                                    allowance.id, allowance.next_payment_date
+                                )
                                 logger.info(
                                     f"✅ Next payment scheduled for: {allowance.next_payment_date}"
                                 )
                             else:
-                                logger.error(f"❌ Payment failed, will retry on next cycle")
+                                logger.error(
+                                    f"❌ Payment failed, will retry on next cycle"
+                                )
 
                         except Exception as e:
                             logger.error(
@@ -319,8 +362,11 @@ async def check_and_process_allowances():
                             )
 
                 except Exception as e:
-                    logger.error(f"❌ Error handling allowance {getattr(allowance, 'name', 'unknown')}: {str(e)}")
+                    logger.error(
+                        f"❌ Error handling allowance {getattr(allowance, 'name', 'unknown')}: {str(e)}"
+                    )
                     import traceback
+
                     logger.error(f"Traceback: {traceback.format_exc()}")
 
         except Exception as e:

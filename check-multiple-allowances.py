@@ -7,38 +7,40 @@ import httpx
 import asyncio
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), 'tests'))
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "tests"))
 from get_api_key import get_admin_api_key
 from pathlib import Path
 from datetime import datetime, timezone
+
 
 async def check_allowances():
     """Check the specific allowances that are having issues"""
 
     # IDs to check
     problem_ids = [
-        '3PTZjiEouMEybkxZnerqQm',
-        'BgvoEqLW2ioVAQXeQuhqTs',
-        'JgmbyFCTPWsYz3FNrxW2GS',
-        '6wqgxbQs57CtoJsG2NxuS3'
+        "3PTZjiEouMEybkxZnerqQm",
+        "BgvoEqLW2ioVAQXeQuhqTs",
+        "JgmbyFCTPWsYz3FNrxW2GS",
+        "6wqgxbQs57CtoJsG2NxuS3",
     ]
 
     # Load config
-    env_path = Path(__file__).parent / '.env.local'
+    env_path = Path(__file__).parent / ".env.local"
     config = {}
-    with open(env_path, 'r') as f:
+    with open(env_path, "r") as f:
         for line in f:
-            if '=' in line and not line.startswith('#'):
-                key, value = line.strip().split('=', 1)
-                if key == 'TEST_LNBITS_URL':
-                    config['base_url'] = value
+            if "=" in line and not line.startswith("#"):
+                key, value = line.strip().split("=", 1)
+                if key == "TEST_LNBITS_URL":
+                    config["base_url"] = value
 
     admin_key = await get_admin_api_key()
 
     async with httpx.AsyncClient() as client:
         response = await client.get(
             f"{config['base_url']}/allowance/api/v1/allowance",
-            headers={'X-Api-Key': admin_key}
+            headers={"X-Api-Key": admin_key},
         )
 
         if response.status_code == 200:
@@ -49,7 +51,7 @@ async def check_allowances():
             for target_id in problem_ids:
                 found = False
                 for a in allowances:
-                    if a['id'] == target_id:
+                    if a["id"] == target_id:
                         found = True
                         print(f"📋 {target_id}:")
                         print(f"  Name: {a.get('name')}")
@@ -73,11 +75,11 @@ async def check_allowances():
             active_count = 0
 
             for a in allowances:
-                if not a.get('start_datetime'):
+                if not a.get("start_datetime"):
                     blank_start_count += 1
-                if not a.get('end_datetime'):
+                if not a.get("end_datetime"):
                     blank_end_count += 1
-                if a.get('active'):
+                if a.get("active"):
                     active_count += 1
 
             print(f"  Total allowances: {len(allowances)}")
@@ -87,6 +89,7 @@ async def check_allowances():
 
         else:
             print(f"❌ Failed to fetch allowances: {response.status_code}")
+
 
 if __name__ == "__main__":
     asyncio.run(check_allowances())

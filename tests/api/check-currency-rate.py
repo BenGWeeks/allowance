@@ -10,25 +10,26 @@ async def test_currency_rate():
     """Test retrieving currency exchange rate via API"""
     # Load config from .env.local
     from pathlib import Path
-    env_path = Path(__file__).parent.parent.parent / '.env.local'
+
+    env_path = Path(__file__).parent.parent.parent / ".env.local"
     config = {}
 
     if not env_path.exists():
         print(f"❌ .env.local not found at {env_path}")
         return False
 
-    with open(env_path, 'r') as f:
+    with open(env_path, "r") as f:
         for line in f:
-            if '=' in line and not line.startswith('#'):
-                key, value = line.strip().split('=', 1)
-                if key == 'TEST_LNBITS_URL':
-                    config['base_url'] = value
+            if "=" in line and not line.startswith("#"):
+                key, value = line.strip().split("=", 1)
+                if key == "TEST_LNBITS_URL":
+                    config["base_url"] = value
 
-    if 'base_url' not in config:
+    if "base_url" not in config:
         print("❌ Missing TEST_LNBITS_URL in .env.local")
         return False
 
-    base_url = config['base_url']
+    base_url = config["base_url"]
 
     try:
         async with httpx.AsyncClient() as client:
@@ -55,25 +56,26 @@ async def test_invalid_currency():
     """Test retrieving rate for invalid currency"""
     # Load config from .env.local
     from pathlib import Path
-    env_path = Path(__file__).parent.parent.parent / '.env.local'
+
+    env_path = Path(__file__).parent.parent.parent / ".env.local"
     config = {}
 
     if not env_path.exists():
         print(f"❌ .env.local not found at {env_path}")
         return False
 
-    with open(env_path, 'r') as f:
+    with open(env_path, "r") as f:
         for line in f:
-            if '=' in line and not line.startswith('#'):
-                key, value = line.strip().split('=', 1)
-                if key == 'TEST_LNBITS_URL':
-                    config['base_url'] = value
+            if "=" in line and not line.startswith("#"):
+                key, value = line.strip().split("=", 1)
+                if key == "TEST_LNBITS_URL":
+                    config["base_url"] = value
 
-    if 'base_url' not in config:
+    if "base_url" not in config:
         print("❌ Missing TEST_LNBITS_URL in .env.local")
         return False
 
-    base_url = config['base_url']
+    base_url = config["base_url"]
 
     try:
         async with httpx.AsyncClient() as client:

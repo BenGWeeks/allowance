@@ -11,27 +11,30 @@ async def test_update_allowance():
     """Test updating an allowance via API - proper test with create→update→verify"""
     # Load config from .env.local
     from pathlib import Path
-    env_path = Path(__file__).parent.parent.parent / '.env.local'
+
+    env_path = Path(__file__).parent.parent.parent / ".env.local"
     config = {}
 
     if not env_path.exists():
         print(f"❌ .env.local not found at {env_path}")
         return False
 
-    with open(env_path, 'r') as f:
+    with open(env_path, "r") as f:
         for line in f:
-            if '=' in line and not line.startswith('#'):
-                key, value = line.strip().split('=', 1)
-                if key == 'PAYLINK_EMAIL':
-                    config['lightning_address'] = value
-                elif key == 'TEST_LNBITS_URL':
-                    config['base_url'] = value
+            if "=" in line and not line.startswith("#"):
+                key, value = line.strip().split("=", 1)
+                if key == "PAYLINK_EMAIL":
+                    config["lightning_address"] = value
+                elif key == "TEST_LNBITS_URL":
+                    config["base_url"] = value
 
-    if 'base_url' not in config or 'lightning_address' not in config:
-        print("❌ Missing required config values in .env.local (TEST_LNBITS_URL or PAYLINK_EMAIL)")
+    if "base_url" not in config or "lightning_address" not in config:
+        print(
+            "❌ Missing required config values in .env.local (TEST_LNBITS_URL or PAYLINK_EMAIL)"
+        )
         return False
 
-    base_url = config['base_url']
+    base_url = config["base_url"]
 
     try:
         # Get admin API key dynamically
@@ -52,7 +55,7 @@ async def test_update_allowance():
             start_datetime = datetime.now(timezone.utc) + timedelta(days=1)
             create_data = {
                 "name": "TEST_UPDATE_ALLOWANCE",
-                "lightning_address": config['lightning_address'],
+                "lightning_address": config["lightning_address"],
                 "amount": 10,  # Small amount < 100 sats
                 "currency": "sats",
                 "frequency_type": "weekly",
@@ -82,7 +85,7 @@ async def test_update_allowance():
             update_start_datetime = datetime.now(timezone.utc) + timedelta(days=2)
             update_data = {
                 "name": "Updated Test Allowance",
-                "lightning_address": config['lightning_address'],
+                "lightning_address": config["lightning_address"],
                 "amount": 20,  # Updated small amount < 100 sats
                 "currency": "sats",
                 "frequency_type": "monthly",
@@ -139,7 +142,7 @@ async def test_update_allowance():
                     f"❌ Name not updated: expected 'Updated Test Allowance', got '{updated_allowance['name']}'"
                 )
                 success = False
-            if updated_allowance["lightning_address"] != config['lightning_address']:
+            if updated_allowance["lightning_address"] != config["lightning_address"]:
                 print(
                     f"❌ Address not updated: expected '{config['lightning_address']}', got '{updated_allowance['lightning_address']}'"
                 )
@@ -160,9 +163,14 @@ async def test_update_allowance():
                 print(f"❌ start_datetime field missing from response")
                 success = False
             else:
-                print(f"✅ start_datetime present: {updated_allowance['start_datetime']}")
+                print(
+                    f"✅ start_datetime present: {updated_allowance['start_datetime']}"
+                )
 
-            if "end_datetime" in updated_allowance and updated_allowance["end_datetime"]:
+            if (
+                "end_datetime" in updated_allowance
+                and updated_allowance["end_datetime"]
+            ):
                 print(f"✅ end_datetime present: {updated_allowance['end_datetime']}")
             else:
                 print(f"ℹ️ end_datetime not set (optional field)")

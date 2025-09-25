@@ -54,7 +54,7 @@ async def create_allowance(data: CreateAllowanceData) -> Allowance:
             "memo": data.memo,
             "active": data.active,
             "end_datetime": end_ts,
-            "created_at": created_ts or int(datetime.now().timestamp())
+            "created_at": created_ts or int(datetime.now().timestamp()),
         },
     )
     return Allowance(**data.dict())
@@ -136,7 +136,7 @@ async def update_allowance(data: CreateAllowanceData) -> Allowance:
             "memo": data.memo,
             "active": data.active,
             "end_datetime": end_ts,
-            "id": data.id
+            "id": data.id,
         },
     )
     return Allowance(**data.dict())
@@ -159,6 +159,7 @@ async def update_next_payment_date(allowance_id: str, next_payment_date) -> None
     """Update only the next payment date for an allowance"""
     # Convert datetime to timestamp integer as LNbits stores timestamps in DB
     from datetime import datetime
+
     if isinstance(next_payment_date, datetime):
         next_payment_ts = int(next_payment_date.timestamp())
     else:
@@ -171,7 +172,7 @@ async def update_next_payment_date(allowance_id: str, next_payment_date) -> None
         SET next_payment_date = to_timestamp({next_payment_ts})
         WHERE id = :id
         """,
-        {"id": allowance_id}
+        {"id": allowance_id},
     )
 
 
@@ -183,7 +184,7 @@ async def deactivate_allowance(allowance_id: str) -> None:
         SET active = false
         WHERE id = :id
         """,
-        {"id": allowance_id}
+        {"id": allowance_id},
     )
 
 

@@ -32,23 +32,26 @@ allowance_api_router = APIRouter()
 ##### API ENDPOINTS #####
 #######################################
 
+
 def get_wallet_id(wallet) -> str:
     """Helper to get wallet ID from either Wallet or WalletTypeInfo object."""
-    if hasattr(wallet, 'id'):
+    if hasattr(wallet, "id"):
         return wallet.id
-    elif hasattr(wallet, 'wallet') and hasattr(wallet.wallet, 'id'):
+    elif hasattr(wallet, "wallet") and hasattr(wallet.wallet, "id"):
         return wallet.wallet.id
     else:
         raise ValueError("Cannot extract wallet ID from provided object")
 
+
 def get_wallet_user(wallet) -> str:
     """Helper to get wallet user from either Wallet or WalletTypeInfo object."""
-    if hasattr(wallet, 'user'):
+    if hasattr(wallet, "user"):
         return wallet.user
-    elif hasattr(wallet, 'wallet') and hasattr(wallet.wallet, 'user'):
+    elif hasattr(wallet, "wallet") and hasattr(wallet.wallet, "user"):
         return wallet.wallet.user
     else:
         raise ValueError("Cannot extract wallet user from provided object")
+
 
 def parse_datetime_string(date_str: Optional[str]) -> Optional[datetime]:
     """Helper to parse datetime strings from various formats."""
@@ -62,10 +65,10 @@ def parse_datetime_string(date_str: Optional[str]) -> Optional[datetime]:
     # Try different formats
     formats = [
         "%Y-%m-%dT%H:%M:%S.%fZ",  # ISO format with Z
-        "%Y-%m-%dT%H:%M:%S.%f",    # ISO format without Z
-        "%Y-%m-%dT%H:%M:%S",       # ISO format without microseconds
-        "%Y-%m-%dT%H:%M",          # datetime-local format
-        "%Y-%m-%d %H:%M:%S",       # Alternative format
+        "%Y-%m-%dT%H:%M:%S.%f",  # ISO format without Z
+        "%Y-%m-%dT%H:%M:%S",  # ISO format without microseconds
+        "%Y-%m-%dT%H:%M",  # datetime-local format
+        "%Y-%m-%d %H:%M:%S",  # Alternative format
     ]
 
     for fmt in formats:
@@ -90,10 +93,7 @@ def parse_datetime_string(date_str: Optional[str]) -> Optional[datetime]:
 
 
 ## Get wallet info for current user
-@allowance_api_router.get(
-    "/api/v1/wallet-info",
-    status_code=HTTPStatus.OK
-)
+@allowance_api_router.get("/api/v1/wallet-info", status_code=HTTPStatus.OK)
 async def api_wallet_info(
     wallet: Wallet = Depends(require_invoice_key),
 ):
@@ -102,17 +102,36 @@ async def api_wallet_info(
 
     return {
         "id": wallet_id,
-        "name": getattr(wallet, "name", "Wallet") if hasattr(wallet, "name") else getattr(wallet.wallet, "name", "Wallet") if hasattr(wallet, "wallet") else "Wallet",
-        "adminkey": getattr(wallet, "adminkey", "") if hasattr(wallet, "adminkey") else getattr(wallet.wallet, "adminkey", "") if hasattr(wallet, "wallet") else "",
-        "inkey": getattr(wallet, "inkey", "") if hasattr(wallet, "inkey") else getattr(wallet.wallet, "inkey", "") if hasattr(wallet, "wallet") else "",
+        "name": (
+            getattr(wallet, "name", "Wallet")
+            if hasattr(wallet, "name")
+            else (
+                getattr(wallet.wallet, "name", "Wallet")
+                if hasattr(wallet, "wallet")
+                else "Wallet"
+            )
+        ),
+        "adminkey": (
+            getattr(wallet, "adminkey", "")
+            if hasattr(wallet, "adminkey")
+            else (
+                getattr(wallet.wallet, "adminkey", "")
+                if hasattr(wallet, "wallet")
+                else ""
+            )
+        ),
+        "inkey": (
+            getattr(wallet, "inkey", "")
+            if hasattr(wallet, "inkey")
+            else (
+                getattr(wallet.wallet, "inkey", "") if hasattr(wallet, "wallet") else ""
+            )
+        ),
     }
 
 
 ## Get all the records belonging to the user
-@allowance_api_router.get(
-    "/api/v1/allowance",
-    status_code=HTTPStatus.OK
-)
+@allowance_api_router.get("/api/v1/allowance", status_code=HTTPStatus.OK)
 async def api_allowances(
     wallet: Wallet = Depends(require_admin_key),
     all_wallets: bool = Query(False),
@@ -135,7 +154,12 @@ async def api_allowances(
             data = allowance.dict()
 
             # Format datetime fields for API response
-            for field in ["start_datetime", "end_datetime", "next_payment_date", "created_at"]:
+            for field in [
+                "start_datetime",
+                "end_datetime",
+                "next_payment_date",
+                "created_at",
+            ]:
                 if field in data and data[field]:
                     if isinstance(data[field], datetime):
                         data[field] = data[field].isoformat()
@@ -156,10 +180,7 @@ async def api_allowances(
 
 
 ## Get a specific record by ID
-@allowance_api_router.get(
-    "/api/v1/allowance/{allowance_id}",
-    status_code=HTTPStatus.OK
-)
+@allowance_api_router.get("/api/v1/allowance/{allowance_id}", status_code=HTTPStatus.OK)
 async def api_allowance(
     allowance_id: str,
     wallet: Wallet = Depends(require_invoice_key),
@@ -169,15 +190,14 @@ async def api_allowance(
 
     if not allowance:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail="Allowance not found"
+            status_code=HTTPStatus.NOT_FOUND, detail="Allowance not found"
         )
 
     # Check ownership
     if allowance.wallet != get_wallet_id(wallet):
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
-            detail="Not authorized to view this allowance"
+            detail="Not authorized to view this allowance",
         )
 
     data = allowance.dict()
@@ -196,10 +216,7 @@ async def api_allowance(
 
 
 ## Update a record
-@allowance_api_router.put(
-    "/api/v1/allowance/{allowance_id}",
-    status_code=HTTPStatus.OK
-)
+@allowance_api_router.put("/api/v1/allowance/{allowance_id}", status_code=HTTPStatus.OK)
 async def api_allowance_update(
     allowance_id: str,
     request: Request,
@@ -210,8 +227,7 @@ async def api_allowance_update(
     allowance = await get_allowance(allowance_id)
     if not allowance:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail="Allowance not found"
+            status_code=HTTPStatus.NOT_FOUND, detail="Allowance not found"
         )
 
     # Check ownership
@@ -220,7 +236,7 @@ async def api_allowance_update(
         if not user or not user.super_user:
             raise HTTPException(
                 status_code=HTTPStatus.FORBIDDEN,
-                detail="Not authorized to update this allowance"
+                detail="Not authorized to update this allowance",
             )
 
     # Parse request data
@@ -264,7 +280,12 @@ async def api_allowance_update(
 
         # Format response
         result = updated.dict()
-        for field in ["start_datetime", "end_datetime", "next_payment_date", "created_at"]:
+        for field in [
+            "start_datetime",
+            "end_datetime",
+            "next_payment_date",
+            "created_at",
+        ]:
             if field in result and result[field]:
                 if isinstance(result[field], datetime):
                     result[field] = result[field].isoformat()
@@ -279,15 +300,12 @@ async def api_allowance_update(
         logger.error(f"❌ Error updating allowance: {e}")
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update allowance: {str(e)}"
+            detail=f"Failed to update allowance: {str(e)}",
         )
 
 
 ## Create a new record
-@allowance_api_router.post(
-    "/api/v1/allowance",
-    status_code=HTTPStatus.CREATED
-)
+@allowance_api_router.post("/api/v1/allowance", status_code=HTTPStatus.CREATED)
 async def api_allowance_create(
     request: Request,
     wallet: Wallet = Depends(require_admin_key),
@@ -330,7 +348,7 @@ async def api_allowance_create(
     if not create_data.name or not create_data.lightning_address:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
-            detail="Name and lightning_address are required"
+            detail="Name and lightning_address are required",
         )
 
     # Create in database
@@ -340,7 +358,12 @@ async def api_allowance_create(
 
         # Format response
         result = allowance.dict()
-        for field in ["start_datetime", "end_datetime", "next_payment_date", "created_at"]:
+        for field in [
+            "start_datetime",
+            "end_datetime",
+            "next_payment_date",
+            "created_at",
+        ]:
             if field in result and result[field]:
                 if isinstance(result[field], datetime):
                     result[field] = result[field].isoformat()
@@ -355,14 +378,13 @@ async def api_allowance_create(
         logger.error(f"❌ Error creating allowance: {e}")
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create allowance: {str(e)}"
+            detail=f"Failed to create allowance: {str(e)}",
         )
 
 
 ## Delete a record
 @allowance_api_router.delete(
-    "/api/v1/allowance/{allowance_id}",
-    status_code=HTTPStatus.OK
+    "/api/v1/allowance/{allowance_id}", status_code=HTTPStatus.OK
 )
 async def api_allowance_delete(
     allowance_id: str,
@@ -373,8 +395,7 @@ async def api_allowance_delete(
     allowance = await get_allowance(allowance_id)
     if not allowance:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail="Allowance not found"
+            status_code=HTTPStatus.NOT_FOUND, detail="Allowance not found"
         )
 
     # Check ownership
@@ -383,7 +404,7 @@ async def api_allowance_delete(
         if not user or not user.super_user:
             raise HTTPException(
                 status_code=HTTPStatus.FORBIDDEN,
-                detail="Not authorized to delete this allowance"
+                detail="Not authorized to delete this allowance",
             )
 
     # Delete from database
@@ -396,15 +417,12 @@ async def api_allowance_delete(
         logger.error(f"❌ Error deleting allowance: {e}")
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete allowance: {str(e)}"
+            detail=f"Failed to delete allowance: {str(e)}",
         )
 
 
 ## Get currency conversion rate
-@allowance_api_router.get(
-    "/api/v1/rate/{currency}",
-    status_code=HTTPStatus.OK
-)
+@allowance_api_router.get("/api/v1/rate/{currency}", status_code=HTTPStatus.OK)
 async def api_currency_rate(
     currency: str,
     wallet: Wallet = Depends(require_invoice_key),
@@ -418,10 +436,7 @@ async def api_currency_rate(
             # Get Bitcoin price in the requested currency
             response = await client.get(
                 f"https://api.coingecko.com/api/v3/simple/price",
-                params={
-                    "ids": "bitcoin",
-                    "vs_currencies": currency.lower()
-                }
+                params={"ids": "bitcoin", "vs_currencies": currency.lower()},
             )
             response.raise_for_status()
             data = response.json()
@@ -429,7 +444,7 @@ async def api_currency_rate(
             if "bitcoin" not in data or currency.lower() not in data["bitcoin"]:
                 raise HTTPException(
                     status_code=HTTPStatus.BAD_REQUEST,
-                    detail=f"Currency {currency} not supported"
+                    detail=f"Currency {currency} not supported",
                 )
 
             # Calculate sats per unit of currency
@@ -439,27 +454,26 @@ async def api_currency_rate(
             return {
                 "currency": currency.upper(),
                 "rate": sats_per_unit,
-                "btc_price": btc_price
+                "btc_price": btc_price,
             }
 
     except httpx.HTTPError as e:
         logger.error(f"Error fetching currency rate: {e}")
         raise HTTPException(
             status_code=HTTPStatus.SERVICE_UNAVAILABLE,
-            detail="Could not fetch currency rate"
+            detail="Could not fetch currency rate",
         )
     except Exception as e:
         logger.error(f"Error processing currency rate: {e}")
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f"Error processing currency rate: {str(e)}"
+            detail=f"Error processing currency rate: {str(e)}",
         )
 
 
 ## Manual trigger for testing scheduled payments
 @allowance_api_router.post(
-    "/api/v1/allowance/{allowance_id}/trigger",
-    status_code=HTTPStatus.OK
+    "/api/v1/allowance/{allowance_id}/trigger", status_code=HTTPStatus.OK
 )
 async def api_allowance_trigger(
     allowance_id: str,
@@ -470,8 +484,7 @@ async def api_allowance_trigger(
     allowance = await get_allowance(allowance_id)
     if not allowance:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail="Allowance not found"
+            status_code=HTTPStatus.NOT_FOUND, detail="Allowance not found"
         )
 
     # Check ownership
@@ -480,7 +493,7 @@ async def api_allowance_trigger(
         if not user or not user.super_user:
             raise HTTPException(
                 status_code=HTTPStatus.FORBIDDEN,
-                detail="Not authorized to trigger this allowance"
+                detail="Not authorized to trigger this allowance",
             )
 
     # Execute the payment
@@ -493,26 +506,25 @@ async def api_allowance_trigger(
                 "success": True,
                 "message": f"Payment triggered successfully for {allowance.name}",
                 "amount": allowance.amount,
-                "lightning_address": allowance.lightning_address
+                "lightning_address": allowance.lightning_address,
             }
         else:
             raise HTTPException(
                 status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-                detail="Payment execution failed"
+                detail="Payment execution failed",
             )
 
     except Exception as e:
         logger.error(f"Error triggering payment: {e}")
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f"Failed to trigger payment: {str(e)}"
+            detail=f"Failed to trigger payment: {str(e)}",
         )
 
 
 ## Verify scheduled payments are working
 @allowance_api_router.post(
-    "/api/v1/allowance/test-scheduler",
-    status_code=HTTPStatus.OK
+    "/api/v1/allowance/test-scheduler", status_code=HTTPStatus.OK
 )
 async def api_test_scheduler(
     wallet: Wallet = Depends(require_admin_key),
@@ -539,21 +551,29 @@ async def api_test_scheduler(
                 next_payment = next_payment.replace(tzinfo=timezone.utc)
 
             if next_payment and next_payment <= now:
-                due_allowances.append({
-                    "id": allowance.id,
-                    "name": allowance.name,
-                    "next_payment": next_payment.isoformat() if next_payment else None,
-                    "amount": allowance.amount,
-                    "lightning_address": allowance.lightning_address
-                })
+                due_allowances.append(
+                    {
+                        "id": allowance.id,
+                        "name": allowance.name,
+                        "next_payment": (
+                            next_payment.isoformat() if next_payment else None
+                        ),
+                        "amount": allowance.amount,
+                        "lightning_address": allowance.lightning_address,
+                    }
+                )
             else:
-                upcoming_allowances.append({
-                    "id": allowance.id,
-                    "name": allowance.name,
-                    "next_payment": next_payment.isoformat() if next_payment else None,
-                    "amount": allowance.amount,
-                    "lightning_address": allowance.lightning_address
-                })
+                upcoming_allowances.append(
+                    {
+                        "id": allowance.id,
+                        "name": allowance.name,
+                        "next_payment": (
+                            next_payment.isoformat() if next_payment else None
+                        ),
+                        "amount": allowance.amount,
+                        "lightning_address": allowance.lightning_address,
+                    }
+                )
 
         return {
             "scheduler_status": "running",
@@ -561,12 +581,12 @@ async def api_test_scheduler(
             "user_active_allowances": len(user_allowances),
             "due_for_payment": due_allowances,
             "upcoming_payments": upcoming_allowances,
-            "current_time": now.isoformat()
+            "current_time": now.isoformat(),
         }
 
     except Exception as e:
         logger.error(f"Error testing scheduler: {e}")
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f"Error testing scheduler: {str(e)}"
+            detail=f"Error testing scheduler: {str(e)}",
         )

@@ -18,8 +18,6 @@ def allowance_renderer():
     return template_renderer(["allowance/templates"])
 
 
-
-
 #######################################
 ##### ADD YOUR PAGE ENDPOINTS HERE ####
 #######################################
@@ -39,11 +37,7 @@ async def index(request: Request, user: User = Depends(check_user_exists)):
 @allowance_generic_router.get("/test-minimal", response_class=HTMLResponse)
 async def test_minimal(request: Request):
     # Use same approach as index
-    user_dict = {
-        "id": "test",
-        "username": "Test",
-        "wallets": []
-    }
+    user_dict = {"id": "test", "username": "Test", "wallets": []}
     return allowance_renderer().TemplateResponse(
         "allowance/test-minimal.html", {"request": request, "user": user_dict}
     )

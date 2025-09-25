@@ -24,22 +24,24 @@ import os
 from pathlib import Path
 
 # Load from .env.local
-env_path = Path(__file__).parent.parent.parent / '.env.local'
+env_path = Path(__file__).parent.parent.parent / ".env.local"
 config = {}
 if env_path.exists():
-    with open(env_path, 'r') as f:
+    with open(env_path, "r") as f:
         for line in f:
-            if '=' in line and not line.startswith('#'):
-                key, value = line.strip().split('=', 1)
+            if "=" in line and not line.startswith("#"):
+                key, value = line.strip().split("=", 1)
                 config[key] = value
 
-if 'TEST_LNBITS_URL' not in config or 'PAYLINK_EMAIL' not in config:
+if "TEST_LNBITS_URL" not in config or "PAYLINK_EMAIL" not in config:
     print("❌ Missing TEST_LNBITS_URL or PAYLINK_EMAIL in .env.local")
     exit(1)
 
-LNBITS_URL = config['TEST_LNBITS_URL']
-LIGHTNING_ADDRESS = config['PAYLINK_EMAIL']
-TEST_ALLOWANCE_NAME = f"TEST_Minutely_{datetime.now().strftime('%H%M%S')}_{int(time.time())}"
+LNBITS_URL = config["TEST_LNBITS_URL"]
+LIGHTNING_ADDRESS = config["PAYLINK_EMAIL"]
+TEST_ALLOWANCE_NAME = (
+    f"TEST_Minutely_{datetime.now().strftime('%H%M%S')}_{int(time.time())}"
+)
 AMOUNT_SATS = 1  # 1 sat to minimize cost
 ADMIN_API_KEY = None  # Will be set from admin wallet
 
@@ -59,8 +61,8 @@ async def get_admin_wallet():
             logger.error("Failed to get wallet info")
             return None, None
 
-        wallet_id = wallet_info.get('wallet_id', '768a7da8063046d98cd5ee6f42621038')
-        admin_key = wallet_info.get('api_key')
+        wallet_id = wallet_info.get("wallet_id", "768a7da8063046d98cd5ee6f42621038")
+        admin_key = wallet_info.get("api_key")
         return wallet_id, admin_key
 
     except Exception as e:
@@ -72,7 +74,9 @@ async def create_test_allowance(wallet_id: str, admin_key: str):
     """Create a test allowance via API"""
     try:
         now = datetime.now(timezone.utc)
-        end_time = now + timedelta(minutes=5)  # Stop after 5 minutes to ensure 3+ payments
+        end_time = now + timedelta(
+            minutes=5
+        )  # Stop after 5 minutes to ensure 3+ payments
 
         allowance_data = {
             "name": TEST_ALLOWANCE_NAME,
@@ -117,7 +121,9 @@ async def monitor_payments(
     allowance_id: str, allowance_name: str, admin_key: str, duration_seconds: int = 360
 ):
     """Monitor for payment attempts over specified duration"""
-    logger.info(f"📊 Monitoring allowance '{allowance_name}' (ID: {allowance_id}) for {duration_seconds} seconds...")
+    logger.info(
+        f"📊 Monitoring allowance '{allowance_name}' (ID: {allowance_id}) for {duration_seconds} seconds..."
+    )
 
     start_time = time.time()
     payment_attempts: list[dict] = []
@@ -143,11 +149,11 @@ async def monitor_payments(
 
                         # Check multiple ways the payment might be tagged
                         is_our_payment = (
-                            ("allowance" in tag.lower() and allowance_name in tag) or
-                            (extra.get("allowance_id") == allowance_id) or
-                            (extra.get("allowance_name") == allowance_name) or
-                            (allowance_name in memo) or
-                            (f"allowance: {allowance_name}" in tag)
+                            ("allowance" in tag.lower() and allowance_name in tag)
+                            or (extra.get("allowance_id") == allowance_id)
+                            or (extra.get("allowance_name") == allowance_name)
+                            or (allowance_name in memo)
+                            or (f"allowance: {allowance_name}" in tag)
                         )
 
                         if is_our_payment and payment.get("pending") == False:
@@ -162,13 +168,15 @@ async def monitor_payments(
                                         "status": "completed",
                                         "checking_id": payment.get("checking_id"),
                                         "memo": memo,
-                                        "tag": tag
+                                        "tag": tag,
                                     }
                                 )
                                 logger.info(
                                     f"💰 Payment detected for {allowance_name}: {len(payment_attempts)} total"
                                 )
-                                logger.debug(f"   Payment details: amount={payment.get('amount')}, memo={memo}, tag={tag}")
+                                logger.debug(
+                                    f"   Payment details: amount={payment.get('amount')}, memo={memo}, tag={tag}"
+                                )
 
         except Exception as e:
             logger.warning(f"⚠️ Error checking payments: {e}")
@@ -239,7 +247,9 @@ async def main():
 
     # Step 3: Monitor for payments (6 minutes to ensure we capture at least 3)
     logger.info("📋 Step 3: Monitoring for payment attempts...")
-    payment_attempts = await monitor_payments(allowance_id, TEST_ALLOWANCE_NAME, admin_key, 360)
+    payment_attempts = await monitor_payments(
+        allowance_id, TEST_ALLOWANCE_NAME, admin_key, 360
+    )
 
     # Step 4: Validate results
     logger.info("📋 Step 4: Validating results...")
@@ -254,13 +264,19 @@ async def main():
     if payment_attempts:
         logger.info("   Payment details:")
         for i, payment in enumerate(payment_attempts, 1):
-            logger.info(f"     Payment {i}: {payment.get('amount', 0)} sats - {payment.get('status', 'unknown')}")
+            logger.info(
+                f"     Payment {i}: {payment.get('amount', 0)} sats - {payment.get('status', 'unknown')}"
+            )
 
     if actual_payments >= expected_payments:
-        logger.info(f"✅ SUCCESS: {actual_payments} scheduled payments executed successfully!")
+        logger.info(
+            f"✅ SUCCESS: {actual_payments} scheduled payments executed successfully!"
+        )
         test_passed = True
     else:
-        logger.error(f"❌ FAILURE: Expected at least {expected_payments} payment attempts, got {actual_payments}")
+        logger.error(
+            f"❌ FAILURE: Expected at least {expected_payments} payment attempts, got {actual_payments}"
+        )
         test_passed = False
 
     # Step 5: Cleanup
@@ -283,7 +299,7 @@ async def main():
 
 if __name__ == "__main__":
     print("🧪 Scheduled payments integration test")
-    print("="*60)
+    print("=" * 60)
 
     # Actually run the test
     result = asyncio.run(main())

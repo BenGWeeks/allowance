@@ -9,29 +9,29 @@ import asyncio
 from pathlib import Path
 
 # Load config from .env.local
-env_path = Path(__file__).parent.parent / '.env.local'
+env_path = Path(__file__).parent.parent / ".env.local"
 config = {}
 
 if not env_path.exists():
     print(f"❌ .env.local not found at {env_path}")
     exit(1)
 
-with open(env_path, 'r') as f:
+with open(env_path, "r") as f:
     for line in f:
-        if '=' in line and not line.startswith('#'):
-            key, value = line.strip().split('=', 1)
+        if "=" in line and not line.startswith("#"):
+            key, value = line.strip().split("=", 1)
             config[key] = value
 
 # Check required variables
-required = ['TEST_LNBITS_URL', 'LNBITS_ADMIN_USERNAME', 'LNBITS_ADMIN_PASSWORD']
+required = ["TEST_LNBITS_URL", "LNBITS_ADMIN_USERNAME", "LNBITS_ADMIN_PASSWORD"]
 missing = [k for k in required if k not in config]
 if missing:
     print(f"❌ Missing required variables in .env.local: {', '.join(missing)}")
     exit(1)
 
-LNBITS_URL = config['TEST_LNBITS_URL']
-USERNAME = config['LNBITS_ADMIN_USERNAME']
-PASSWORD = config['LNBITS_ADMIN_PASSWORD']
+LNBITS_URL = config["TEST_LNBITS_URL"]
+USERNAME = config["LNBITS_ADMIN_USERNAME"]
+PASSWORD = config["LNBITS_ADMIN_PASSWORD"]
 
 
 async def get_admin_api_key():
