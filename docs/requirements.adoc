@@ -1,14 +1,20 @@
-# Allowance Extension Requirements
+= Allowance Extension Requirements
+:toc:
+:toc-placement: preamble
+:toclevels: 3
 
-## Core Functionality
+Comprehensive requirements and user stories for the LNBits Allowance extension.
 
-### User Story: Create Recurring Allowances
-As a wallet owner
-I want to create recurring Bitcoin allowances
-So that I can automatically send regular payments to recipients
+== Core Functionality
+
+=== User Story: Create Recurring Allowances
+
+As a wallet owner, I want to create recurring Bitcoin allowances so that I can automatically send regular payments to recipients.
 
 **Acceptance Criteria:**
-```gherkin
+
+[source,gherkin]
+----
 Given I am logged into LNBits
 And I have the Allowance extension enabled
 When I click "Create Allowance"
@@ -16,44 +22,47 @@ And I fill in the recipient's Lightning address
 And I set an amount and frequency
 Then a recurring allowance should be created
 And payments should be sent automatically on schedule
-```
+----
 
-### User Story: Support Multiple Currencies
-As a wallet owner
-I want to specify allowances in different currencies
-So that recipients receive consistent value regardless of Bitcoin price fluctuations
+=== User Story: Support Multiple Currencies
+
+As a wallet owner, I want to specify allowances in different currencies so that recipients receive consistent value regardless of Bitcoin price fluctuations.
 
 **Acceptance Criteria:**
-```gherkin
+
+[source,gherkin]
+----
 Given I am creating an allowance
 When I select a currency other than sats (e.g., GBP, USD)
 And I enter a decimal amount (e.g., 0.01)
 Then the system should accept decimal values
 And convert to sats at the time of each payment
 And the conversion should use current exchange rates
-```
+----
 
-### User Story: Currency Settings Management
-As a system administrator
-I want to control which currencies are available
-So that users only see relevant currency options
+=== User Story: Currency Settings Management
+
+As a system administrator, I want to control which currencies are available so that users only see relevant currency options.
 
 **Acceptance Criteria:**
-```gherkin
+
+[source,gherkin]
+----
 Given the extension has currency settings configured
 When I open the currency dropdown in the allowance form
 Then I should only see currencies specified in the settings
 And the dropdown should include at minimum: sats, USD, EUR, GBP
 And each currency should display its proper symbol and name
-```
+----
 
-### User Story: Flexible Payment Scheduling
-As a wallet owner
-I want to set custom payment schedules
-So that I can match different payment needs
+=== User Story: Flexible Payment Scheduling
+
+As a wallet owner, I want to set custom payment schedules so that I can match different payment needs.
 
 **Acceptance Criteria:**
-```gherkin
+
+[source,gherkin]
+----
 Given I am creating an allowance
 When I select a frequency type
 Then I should see options for:
@@ -64,15 +73,16 @@ Then I should see options for:
   - Monthly
   - Yearly
 And I should be able to set optional start and end dates
-```
+----
 
-### User Story: Precise Schedule Timing
-As a wallet owner
-I want payments to occur at consistent times
-So that recipients can rely on predictable payment schedules
+=== User Story: Precise Schedule Timing
+
+As a wallet owner, I want payments to occur at consistent times so that recipients can rely on predictable payment schedules.
 
 **Acceptance Criteria:**
-```gherkin
+
+[source,gherkin]
+----
 Given I have set up a recurring allowance
 When the payment schedule is:
   - Hourly: Payment occurs at the same minute past each hour (hour + 1)
@@ -80,118 +90,126 @@ When the payment schedule is:
   - Monthly: Payment occurs on the same day each month (month + 1, handling varying month lengths)
   - Yearly: Payment occurs on the same date each year (year + 1, handling leap years)
 Then payments should maintain consistent timing patterns
-```
+----
 
-## User Interface
+== User Interface
 
-### User Story: Optional Start Date
-As a wallet owner
-I want the start date to be optional
-So that allowances can begin immediately without configuration
+=== User Story: Optional Start Date
+
+As a wallet owner, I want the start date to be optional so that allowances can begin immediately without configuration.
 
 **Acceptance Criteria:**
-```gherkin
+
+[source,gherkin]
+----
 Given I am creating an allowance
 When I leave the start date field empty
 Then the allowance should start immediately (using current datetime)
 And the UI should show "Start date & time (optional)"
-```
+----
 
-### User Story: Mobile-Friendly Popup
-As a mobile user
-I want to scroll within popups
-So that I can access all form fields and buttons on small screens
+=== User Story: Mobile-Friendly Popup
+
+As a mobile user, I want to scroll within popups so that I can access all form fields and buttons on small screens.
 
 **Acceptance Criteria:**
-```gherkin
+
+[source,gherkin]
+----
 Given I am on a device with a small screen
 When I open the Create Allowance popup
 Then the popup should be scrollable
 And the "Create Allowance" button should be accessible
 And all form fields should be reachable by scrolling
-```
+----
 
-### User Story: Clear Transaction Tracking
-As a wallet owner
-I want to identify allowance payments in transaction history
-So that I can track and audit automated payments
+=== User Story: Clear Transaction Tracking
+
+As a wallet owner, I want to identify allowance payments in transaction history so that I can track and audit automated payments.
 
 **Acceptance Criteria:**
-```gherkin
+
+[source,gherkin]
+----
 Given an allowance payment has been made
 When I view the transaction history
 Then the transaction memo should show "#allowance: [allowance name]"
 And I should be able to identify which allowance triggered the payment
-```
+----
 
-## Data Management
+== Data Management
 
-### User Story: View Active Allowances
-As a wallet owner
-I want to see all my active allowances
-So that I can manage ongoing payments
+=== User Story: View Active Allowances
+
+As a wallet owner, I want to see all my active allowances so that I can manage ongoing payments.
 
 **Acceptance Criteria:**
-```gherkin
+
+[source,gherkin]
+----
 Given I have created multiple allowances
 When I view the Allowance extension page
 Then I should see all allowances listed
 And they should be sorted by creation date (newest first)
 And I should see the current status of each allowance
-```
+----
 
-### User Story: Edit Existing Allowances
-As a wallet owner
-I want to modify existing allowances
-So that I can adjust payment amounts or schedules
+=== User Story: Edit Existing Allowances
+
+As a wallet owner, I want to modify existing allowances so that I can adjust payment amounts or schedules.
 
 **Acceptance Criteria:**
-```gherkin
+
+[source,gherkin]
+----
 Given I have an existing allowance
 When I click the edit button
 Then I should see a form with current values pre-filled
 And I should be able to modify any field
 And changes should be saved when I click "Update Allowance"
-```
+----
 
-### User Story: Delete Allowances
-As a wallet owner
-I want to delete allowances
-So that I can stop unwanted recurring payments
+=== User Story: Delete Allowances
+
+As a wallet owner, I want to delete allowances so that I can stop unwanted recurring payments.
 
 **Acceptance Criteria:**
-```gherkin
+
+[source,gherkin]
+----
 Given I have an existing allowance
 When I click the delete button
 And I confirm the deletion
 Then the allowance should be removed
 And no further payments should be processed
-```
+----
 
-## Security & Configuration
+== Security & Configuration
 
-### User Story: Secure Authentication
-As a system administrator
-I want all credentials stored securely
-So that the system remains protected
+=== User Story: Secure Authentication
+
+As a system administrator, I want all credentials stored securely so that the system remains protected.
 
 **Acceptance Criteria:**
-```gherkin
+
+[source,gherkin]
+----
 Given the system requires authentication
 When credentials are needed
 Then they should be loaded from environment variables (.env.local)
 And no credentials should be hardcoded in the source code
 And test scripts should use the auth-helper module
 And .env.local should be gitignored to prevent credential exposure
-```
+----
 
-### User Story: Environment Configuration
-As a developer or system administrator
-I want to configure the system using environment variables
-So that different environments can use different settings
+=== User Story: Environment Configuration
+
+As a developer or system administrator, I want to configure the system using environment variables so that different environments can use different settings.
 
 **Acceptance Criteria:**
-```gherkin
+
+[source,gherkin]
+----
 Given I want to configure the system
 When I set up testing or deployment
 Then I should copy .env.example to .env.local
@@ -203,17 +221,18 @@ And customize the values for my environment:
   - PAYLINK_EMAIL: Email address for PayLinks testing
 And all test scripts should use auth-helper.js to load these values
 And no hardcoded credentials should exist in any file
-```
+----
 
-## Testing
+== Testing
 
-### User Story: Automated Testing
-As a developer
-I want comprehensive test coverage
-So that I can ensure the extension works correctly
+=== User Story: Automated Testing
+
+As a developer, I want comprehensive test coverage so that I can ensure the extension works correctly.
 
 **Acceptance Criteria:**
-```gherkin
+
+[source,gherkin]
+----
 Given I want to test the allowance functionality
 When I run the test suite
 Then it should:
@@ -222,15 +241,16 @@ Then it should:
   - Capture screenshots at key points
   - Verify transactions were processed correctly
   - Use production URL (https://lnbits-allowance.weeksfamily.me/)
-```
+----
 
-### User Story: Transaction Verification
-As a developer
-I want to verify payment processing
-So that I can confirm allowances are working
+=== User Story: Transaction Verification
+
+As a developer, I want to verify payment processing so that I can confirm allowances are working.
 
 **Acceptance Criteria:**
-```gherkin
+
+[source,gherkin]
+----
 Given tests have created and processed allowances
 When I run the transaction verification script
 Then it should show:
@@ -239,35 +259,76 @@ Then it should show:
   - Allowance payment records
   - Summary statistics
 And confirm all expected payments were made
-```
+----
 
-## Technical Requirements
+== Technical Requirements
 
-### User Story: Database Schema
-As a developer
-I want consistent database field naming
-So that the codebase is maintainable
+=== User Story: Database Schema
+
+As a developer, I want consistent database field naming so that the codebase is maintainable.
 
 **Acceptance Criteria:**
-```gherkin
+
+[source,gherkin]
+----
 Given the database stores allowance data
 When I reference datetime fields
 Then they should be named:
   - start_datetime (not start_date)
   - end_datetime (not end_date)
 And these should be consistent across all layers
-```
+----
 
-### User Story: Timezone Handling
-As a developer
-I want proper timezone handling
-So that scheduled payments work correctly across timezones
+=== User Story: Timezone Handling
+
+As a developer, I want proper timezone handling so that scheduled payments work correctly across timezones.
 
 **Acceptance Criteria:**
-```gherkin
+
+[source,gherkin]
+----
 Given the system handles datetime values
 When I use datetime functions
 Then I should use datetime.now(timezone.utc)
 And not use deprecated datetime.utcnow()
 And all datetime values should be timezone-aware
-```
+----
+
+== Implementation Status
+
+[cols="1,3,1", options="header"]
+|===
+|Feature |Description |Status
+
+|Recurring Allowances
+|Create and manage recurring Bitcoin payments
+|✅ Complete
+
+|Multi-Currency Support
+|Support for USD, EUR, GBP, etc. with decimal amounts
+|✅ Complete
+
+|Payment Scheduling
+|Flexible frequencies from minutely to yearly
+|✅ Complete
+
+|Transaction Tracking
+|Payments tagged with "#allowance: {name}"
+|✅ Complete
+
+|Mobile UI
+|Scrollable popups for small screens
+|✅ Complete
+
+|Secure Configuration
+|Environment variables for credentials
+|✅ Complete
+
+|Automated Testing
+|Comprehensive Playwright and API test suites
+|✅ Complete
+
+|Timezone Handling
+|Proper UTC timezone awareness
+|✅ Complete
+|===
