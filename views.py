@@ -27,15 +27,86 @@ def allowance_renderer():
 
 @allowance_generic_router.get("/", response_class=HTMLResponse)
 async def index(request: Request, user: User = Depends(check_user_exists)):
+    # Manual serialization to avoid WalletTypeInfo serialization issues
+    user_data = {
+        "id": user.id,
+        "username": getattr(user, "username", None),
+        "email": getattr(user, "email", None),
+        "super_user": getattr(user, "super_user", False),
+        "wallets": []
+    }
+
+    if hasattr(user, "wallets") and user.wallets:
+        for w in user.wallets:
+            try:
+                # Handle both Wallet and WalletTypeInfo objects
+                if hasattr(w, "wallet"):  # This is a WalletTypeInfo
+                    actual_wallet = w.wallet
+                    wallet_dict = {
+                        "id": getattr(actual_wallet, "id", None),
+                        "name": getattr(actual_wallet, "name", ""),
+                        "adminkey": getattr(actual_wallet, "adminkey", ""),
+                        "inkey": getattr(actual_wallet, "inkey", ""),
+                        "user": getattr(actual_wallet, "user", ""),
+                        "currency": getattr(actual_wallet, "currency", None),
+                        "balance_msat": getattr(actual_wallet, "balance_msat", 0),
+                    }
+                else:  # This is a Wallet directly
+                    wallet_dict = {
+                        "id": getattr(w, "id", None),
+                        "name": getattr(w, "name", ""),
+                        "adminkey": getattr(w, "adminkey", ""),
+                        "inkey": getattr(w, "inkey", ""),
+                        "user": getattr(w, "user", ""),
+                        "currency": getattr(w, "currency", None),
+                        "balance_msat": getattr(w, "balance_msat", 0),
+                    }
+                if wallet_dict["id"]:  # Only add wallets with valid IDs
+                    user_data["wallets"].append(wallet_dict)
+            except Exception as e:
+                # Log but don't fail on individual wallet serialization errors
+                print(f"Warning: Could not serialize wallet: {e}")
+                continue
+
     return allowance_renderer().TemplateResponse(
-        "allowance/index.html", {"request": request, "user": user.json()}
+        "allowance/index.html", {"request": request, "user": user_data}
     )
 
 
 @allowance_generic_router.get("/test-minimal", response_class=HTMLResponse)
 async def test_minimal(request: Request, user: User = Depends(check_user_exists)):
+    # Manual serialization to avoid WalletTypeInfo issues
+    user_data = {
+        "id": user.id,
+        "username": getattr(user, "username", None),
+        "wallets": []
+    }
+
+    if hasattr(user, "wallets") and user.wallets:
+        for w in user.wallets:
+            try:
+                if hasattr(w, "wallet"):  # WalletTypeInfo
+                    wallet_dict = {
+                        "id": getattr(w.wallet, "id", None),
+                        "name": getattr(w.wallet, "name", ""),
+                        "adminkey": getattr(w.wallet, "adminkey", ""),
+                        "inkey": getattr(w.wallet, "inkey", "")
+                    }
+                else:  # Wallet directly
+                    wallet_dict = {
+                        "id": getattr(w, "id", None),
+                        "name": getattr(w, "name", ""),
+                        "adminkey": getattr(w, "adminkey", ""),
+                        "inkey": getattr(w, "inkey", "")
+                    }
+                if wallet_dict["id"]:
+                    user_data["wallets"].append(wallet_dict)
+            except Exception as e:
+                print(f"Warning: Could not serialize wallet: {e}")
+                continue
+
     return allowance_renderer().TemplateResponse(
-        "allowance/test-minimal.html", {"request": request, "user": user.json()}
+        "allowance/test-minimal.html", {"request": request, "user": user_data}
     )
 
 
