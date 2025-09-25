@@ -37,11 +37,12 @@ When ready to share your extension:
 - **Scheduled Payments**: Automated payment execution with 1-minute minimum frequency using background tasks
 - **Flexible Scheduling**: Support for various frequencies (minutely, hourly, daily, weekly, monthly, yearly)
 - **Payment Tracking**: All payments are tagged as "#allowance: {name}" in the LNBits payment history
-- **Currency Support**: Multi-currency support with real-time conversion hints
+- **Multi-Currency Support**: Pay in fiat currencies (USD, EUR, GBP, etc.) with automatic conversion to sats at payment time
+- **Decimal Amount Support**: Precise amounts like 0.02 GBP or 0.30 USD supported
 - **Vue.js Frontend**: Modern reactive interface following LNBits patterns
 - **Comprehensive Testing**: Full Playwright test suite for automated testing
 - **API Architecture**: Uses LNBits decorators and database abstraction (no hardcoded credentials)
-- **Scheduler Logic**: Smart deactivation of expired allowances with tracking to prevent reprocessing
+- **Smart Scheduler**: Automatic deactivation of expired allowances with proper timezone handling
 
 ### Testing
 
@@ -73,20 +74,20 @@ cd ..
 
 **API Tests (Python):**
 - **tests/api/allowance_create.py** - Test POST /api/v1/allowance endpoint
-- **tests/api/allowance_read.py** - Test GET /api/v1/allowance endpoints  
+- **tests/api/allowance_read.py** - Test GET /api/v1/allowance endpoints
 - **tests/api/allowance_update.py** - Test PUT /api/v1/allowance/{id} endpoint
 - **tests/api/allowance_delete.py** - Test DELETE /api/v1/allowance/{id} endpoint
 - **tests/api/currency_rate.py** - Test GET /api/v1/rate/{currency} endpoint
 - **tests/api/scheduled_payments.py** - Test scheduled payment execution
+- **tests/api/create-test-allowances.py** - Create 10 test allowances with various configurations
 
 **UI Tests (Playwright):**
-- **tests/ui/create_admin_account.js** - Creates initial superuser account
-- **tests/ui/login_test.js** - Tests admin login functionality
-- **tests/ui/enable_allowance.js** - Enables the allowance extension via UI
-- **tests/ui/create_allowance.js** - End-to-end allowance creation test
-- **tests/ui/edit_allowance.js** - Tests allowance editing through forms
-- **tests/ui/delete_allowance.js** - Tests allowance deletion functionality
+- **tests/ui/enable-allowance.js** - Enables the allowance extension via UI
+- **tests/ui/create-allowance.js** - End-to-end allowance creation test
+- **tests/ui/edit-allowance.js** - Tests allowance editing and metadata display
+- **tests/ui/delete-allowance.js** - Tests allowance deletion functionality
 - **tests/ui/check-currencies.js** - Tests currency dropdown functionality
+- **tests/ui/test-date-persistence.js** - Verifies date changes persist correctly
 
 **Test Runners:**
 - **tests/run_all_tests.sh** - Runs both API and UI tests in sequence
@@ -149,6 +150,15 @@ PAYLINK_EMAIL=receiving@yourdomain.com
 - Valid admin credentials for authentication
 - Fresh database for initial setup tests
 
+### Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+- **[Installation Guide](docs/installation.adoc)** - Step-by-step installation instructions
+- **[FAQs](docs/faqs.adoc)** - Frequently asked questions and answers
+- **[Testing Guide](docs/testing.adoc)** - Detailed testing procedures
+- **[Troubleshooting Guide](docs/troubleshooting.adoc)** - Common issues and solutions
+
 ### Testing & Quality
 
 #### Code Formatting & Linting
@@ -198,28 +208,28 @@ ruff check .
 allowance/
 ├── .github/workflows/       # CI/CD pipeline configuration
 │   └── integration-tests.yml # GitHub Actions workflow
+├── docs/                    # Documentation (AsciiDoc format)
+│   ├── installation.adoc   # Installation guide
+│   ├── faqs.adoc           # Frequently asked questions
+│   ├── testing.adoc        # Testing procedures
+│   └── troubleshooting.adoc # Problem resolution
 ├── tests/                   # Comprehensive test suite
 │   ├── api/                # API endpoint tests (Python)
-│   │   ├── allowance_create.py
-│   │   ├── allowance_read.py
-│   │   ├── allowance_update.py
-│   │   ├── allowance_delete.py
-│   │   ├── currency_rate.py
-│   │   └── scheduled_payments.py
+│   │   ├── allowance_*.py  # CRUD operation tests
+│   │   ├── currency_rate.py # Currency conversion tests
+│   │   ├── scheduled_payments.py # Payment scheduler tests
+│   │   └── create-test-allowances.py # Bulk test data creation
 │   ├── ui/                 # UI automation tests (Playwright)
-│   │   ├── create_admin_account.js
-│   │   ├── login_test.js
-│   │   ├── enable_allowance.js
-│   │   ├── create_allowance.js
-│   │   ├── edit_allowance.js
-│   │   ├── delete_allowance.js
-│   │   └── check-currencies.js
+│   │   ├── auth-helper.js  # Centralized authentication
+│   │   ├── enable-allowance.js
+│   │   ├── create-allowance.js
+│   │   ├── edit-allowance.js
+│   │   ├── delete-allowance.js
+│   │   ├── check-currencies.js
+│   │   └── test-date-persistence.js
 │   ├── run_all_tests.sh    # Run all tests
 │   ├── run_api_tests.sh    # Run API tests only
-│   ├── run_ui_tests.sh     # Run UI tests only
-│   ├── get_api_key.py      # Helper to get admin API key
-│   ├── package.json        # Node.js dependencies
-│   └── test_scheduled_payments.py # Additional payment tests
+│   └── run_ui_tests.sh     # Run UI tests only
 ├── static/
 │   ├── js/                 # Frontend JavaScript
 │   │   └── index.js        # Vue.js application
