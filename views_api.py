@@ -32,6 +32,24 @@ allowance_api_router = APIRouter()
 ##### API ENDPOINTS #####
 #######################################
 
+def get_wallet_id(wallet) -> str:
+    """Helper to get wallet ID from either Wallet or WalletTypeInfo object."""
+    if hasattr(wallet, 'id'):
+        return wallet.id
+    elif hasattr(wallet, 'wallet') and hasattr(wallet.wallet, 'id'):
+        return wallet.wallet.id
+    else:
+        raise ValueError("Cannot extract wallet ID from provided object")
+
+def get_wallet_user(wallet) -> str:
+    """Helper to get wallet user from either Wallet or WalletTypeInfo object."""
+    if hasattr(wallet, 'user'):
+        return wallet.user
+    elif hasattr(wallet, 'wallet') and hasattr(wallet.wallet, 'user'):
+        return wallet.wallet.user
+    else:
+        raise ValueError("Cannot extract wallet user from provided object")
+
 def parse_datetime_string(date_str: Optional[str]) -> Optional[datetime]:
     """Helper to parse datetime strings from various formats."""
     if not date_str:
@@ -81,7 +99,8 @@ async def api_allowances(
     all_wallets: bool = Query(False),
 ):
     """Get allowances for the authenticated wallet or all wallets (if admin)."""
-    logger.info(f"🔗 API called: Getting allowances for wallet {wallet.id}")
+    wallet_id = get_wallet_id(wallet)
+    logger.info(f"🔗 API called: Getting allowances for wallet {wallet_id}")
 
     try:
         if all_wallets:
@@ -89,7 +108,7 @@ async def api_allowances(
             allowances = await get_all_active_allowances()
         else:
             # Get allowances for specific wallet
-            allowances = await get_allowances(wallet.id)
+            allowances = await get_allowances(wallet_id)
 
         # Convert to list of dicts with proper datetime formatting
         result = []
@@ -136,7 +155,7 @@ async def api_allowance(
         )
 
     # Check ownership
-    if allowance.wallet != wallet.id:
+    if allowance.wallet != get_wallet_id(wallet):
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
             detail="Not authorized to view this allowance"
@@ -177,8 +196,8 @@ async def api_allowance_update(
         )
 
     # Check ownership
-    if allowance.wallet != wallet.id:
-        user = await get_user(wallet.user)
+    if allowance.wallet != get_wallet_id(wallet):
+        user = await get_user(get_wallet_user(wallet))
         if not user or not user.super_user:
             raise HTTPException(
                 status_code=HTTPStatus.FORBIDDEN,
@@ -256,7 +275,8 @@ async def api_allowance_create(
 ):
     """Create a new allowance."""
     data = await request.json()
-    logger.info(f"📝 Create request from wallet {wallet.id}: {data}")
+    wallet_id = get_wallet_id(wallet)
+    logger.info(f"📝 Create request from wallet {wallet_id}: {data}")
 
     # Handle datetime fields
     start_dt = parse_datetime_string(data.get("start_datetime"))
@@ -271,7 +291,7 @@ async def api_allowance_create(
 
     # Create new allowance data
     create_data = CreateAllowanceData(
-        wallet=wallet.id,
+        wallet=wallet_id,
         name=data.get("name"),
         lightning_address=data.get("lightning_address"),
         amount=data.get("amount", 0),
@@ -339,8 +359,8 @@ async def api_allowance_delete(
         )
 
     # Check ownership
-    if allowance.wallet != wallet.id:
-        user = await get_user(wallet.user)
+    if allowance.wallet != get_wallet_id(wallet):
+        user = await get_user(get_wallet_user(wallet))
         if not user or not user.super_user:
             raise HTTPException(
                 status_code=HTTPStatus.FORBIDDEN,
@@ -436,8 +456,8 @@ async def api_allowance_trigger(
         )
 
     # Check ownership
-    if allowance.wallet != wallet.id:
-        user = await get_user(wallet.user)
+    if allowance.wallet != get_wallet_id(wallet):
+        user = await get_user(get_wallet_user(wallet))
         if not user or not user.super_user:
             raise HTTPException(
                 status_code=HTTPStatus.FORBIDDEN,
@@ -484,7 +504,7 @@ async def api_test_scheduler(
         allowances = await get_all_active_allowances()
 
         # Filter to user's allowances
-        user_allowances = [a for a in allowances if a.wallet == wallet.id]
+        user_allowances = [a for a in allowances if a.wallet == get_wallet_id(wallet)]
 
         # Check which are due
         now = datetime.now(timezone.utc)
