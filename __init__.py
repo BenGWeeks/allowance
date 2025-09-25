@@ -1,7 +1,47 @@
 import asyncio
+import json
 
 from fastapi import APIRouter
 from loguru import logger
+
+# Monkey-patch WalletTypeInfo to add missing attributes
+try:
+    from lnbits.core.models.wallets import WalletTypeInfo
+
+    # Add properties that delegate to the wrapped wallet
+    def make_property(attr_name):
+        def getter(self):
+            return getattr(self.wallet, attr_name, None) if hasattr(self, 'wallet') else None
+        return property(getter)
+
+    # Add all common wallet attributes
+    for attr in ['id', 'name', 'adminkey', 'inkey', 'user', 'balance_msat']:
+        if not hasattr(WalletTypeInfo, attr):
+            setattr(WalletTypeInfo, attr, make_property(attr))
+
+    logger.info("✅ Added wallet properties to WalletTypeInfo")
+
+except ImportError:
+    try:
+        # Try alternative import path
+        from lnbits.core.models import WalletTypeInfo
+
+        # Add properties that delegate to the wrapped wallet
+        def make_property(attr_name):
+            def getter(self):
+                return getattr(self.wallet, attr_name, None) if hasattr(self, 'wallet') else None
+            return property(getter)
+
+        # Add all common wallet attributes
+        for attr in ['id', 'name', 'adminkey', 'inkey', 'user', 'balance_msat']:
+            if not hasattr(WalletTypeInfo, attr):
+                setattr(WalletTypeInfo, attr, make_property(attr))
+
+        logger.info("✅ Added wallet properties to WalletTypeInfo")
+    except ImportError:
+        logger.info("WalletTypeInfo not found, skipping patch")
+except Exception as e:
+    logger.warning(f"Could not patch WalletTypeInfo: {e}")
 
 from .crud import db
 from .tasks import check_and_process_allowances

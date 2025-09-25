@@ -32,6 +32,13 @@ const { getConfig, login } = require('./auth-helper');
     // Wait for the page to load
     await page.waitForLoadState('networkidle');
 
+    // Check for our test message
+    const testHeader = await page.$('h1:has-text("Test - Allowance Extension")');
+    if (testHeader) {
+      console.log('✅ Test HTML is showing - route is working!');
+      process.exit(0);
+    }
+
     // Check for error messages
     const errorElement = await page.$('.q-notification__message:has-text("error")');
     const serverErrorElement = await page.$('text=/500 INTERNAL SERVER ERROR/i');

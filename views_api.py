@@ -89,6 +89,25 @@ def parse_datetime_string(date_str: Optional[str]) -> Optional[datetime]:
     return None
 
 
+## Get wallet info for current user
+@allowance_api_router.get(
+    "/api/v1/wallet-info",
+    status_code=HTTPStatus.OK
+)
+async def api_wallet_info(
+    wallet: Wallet = Depends(require_invoice_key),
+):
+    """Get basic wallet info for the current user."""
+    wallet_id = get_wallet_id(wallet)
+
+    return {
+        "id": wallet_id,
+        "name": getattr(wallet, "name", "Wallet") if hasattr(wallet, "name") else getattr(wallet.wallet, "name", "Wallet") if hasattr(wallet, "wallet") else "Wallet",
+        "adminkey": getattr(wallet, "adminkey", "") if hasattr(wallet, "adminkey") else getattr(wallet.wallet, "adminkey", "") if hasattr(wallet, "wallet") else "",
+        "inkey": getattr(wallet, "inkey", "") if hasattr(wallet, "inkey") else getattr(wallet.wallet, "inkey", "") if hasattr(wallet, "wallet") else "",
+    }
+
+
 ## Get all the records belonging to the user
 @allowance_api_router.get(
     "/api/v1/allowance",
