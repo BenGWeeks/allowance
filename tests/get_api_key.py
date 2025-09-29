@@ -4,9 +4,10 @@ Helper script to get API key from LNBits using username/password authentication.
 This avoids hardcoding API keys in tests.
 """
 
-import httpx
 import asyncio
 from pathlib import Path
+
+import httpx
 
 # Load config from .env.local
 env_path = Path(__file__).parent.parent / ".env.local"
@@ -16,7 +17,7 @@ if not env_path.exists():
     print(f"❌ .env.local not found at {env_path}")
     exit(1)
 
-with open(env_path, "r") as f:
+with open(env_path) as f:
     for line in f:
         if "=" in line and not line.startswith("#"):
             key, value = line.strip().split("=", 1)

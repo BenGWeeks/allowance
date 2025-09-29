@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const { chromium } = require('playwright');
-const { getConfig, login } = require('./auth-helper');
+const { getConfig, login } = require('../auth-helper');
 
 (async () => {
   console.log('⏱️ Creating minutely allowance (2 sats per minute for 5 minutes)...');

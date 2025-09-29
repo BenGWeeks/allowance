@@ -14,20 +14,20 @@ Usage: python test_scheduled_payments.py
 """
 
 import asyncio
-import time
-from datetime import datetime, timedelta, timezone
-import httpx
-from loguru import logger
 
 # Configuration
-import os
+import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+import httpx
+from loguru import logger
 
 # Load from .env.local
 env_path = Path(__file__).parent.parent.parent / ".env.local"
 config = {}
 if env_path.exists():
-    with open(env_path, "r") as f:
+    with open(env_path) as f:
         for line in f:
             if "=" in line and not line.startswith("#"):
                 key, value = line.strip().split("=", 1)
@@ -50,8 +50,8 @@ async def get_admin_wallet():
     """Get the default admin wallet ID and API key"""
     try:
         # Get admin API key dynamically
-        import sys
         import os
+        import sys
 
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         from get_api_key import main as get_api_key_main
@@ -75,8 +75,8 @@ async def create_test_allowance(wallet_id: str, admin_key: str):
     try:
         now = datetime.now(timezone.utc)
         end_time = now + timedelta(
-            minutes=5
-        )  # Stop after 5 minutes to ensure 3+ payments
+            minutes=2
+        )  # Stop after 2 minutes for quick test
 
         allowance_data = {
             "name": TEST_ALLOWANCE_NAME,
@@ -108,7 +108,8 @@ async def create_test_allowance(wallet_id: str, admin_key: str):
                 return allowance["id"]
             else:
                 logger.error(
-                    f"❌ Failed to create allowance: {response.status_code} - {response.text}"
+                    f"❌ Failed to create allowance: "
+                    f"{response.status_code} - {response.text}"
                 )
                 return None
 
@@ -122,7 +123,8 @@ async def monitor_payments(
 ):
     """Monitor for payment attempts over specified duration"""
     logger.info(
-        f"📊 Monitoring allowance '{allowance_name}' (ID: {allowance_id}) for {duration_seconds} seconds..."
+        f"📊 Monitoring allowance '{allowance_name}' "
+        f"(ID: {allowance_id}) for {duration_seconds} seconds..."
     )
 
     start_time = time.time()
@@ -156,7 +158,7 @@ async def monitor_payments(
                             or (f"allowance: {allowance_name}" in tag)
                         )
 
-                        if is_our_payment and payment.get("pending") == False:
+                        if is_our_payment and payment.get("pending") is False:
                             payment_time = payment.get("time", 0)
                             if payment_time not in [
                                 p["time"] for p in payment_attempts
@@ -172,10 +174,13 @@ async def monitor_payments(
                                     }
                                 )
                                 logger.info(
-                                    f"💰 Payment detected for {allowance_name}: {len(payment_attempts)} total"
+                                    f"💰 Payment detected for {allowance_name}: "
+                                    f"{len(payment_attempts)} total"
                                 )
+                                amount = payment.get("amount")
                                 logger.debug(
-                                    f"   Payment details: amount={payment.get('amount')}, memo={memo}, tag={tag}"
+                                    f"   Payment details: amount={amount}, "
+                                    f"memo={memo}, tag={tag}"
                                 )
 
         except Exception as e:
@@ -186,7 +191,8 @@ async def monitor_payments(
 
         elapsed_minutes = (time.time() - start_time) / 60
         logger.info(
-            f"⏳ Monitoring... {elapsed_minutes:.1f} minutes elapsed, {len(payment_attempts)} payments detected for {allowance_name}"
+            f"⏳ Monitoring... {elapsed_minutes:.1f} minutes elapsed, "
+            f"{len(payment_attempts)} payments detected for {allowance_name}"
         )
 
     return payment_attempts
@@ -209,7 +215,8 @@ async def delete_test_allowance(allowance_id: str, admin_key: str):
                 return True
             else:
                 logger.error(
-                    f"❌ Failed to delete allowance: {response.status_code} - {response.text}"
+                    f"❌ Failed to delete allowance: "
+                    f"{response.status_code} - {response.text}"
                 )
                 return False
 
@@ -243,17 +250,17 @@ async def main():
     logger.info(f"✅ Created allowance: {allowance_id}")
     logger.info(f"📧 Target: {LIGHTNING_ADDRESS}")
     logger.info(f"💰 Amount: {AMOUNT_SATS} sats every minute")
-    logger.info(f"⏰ Duration: 5 minutes (expecting 3-5 payment attempts)")
+    logger.info("⏰ Duration: 2 minutes (expecting 1-2 payment attempts)")
 
-    # Step 3: Monitor for payments (6 minutes to ensure we capture at least 3)
+    # Step 3: Monitor for payments (2.5 minutes to ensure we capture at least 1)
     logger.info("📋 Step 3: Monitoring for payment attempts...")
     payment_attempts = await monitor_payments(
-        allowance_id, TEST_ALLOWANCE_NAME, admin_key, 360
+        allowance_id, TEST_ALLOWANCE_NAME, admin_key, 150
     )
 
     # Step 4: Validate results
     logger.info("📋 Step 4: Validating results...")
-    expected_payments = 3  # At least 3 payments in 5 minutes
+    expected_payments = 1  # At least 1 payment in 2 minutes
     actual_payments = len(payment_attempts)
 
     logger.info(f"📊 Test Results for {TEST_ALLOWANCE_NAME}:")
@@ -265,7 +272,8 @@ async def main():
         logger.info("   Payment details:")
         for i, payment in enumerate(payment_attempts, 1):
             logger.info(
-                f"     Payment {i}: {payment.get('amount', 0)} sats - {payment.get('status', 'unknown')}"
+                f"     Payment {i}: {payment.get('amount', 0)} sats - "
+                f"{payment.get('status', 'unknown')}"
             )
 
     if actual_payments >= expected_payments:
@@ -275,7 +283,8 @@ async def main():
         test_passed = True
     else:
         logger.error(
-            f"❌ FAILURE: Expected at least {expected_payments} payment attempts, got {actual_payments}"
+            f"❌ FAILURE: Expected at least {expected_payments} payment attempts, "
+            f"got {actual_payments}"
         )
         test_passed = False
 

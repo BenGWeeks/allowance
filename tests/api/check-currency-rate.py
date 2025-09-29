@@ -3,7 +3,6 @@ API test for GET /api/v1/rate/{currency} - Currency rate endpoint
 """
 
 import httpx
-import asyncio
 
 
 async def test_currency_rate():
@@ -18,7 +17,7 @@ async def test_currency_rate():
         print(f"❌ .env.local not found at {env_path}")
         return False
 
-    with open(env_path, "r") as f:
+    with open(env_path) as f:
         for line in f:
             if "=" in line and not line.startswith("#"):
                 key, value = line.strip().split("=", 1)
@@ -64,7 +63,7 @@ async def test_invalid_currency():
         print(f"❌ .env.local not found at {env_path}")
         return False
 
-    with open(env_path, "r") as f:
+    with open(env_path) as f:
         for line in f:
             if "=" in line and not line.startswith("#"):
                 key, value = line.strip().split("=", 1)
@@ -88,7 +87,7 @@ async def test_invalid_currency():
                 data = response.json()
                 rate = data.get("rate")
                 if rate is None:
-                    print(f"✅ Invalid currency correctly returned null rate")
+                    print("✅ Invalid currency correctly returned null rate")
                     return True
                 else:
                     print(f"⚠️ Invalid currency returned rate: {rate}")

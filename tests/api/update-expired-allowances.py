@@ -4,13 +4,14 @@ Test that scheduler properly deactivates expired allowances and they stay deacti
 This test catches the bug where expired allowances keep appearing as active.
 """
 
-import httpx
 import asyncio
-from datetime import datetime, timedelta, timezone
 import time
+from datetime import datetime, timedelta, timezone
+
+import httpx
 
 
-async def test_scheduler_deactivation():
+async def test_scheduler_deactivation():  # noqa: C901
     """Test that scheduler deactivation persists properly"""
     # Load config from .env.local
     from pathlib import Path
@@ -22,7 +23,7 @@ async def test_scheduler_deactivation():
         print(f"❌ .env.local not found at {env_path}")
         return False
 
-    with open(env_path, "r") as f:
+    with open(env_path) as f:
         for line in f:
             if "=" in line and not line.startswith("#"):
                 key, value = line.strip().split("=", 1)
@@ -35,12 +36,13 @@ async def test_scheduler_deactivation():
         print("❌ Missing required config values in .env.local")
         return False
 
-    base_url = config["base_url"]
+    # Use local dev instance for testing
+    base_url = "http://localhost:5001"
 
     try:
         # Get admin API key dynamically
-        import sys
         import os
+        import sys
 
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         from get_api_key import get_admin_api_key
@@ -56,7 +58,7 @@ async def test_scheduler_deactivation():
             end_time = now + timedelta(seconds=70)  # Expires in 70 seconds
 
             test_data = {
-                "name": f"DEACTIVATION_TEST_{int(time.time())}",
+                "name": "Test Deactivation Check",
                 "lightning_address": config["lightning_address"],
                 "amount": 1,  # Minimal amount
                 "currency": "sats",
@@ -68,7 +70,7 @@ async def test_scheduler_deactivation():
                 "memo": "Testing scheduler deactivation",
             }
 
-            print(f"📝 Creating test allowance that expires in 70 seconds...")
+            print("📝 Creating test allowance that expires in 70 seconds...")
             create_response = await client.post(
                 f"{base_url}/allowance/api/v1/allowance",
                 json=test_data,
@@ -87,12 +89,12 @@ async def test_scheduler_deactivation():
             print(f"   Will expire at: {end_time.strftime('%H:%M:%S')}")
 
             # Wait for it to expire
-            print(f"⏳ Waiting 75 seconds for allowance to expire...")
+            print("⏳ Waiting 75 seconds for allowance to expire...")
             await asyncio.sleep(75)
 
             # Now check the status multiple times over 3 minutes
             # The bug is that it keeps appearing as active
-            print(f"\n🔍 Checking if allowance stays deactivated over 3 minutes...")
+            print("\n🔍 Checking if allowance stays deactivated over 3 minutes...")
 
             deactivation_checks = []
             for minute in range(3):
@@ -128,7 +130,7 @@ async def test_scheduler_deactivation():
                             break
 
             # Analyze results
-            print(f"\n📊 Test Results:")
+            print("\n📊 Test Results:")
             all_inactive = all(not check["active"] for check in deactivation_checks)
             datetimes_preserved = all(
                 check["start_datetime"] and check["end_datetime"]
@@ -136,19 +138,20 @@ async def test_scheduler_deactivation():
             )
 
             if all_inactive:
-                print(
-                    f"✅ Allowance stayed inactive for all {len(deactivation_checks)} checks"
-                )
+                num_checks = len(deactivation_checks)
+                print(f"✅ Allowance stayed inactive for all {num_checks} checks")
             else:
                 active_checks = [c for c in deactivation_checks if c["active"]]
+                num_active = len(active_checks)
                 print(
-                    f"❌ BUG DETECTED: Allowance was active in {len(active_checks)} checks after expiry!"
+                    f"❌ BUG DETECTED: Allowance was active in {num_active} "
+                    f"checks after expiry!"
                 )
                 for check in active_checks:
                     print(f"   Minute {check['minute']}: Was incorrectly ACTIVE")
 
             if datetimes_preserved:
-                print(f"✅ Datetime fields preserved in all checks")
+                print("✅ Datetime fields preserved in all checks")
             else:
                 missing_checks = [
                     c

@@ -49,7 +49,7 @@ TOTAL=${#API_TESTS[@]}
 echo
 echo "Running API tests..."
 
-# Run all core tests
+# Run all core tests (quick tests only by default)
 CORE_TESTS=(
     "./api/create-allowance.py"
     "./api/read-allowance.py"
@@ -57,7 +57,14 @@ CORE_TESTS=(
     "./api/delete-allowance.py"
     "./api/create-currency-allowance.py"
     "./api/check-currency-rate.py"
+    "./api/create-active-minutely.py"
+    "./api/update-expired-allowances.py"
+)
+
+# Long-running tests (skipped by default, run with --all flag)
+LONG_TESTS=(
     "./api/check-scheduled-payments.py"
+    "./api/check-minutely-allowances.py"
 )
 
 for test in "${CORE_TESTS[@]}"; do
@@ -78,9 +85,44 @@ done
 
 TOTAL=${#CORE_TESTS[@]}
 
+# Check if --all flag was passed
+if [[ "$1" == "--all" ]]; then
+    echo
+    echo "Running long-running tests..."
+    for test in "${LONG_TESTS[@]}"; do
+        if [ -f "$test" ]; then
+            echo
+            echo "🧪 Running (long): $test"
+            echo "⏱️  This test may take 2-3 minutes..."
+            if timeout 180 python3 "$test" 2>/dev/null; then
+                echo "✅ PASSED: $test"
+                ((PASSED++))
+            else
+                echo "❌ FAILED or TIMEOUT: $test"
+            fi
+            ((TOTAL++))
+        fi
+    done
+else
+    echo
+    echo "ℹ️  Skipped long-running tests. Use '--all' flag to run them:"
+    for test in "${LONG_TESTS[@]}"; do
+        echo "   - $test"
+    done
+fi
+
 echo
 echo "============================="
 echo "📊 API Test Results: $PASSED/$TOTAL tests passed"
+
+# Always run cleanup at the end
+echo
+echo "🧹 Running cleanup..."
+if python3 "./api/delete-all-test-allowances.py" 2>/dev/null; then
+    echo "✅ Cleanup completed"
+else
+    echo "⚠️ Cleanup may have failed"
+fi
 
 if [ $PASSED -eq $TOTAL ]; then
     echo "🎉 All API tests passed!"

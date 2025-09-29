@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const { chromium } = require('playwright');
-const { getConfig, login } = require('./auth-helper');
+const { getConfig, login } = require('../auth-helper');
 
 (async () => {
   console.log('📋 Listing all allowances...');

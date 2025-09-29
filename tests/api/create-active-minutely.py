@@ -3,12 +3,13 @@
 Create an ACTIVE minutely allowance with proper datetime values
 """
 
-import httpx
 import asyncio
 from datetime import datetime, timedelta, timezone
 
+import httpx
 
-async def create_active_minutely():
+
+async def create_active_minutely():  # noqa: C901
     """Create an active minutely allowance that should start paying immediately"""
     # Load config from .env.local
     from pathlib import Path
@@ -20,7 +21,7 @@ async def create_active_minutely():
         print(f"❌ .env.local not found at {env_path}")
         return False
 
-    with open(env_path, "r") as f:
+    with open(env_path) as f:
         for line in f:
             if "=" in line and not line.startswith("#"):
                 key, value = line.strip().split("=", 1)
@@ -37,8 +38,8 @@ async def create_active_minutely():
 
     try:
         # Get admin API key dynamically
-        import sys
         import os
+        import sys
 
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         from get_api_key import get_admin_api_key
@@ -51,13 +52,13 @@ async def create_active_minutely():
         async with httpx.AsyncClient() as client:
             # Create active minutely allowance starting NOW
             now = datetime.now(timezone.utc)
-            end_time = now + timedelta(minutes=10)  # Run for 10 minutes
+            end_time = now + timedelta(minutes=3)  # Run for 3 minutes
 
             # Calculate next payment date (1 minute from now for minutely)
             next_payment = now + timedelta(minutes=1)
 
             test_data = {
-                "name": f"ACTIVE_Minutely_Test_{int(now.timestamp())}",
+                "name": "Test Active Minutely Payment",
                 "lightning_address": config["lightning_address"],
                 "amount": 2,  # 2 sats per minute
                 "currency": "sats",
@@ -69,12 +70,12 @@ async def create_active_minutely():
                 "memo": "Active minutely payment test",
             }
 
-            print(f"📝 Creating ACTIVE minutely allowance:")
+            print("📝 Creating ACTIVE minutely allowance:")
             print(f"   Name: {test_data['name']}")
             print(f"   Amount: {test_data['amount']} sats per minute")
             print(f"   Active: {test_data['active']}")
             print(f"   Start: NOW ({now.strftime('%H:%M:%S')})")
-            print(f"   End: In 10 minutes ({end_time.strftime('%H:%M:%S')})")
+            print(f"   End: In 3 minutes ({end_time.strftime('%H:%M:%S')})")
             print(f"   Lightning address: {test_data['lightning_address']}")
 
             create_response = await client.post(
@@ -85,10 +86,10 @@ async def create_active_minutely():
 
             if create_response.status_code == 201:
                 created = create_response.json()
-                print(f"\n✅ Successfully created active minutely allowance!")
+                print("\n✅ Successfully created active minutely allowance!")
                 print(f"   ID: {created['id']}")
-                print(f"   Status: ACTIVE ✅")
-                print(f"\n⏳ Waiting 65 seconds for first payment...")
+                print("   Status: ACTIVE ✅")
+                print("\n⏳ Waiting 65 seconds for first payment...")
 
                 await asyncio.sleep(65)
 
@@ -102,19 +103,18 @@ async def create_active_minutely():
                     allowances = fetch_response.json()
                     for allowance in allowances:
                         if allowance["id"] == created["id"]:
-                            print(f"\n📊 Allowance status after 1 minute:")
-                            print(
-                                f"   Active: {'✅' if allowance.get('active') else '❌'}"
-                            )
+                            print("\n📊 Allowance status after 1 minute:")
+                            is_active = "✅" if allowance.get("active") else "❌"
+                            print(f"   Active: {is_active}")
                             print(
                                 f"   Next payment: {allowance.get('next_payment_date')}"
                             )
                             total = allowance.get("total", 0)
                             if total > 0:
                                 print(f"   💰 Total paid: {total} sats ✅")
-                                print(f"\n✅ MINUTELY PAYMENTS ARE WORKING!")
+                                print("\n✅ MINUTELY PAYMENTS ARE WORKING!")
                             else:
-                                print(f"   ⚠️ No payments made yet (total: 0)")
+                                print("   ⚠️ No payments made yet (total: 0)")
                             break
 
                 return True

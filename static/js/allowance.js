@@ -277,39 +277,23 @@ window.app = Vue.createApp({
       console.log('📋 After cloning:', this.formDialog.data)
       
       // Convert datetime fields to format required by datetime-local input
+      // API returns ISO strings like "2025-09-28T07:49:00" which is already
+      // compatible with datetime-local, but we need to ensure it's truncated to minutes
       if (this.formDialog.data.start_datetime) {
-        // Database returns timestamps in seconds, JS needs milliseconds
-        const timestamp = typeof this.formDialog.data.start_datetime === 'number'
-          ? this.formDialog.data.start_datetime * 1000
-          : this.formDialog.data.start_datetime
-        const date = new Date(timestamp)
-        if (!isNaN(date)) {
-          // datetime-local needs YYYY-MM-DDTHH:MM format in LOCAL time, not UTC
-          // Format as local time string
-          const year = date.getFullYear()
-          const month = String(date.getMonth() + 1).padStart(2, '0')
-          const day = String(date.getDate()).padStart(2, '0')
-          const hours = String(date.getHours()).padStart(2, '0')
-          const minutes = String(date.getMinutes()).padStart(2, '0')
-          this.formDialog.data.start_datetime = `${year}-${month}-${day}T${hours}:${minutes}`
+        // If it has seconds or more precision, truncate to minutes
+        if (typeof this.formDialog.data.start_datetime === 'string') {
+          // Take first 16 characters: "YYYY-MM-DDTHH:mm"
+          this.formDialog.data.start_datetime = this.formDialog.data.start_datetime.substring(0, 16)
+          console.log('✅ Formatted start_datetime:', this.formDialog.data.start_datetime)
         }
       }
 
       if (this.formDialog.data.end_datetime) {
-        // Database returns timestamps in seconds, JS needs milliseconds
-        const timestamp = typeof this.formDialog.data.end_datetime === 'number'
-          ? this.formDialog.data.end_datetime * 1000
-          : this.formDialog.data.end_datetime
-        const date = new Date(timestamp)
-        if (!isNaN(date)) {
-          // datetime-local needs YYYY-MM-DDTHH:MM format in LOCAL time, not UTC
-          // Format as local time string
-          const year = date.getFullYear()
-          const month = String(date.getMonth() + 1).padStart(2, '0')
-          const day = String(date.getDate()).padStart(2, '0')
-          const hours = String(date.getHours()).padStart(2, '0')
-          const minutes = String(date.getMinutes()).padStart(2, '0')
-          this.formDialog.data.end_datetime = `${year}-${month}-${day}T${hours}:${minutes}`
+        // If it has seconds or more precision, truncate to minutes
+        if (typeof this.formDialog.data.end_datetime === 'string') {
+          // Take first 16 characters: "YYYY-MM-DDTHH:mm"
+          this.formDialog.data.end_datetime = this.formDialog.data.end_datetime.substring(0, 16)
+          console.log('✅ Formatted end_datetime:', this.formDialog.data.end_datetime)
         }
       }
       

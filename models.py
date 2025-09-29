@@ -24,7 +24,7 @@ class CreateAllowanceData(BaseModel):
     created_at: Optional[datetime] = None  # Auto-set by database
 
     @validator("amount")
-    def amount_must_be_positive(cls, v):
+    def amount_must_be_positive(cls, v):  # noqa: N805
         if v <= 0:
             raise ValueError("Amount must be greater than 0")
         return v
@@ -48,7 +48,7 @@ class Allowance(BaseModel):
     created_at: Optional[datetime] = None  # When the allowance was created
 
     @validator("amount")
-    def amount_must_be_positive(cls, v):
+    def amount_must_be_positive(cls, v):  # noqa: N805
         if v <= 0:
             raise ValueError("Amount must be greater than 0")
         return v

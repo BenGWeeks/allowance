@@ -2,12 +2,13 @@
 API test for PUT /api/v1/allowance/{id} - Update allowance endpoint
 """
 
-import httpx
 import asyncio
 from datetime import datetime, timedelta, timezone
 
+import httpx
 
-async def test_update_allowance():
+
+async def test_update_allowance():  # noqa: C901
     """Test updating an allowance via API - proper test with create→update→verify"""
     # Load config from .env.local
     from pathlib import Path
@@ -19,7 +20,7 @@ async def test_update_allowance():
         print(f"❌ .env.local not found at {env_path}")
         return False
 
-    with open(env_path, "r") as f:
+    with open(env_path) as f:
         for line in f:
             if "=" in line and not line.startswith("#"):
                 key, value = line.strip().split("=", 1)
@@ -30,7 +31,8 @@ async def test_update_allowance():
 
     if "base_url" not in config or "lightning_address" not in config:
         print(
-            "❌ Missing required config values in .env.local (TEST_LNBITS_URL or PAYLINK_EMAIL)"
+            "❌ Missing required config values in .env.local "
+            "(TEST_LNBITS_URL or PAYLINK_EMAIL)"
         )
         return False
 
@@ -38,8 +40,8 @@ async def test_update_allowance():
 
     try:
         # Get admin API key dynamically
-        import sys
         import os
+        import sys
 
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         from get_api_key import get_admin_api_key
@@ -84,7 +86,7 @@ async def test_update_allowance():
             # Step 2: Update the allowance
             update_start_datetime = datetime.now(timezone.utc) + timedelta(days=2)
             update_data = {
-                "name": "Updated Test Allowance",
+                "name": "Test Updated Allowance",
                 "lightning_address": config["lightning_address"],
                 "amount": 20,  # Updated small amount < 100 sats
                 "currency": "sats",
@@ -132,48 +134,51 @@ async def test_update_allowance():
                     break
 
             if not updated_allowance:
-                print(f"❌ Updated allowance not found")
+                print("❌ Updated allowance not found")
                 return False
 
             # Verify the updates
             success = True
-            if updated_allowance["name"] != "Updated Test Allowance":
+            if updated_allowance["name"] != "Test Updated Allowance":
+                actual_name = updated_allowance["name"]
                 print(
-                    f"❌ Name not updated: expected 'Updated Test Allowance', got '{updated_allowance['name']}'"
+                    f"❌ Name not updated: expected 'Test Updated Allowance', "
+                    f"got '{actual_name}'"
                 )
                 success = False
             if updated_allowance["lightning_address"] != config["lightning_address"]:
+                expected_addr = config["lightning_address"]
+                actual_addr = updated_allowance["lightning_address"]
                 print(
-                    f"❌ Address not updated: expected '{config['lightning_address']}', got '{updated_allowance['lightning_address']}'"
+                    f"❌ Address not updated: expected '{expected_addr}', "
+                    f"got '{actual_addr}'"
                 )
                 success = False
             if updated_allowance["amount"] != 20:
-                print(
-                    f"❌ Amount not updated: expected 20, got {updated_allowance['amount']}"
-                )
+                actual_amount = updated_allowance["amount"]
+                print(f"❌ Amount not updated: expected 20, got {actual_amount}")
                 success = False
-            if updated_allowance["active"] != False:
+            if updated_allowance["active"] is not False:
+                actual_active = updated_allowance["active"]
                 print(
-                    f"❌ Active status not updated: expected False, got {updated_allowance['active']}"
+                    f"❌ Active status not updated: expected False, "
+                    f"got {actual_active}"
                 )
                 success = False
 
             # Verify datetime fields are present and updated
             if "start_datetime" not in updated_allowance:
-                print(f"❌ start_datetime field missing from response")
+                print("❌ start_datetime field missing from response")
                 success = False
             else:
                 print(
                     f"✅ start_datetime present: {updated_allowance['start_datetime']}"
                 )
 
-            if (
-                "end_datetime" in updated_allowance
-                and updated_allowance["end_datetime"]
-            ):
+            if updated_allowance.get("end_datetime"):
                 print(f"✅ end_datetime present: {updated_allowance['end_datetime']}")
             else:
-                print(f"ℹ️ end_datetime not set (optional field)")
+                print("ℹ️ end_datetime not set (optional field)")  # noqa: RUF001
 
             if success:
                 print("✅ All update verifications passed")

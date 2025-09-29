@@ -1,24 +1,24 @@
 import asyncio
-import httpx
 from datetime import datetime, timedelta, timezone
-from dateutil.relativedelta import relativedelta
-from typing import List, Tuple, Dict, Any
+from typing import Any
 
+import httpx
+from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
 from lnbits.core.services import pay_invoice
-from loguru import logger
 from lnurl import decode as lnurl_decode
+from loguru import logger
 
 from .crud import (
+    deactivate_allowance,
     get_all_active_allowances,
     update_next_payment_date,
-    deactivate_allowance,
 )
 from .models import Allowance
 
 
 async def resolve_lightning_address(
     lightning_address: str,
-) -> Tuple[str, Dict[str, Any]]:
+) -> tuple[str, dict[str, Any]]:
     """
     Convert Lightning address (user@domain.com) to LNURL-pay endpoint
     Returns tuple of (callback_url, lnurl_data)
@@ -34,7 +34,7 @@ async def resolve_lightning_address(
                 return lnurl_data.get("callback"), lnurl_data
         except Exception as e:
             logger.error(f"Failed to decode LNURL: {e}")
-            raise Exception(f"Invalid LNURL: {lightning_address}")
+            raise Exception(f"Invalid LNURL: {lightning_address}") from e
 
     if "@" not in lightning_address:
         raise Exception(f"Invalid Lightning address format: {lightning_address}")
@@ -60,10 +60,14 @@ async def resolve_lightning_address(
 
     except httpx.HTTPError as e:
         logger.error(f"HTTP error resolving Lightning address {lightning_address}: {e}")
-        raise Exception(f"Failed to resolve Lightning address: {lightning_address}")
+        raise Exception(
+            f"Failed to resolve Lightning address: {lightning_address}"
+        ) from e
     except Exception as e:
         logger.error(f"Error resolving Lightning address {lightning_address}: {e}")
-        raise Exception(f"Failed to resolve Lightning address: {lightning_address}")
+        raise Exception(
+            f"Failed to resolve Lightning address: {lightning_address}"
+        ) from e
 
 
 async def get_invoice_from_lnurl(
@@ -99,10 +103,10 @@ async def get_invoice_from_lnurl(
 
     except httpx.HTTPError as e:
         logger.error(f"HTTP error getting invoice from LNURL: {e}")
-        raise Exception(f"Failed to get invoice from LNURL endpoint")
+        raise Exception("Failed to get invoice from LNURL endpoint") from e
     except Exception as e:
         logger.error(f"Error getting invoice from LNURL: {e}")
-        raise Exception(f"Failed to get invoice from LNURL endpoint")
+        raise Exception("Failed to get invoice from LNURL endpoint") from e
 
 
 async def execute_lightning_address_payment(allowance: Allowance) -> bool:
@@ -138,7 +142,8 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
                     btc_amount = allowance.amount / btc_price_in_currency
                     amount_sats = int(btc_amount * 100_000_000)  # Convert BTC to sats
                     logger.info(
-                        f"💱 Converted to {amount_sats} sats (rate: 1 BTC = {btc_price_in_currency} {allowance.currency})"
+                        f"💱 Converted to {amount_sats} sats "
+                        f"(rate: 1 BTC = {btc_price_in_currency} {allowance.currency})"
                     )
                 else:
                     raise Exception(
@@ -171,7 +176,8 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
                 else f"{allowance.amount} sats"
             )
             raise Exception(
-                f"Amount {currency_display} ({amount_sats} sats) is below minimum {min_sendable // 1000} sats"
+                f"Amount {currency_display} ({amount_sats} sats) is below minimum "
+                f"{min_sendable // 1000} sats"
             )
         if amount_msats > max_sendable:
             currency_display = (
@@ -180,7 +186,8 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
                 else f"{allowance.amount} sats"
             )
             raise Exception(
-                f"Amount {currency_display} ({amount_sats} sats) exceeds maximum {max_sendable // 1000} sats"
+                f"Amount {currency_display} ({amount_sats} sats) exceeds maximum "
+                f"{max_sendable // 1000} sats"
             )
 
         # Step 3: Get invoice from LNURL-pay endpoint with appropriate memo
@@ -198,11 +205,13 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
             memo = desired_memo[:comment_allowed]  # Truncate to allowed length
             if len(desired_memo) > comment_allowed:
                 logger.info(
-                    f"⚠️ Memo truncated from {len(desired_memo)} to {comment_allowed} characters"
+                    f"⚠️ Memo truncated from {len(desired_memo)} to "
+                    f"{comment_allowed} characters"
                 )
         else:
             logger.info(
-                f"ℹ️ LNURL endpoint doesn't accept comments, sending without memo"
+                "ℹ️ LNURL endpoint doesn't accept comments, "  # noqa: RUF001
+                "sending without memo"
             )
 
         payment_request = await get_invoice_from_lnurl(
@@ -212,7 +221,7 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
         )
 
         # Step 4: Execute payment using LNBits pay_invoice
-        logger.info(f"💸 Executing payment...")
+        logger.info("💸 Executing payment...")
 
         # Create a descriptive tag for the payment
         payment_tag = f"allowance: {allowance.name}"
@@ -239,7 +248,7 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
 
     except Exception as e:
         logger.error(
-            f"❌ Error executing payment for allowance {allowance.name}: {str(e)}"
+            f"❌ Error executing payment for allowance {allowance.name}: {e!s}"
         )
         return False
 
@@ -251,7 +260,7 @@ def ensure_timezone_aware(dt):
     return dt
 
 
-async def check_and_process_allowances():
+async def check_and_process_allowances():  # noqa: C901
     """
     Background task to check and process scheduled allowance payments.
     Runs every 60 seconds (1 minute minimum frequency).
@@ -274,11 +283,13 @@ async def check_and_process_allowances():
                     # Skip if we've already deactivated this in a previous run
                     if allowance.id in deactivated_ids:
                         logger.debug(
-                            f"⏩ Skipping already-deactivated allowance: {allowance.name}"
+                            f"⏩ Skipping already-deactivated allowance: "
+                            f"{allowance.name}"
                         )
                         continue
 
-                    # The query already filters for active=true, so no need to check again
+                    # The query already filters for active=true,
+                    # so no need to check again
 
                     # Check if start_datetime hasn't been reached yet
                     if (
@@ -288,7 +299,8 @@ async def check_and_process_allowances():
                         start_datetime = ensure_timezone_aware(allowance.start_datetime)
                         if current_time < start_datetime:
                             logger.info(
-                                f"⏳ Allowance {allowance.name} hasn't started yet (starts at {start_datetime})"
+                                f"⏳ Allowance {allowance.name} hasn't started yet "
+                                f"(starts at {start_datetime})"
                             )
                             continue
 
@@ -349,11 +361,12 @@ async def check_and_process_allowances():
                                     allowance.id, allowance.next_payment_date
                                 )
                                 logger.info(
-                                    f"✅ Next payment scheduled for: {allowance.next_payment_date}"
+                                    f"✅ Next payment scheduled for: "
+                                    f"{allowance.next_payment_date}"
                                 )
                             else:
                                 logger.error(
-                                    f"❌ Payment failed, will retry on next cycle"
+                                    "❌ Payment failed, will retry on next " "cycle"
                                 )
 
                         except Exception as e:
@@ -363,16 +376,18 @@ async def check_and_process_allowances():
 
                 except Exception as e:
                     logger.error(
-                        f"❌ Error handling allowance {getattr(allowance, 'name', 'unknown')}: {str(e)}"
+                        f"❌ Error handling allowance "
+                        f"{getattr(allowance, 'name', 'unknown')}: {e!s}"
                     )
                     import traceback
 
                     logger.error(f"Traceback: {traceback.format_exc()}")
 
         except Exception as e:
-            logger.error(f"❌ Error in allowance scheduler: {str(e)}")
+            logger.error(f"❌ Error in allowance scheduler: {e!s}")
 
-        # Clean up deactivated list periodically (keep last 100 to prevent memory growth)
+        # Clean up deactivated list periodically
+        # (keep last 100 to prevent memory growth)
         if len(deactivated_ids) > 100:
             deactivated_ids = set(list(deactivated_ids)[-100:])
 

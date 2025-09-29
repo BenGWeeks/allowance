@@ -1,29 +1,26 @@
-from http import HTTPStatus
 from datetime import datetime, timezone
-from typing import Optional, List
+from http import HTTPStatus
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
-from loguru import logger
 from lnbits.core.crud import get_user
 from lnbits.core.models import Wallet
-from lnbits.core.services import create_invoice
 from lnbits.decorators import (
     require_admin_key,
     require_invoice_key,
 )
-from lnbits.helpers import urlsafe_short_hash
-from lnurl import encode as lnurl_encode
+from loguru import logger
 from starlette.exceptions import HTTPException
 
 from .crud import (
     create_allowance,
     delete_allowance,
+    get_all_active_allowances,
     get_allowance,
     get_allowances,
     update_allowance,
-    get_all_active_allowances,
 )
-from .models import CreateAllowanceData, Allowance
+from .models import CreateAllowanceData
 from .tasks import execute_lightning_address_payment
 
 allowance_api_router = APIRouter()
@@ -62,10 +59,29 @@ def parse_datetime_string(date_str: Optional[str]) -> Optional[datetime]:
     if date_str.strip() == "":
         return None
 
+    # First try parsing ISO format with timezone offset like +00:00
+    # Python's isoformat() produces this format
+    if "+" in date_str or date_str.endswith("Z"):
+        try:
+            # Replace +00:00 with +0000 for strptime %z
+            normalized = date_str.replace("+00:00", "+0000").replace("-00:00", "-0000")
+            if normalized.endswith("Z"):
+                normalized = normalized[:-1] + "+0000"
+
+            # Try with microseconds first
+            try:
+                dt = datetime.strptime(normalized, "%Y-%m-%dT%H:%M:%S.%f%z")
+                return dt
+            except ValueError:
+                # Try without microseconds
+                dt = datetime.strptime(normalized, "%Y-%m-%dT%H:%M:%S%z")
+                return dt
+        except ValueError:
+            pass
+
     # Try different formats
     formats = [
-        "%Y-%m-%dT%H:%M:%S.%fZ",  # ISO format with Z
-        "%Y-%m-%dT%H:%M:%S.%f",  # ISO format without Z
+        "%Y-%m-%dT%H:%M:%S.%f",  # ISO format without timezone
         "%Y-%m-%dT%H:%M:%S",  # ISO format without microseconds
         "%Y-%m-%dT%H:%M",  # datetime-local format
         "%Y-%m-%d %H:%M:%S",  # Alternative format
@@ -160,7 +176,7 @@ async def api_allowances(
                 "next_payment_date",
                 "created_at",
             ]:
-                if field in data and data[field]:
+                if data.get(field):
                     if isinstance(data[field], datetime):
                         data[field] = data[field].isoformat()
                     elif isinstance(data[field], (int, float)):
@@ -204,7 +220,7 @@ async def api_allowance(
 
     # Format datetime fields
     for field in ["start_datetime", "end_datetime", "next_payment_date", "created_at"]:
-        if field in data and data[field]:
+        if data.get(field):
             if isinstance(data[field], datetime):
                 data[field] = data[field].isoformat()
             elif isinstance(data[field], (int, float)):
@@ -286,7 +302,7 @@ async def api_allowance_update(
             "next_payment_date",
             "created_at",
         ]:
-            if field in result and result[field]:
+            if result.get(field):
                 if isinstance(result[field], datetime):
                     result[field] = result[field].isoformat()
                 elif isinstance(result[field], (int, float)):
@@ -300,8 +316,8 @@ async def api_allowance_update(
         logger.error(f"❌ Error updating allowance: {e}")
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update allowance: {str(e)}",
-        )
+            detail=f"Failed to update allowance: {e!s}",
+        ) from e
 
 
 ## Create a new record
@@ -364,7 +380,7 @@ async def api_allowance_create(
             "next_payment_date",
             "created_at",
         ]:
-            if field in result and result[field]:
+            if result.get(field):
                 if isinstance(result[field], datetime):
                     result[field] = result[field].isoformat()
                 elif isinstance(result[field], (int, float)):
@@ -378,8 +394,8 @@ async def api_allowance_create(
         logger.error(f"❌ Error creating allowance: {e}")
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create allowance: {str(e)}",
-        )
+            detail=f"Failed to create allowance: {e!s}",
+        ) from e
 
 
 ## Delete a record
@@ -417,8 +433,8 @@ async def api_allowance_delete(
         logger.error(f"❌ Error deleting allowance: {e}")
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete allowance: {str(e)}",
-        )
+            detail=f"Failed to delete allowance: {e!s}",
+        ) from e
 
 
 ## Get currency conversion rate
@@ -435,7 +451,7 @@ async def api_currency_rate(
         async with httpx.AsyncClient() as client:
             # Get Bitcoin price in the requested currency
             response = await client.get(
-                f"https://api.coingecko.com/api/v3/simple/price",
+                "https://api.coingecko.com/api/v3/simple/price",
                 params={"ids": "bitcoin", "vs_currencies": currency.lower()},
             )
             response.raise_for_status()
@@ -462,13 +478,13 @@ async def api_currency_rate(
         raise HTTPException(
             status_code=HTTPStatus.SERVICE_UNAVAILABLE,
             detail="Could not fetch currency rate",
-        )
+        ) from e
     except Exception as e:
         logger.error(f"Error processing currency rate: {e}")
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f"Error processing currency rate: {str(e)}",
-        )
+            detail=f"Error processing currency rate: {e!s}",
+        ) from e
 
 
 ## Manual trigger for testing scheduled payments
@@ -518,8 +534,8 @@ async def api_allowance_trigger(
         logger.error(f"Error triggering payment: {e}")
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f"Failed to trigger payment: {str(e)}",
-        )
+            detail=f"Failed to trigger payment: {e!s}",
+        ) from e
 
 
 ## Verify scheduled payments are working
@@ -588,5 +604,5 @@ async def api_test_scheduler(
         logger.error(f"Error testing scheduler: {e}")
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f"Error testing scheduler: {str(e)}",
-        )
+            detail=f"Error testing scheduler: {e!s}",
+        ) from e

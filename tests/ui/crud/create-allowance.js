@@ -1,7 +1,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
-const { login, getConfig } = require('./auth-helper');
+const { login, getConfig } = require('../auth-helper');
 
 // Get test data using config from .env.local
 const getTestData = () => {
@@ -72,7 +72,7 @@ const getTestData = () => {
     await page.waitForTimeout(3000);
     
     // Get initial count
-    const { getAdminApiKey } = require('../get_api_key.js');
+    const { getAdminApiKey } = require('../../get_api_key.js');
     const adminKey = await getAdminApiKey(page);
     
     let initialCount = 0;

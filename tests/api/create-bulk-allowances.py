@@ -4,12 +4,12 @@ Create 10 test allowances via API matching the UI test data
 This script creates allowances with various configurations including different end dates
 """
 
-import httpx
 import asyncio
-import json
-import os
+import random
 from datetime import datetime, timedelta
 from pathlib import Path
+
+import httpx
 
 
 # Load environment variables
@@ -20,7 +20,7 @@ def load_config():
     if not env_path.exists():
         raise Exception(f"Environment file not found: {env_path}")
 
-    with open(env_path, "r") as f:
+    with open(env_path) as f:
         for line in f:
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
@@ -45,13 +45,12 @@ def load_config():
 
 async def get_admin_key(config):
     """Get the admin key for the wallet"""
-    async with httpx.AsyncClient() as client:
-        # First, we need to find the wallet ID and admin key
-        # This would normally be done via login, but for testing we'll use a known key
-        # You may need to update this with your actual admin key
+    # First, we need to find the wallet ID and admin key
+    # This would normally be done via login, but for testing we'll use a known key
+    # You may need to update this with your actual admin key
 
-        # For now, return the known admin key from the database query
-        return "2c3cd50a44784f19a4d7b4f605bbe247"
+    # For now, return the known admin key from the database query
+    return "2c3cd50a44784f19a4d7b4f605bbe247"
 
 
 async def create_allowance(client, base_url, api_key, allowance_data):
@@ -81,7 +80,7 @@ async def main():
     config = load_config()
     api_key = await get_admin_key(config)
 
-    print(f"🚀 Creating test allowances via API...")
+    print("🚀 Creating test allowances via API...")
     print(f"📍 Server: {config['base_url']}")
 
     # Get current time (use timezone-aware datetime)
@@ -94,7 +93,7 @@ async def main():
         {
             "name": "Test 1 (API)",
             "lightning_address": "receiving@lnbits-allowance.weeksfamily.me",
-            "amount": 1,
+            "amount": random.randint(1, 99),
             "currency": "sats",
             "frequency_type": "minutely",
             "start_datetime": now.isoformat(),
@@ -129,7 +128,7 @@ async def main():
         {
             "name": "Test 4 (API)",
             "lightning_address": "receiving@lnbits-allowance.weeksfamily.me",
-            "amount": 4,
+            "amount": random.randint(1, 99),
             "currency": "sats",
             "frequency_type": "minutely",
             "start_datetime": now.isoformat(),
@@ -140,7 +139,7 @@ async def main():
         {
             "name": "Test 5 (API)",
             "lightning_address": "receiving@lnbits-allowance.weeksfamily.me",
-            "amount": 5,
+            "amount": random.randint(1, 99),
             "currency": "sats",
             "frequency_type": "minutely",
             "start_datetime": now.isoformat(),
@@ -151,7 +150,7 @@ async def main():
         {
             "name": "Test 6 (API)",
             "lightning_address": "receiving@lnbits-allowance.weeksfamily.me",
-            "amount": 6,
+            "amount": random.randint(1, 99),
             "currency": "sats",
             "frequency_type": "minutely",
             "start_datetime": now.isoformat(),
@@ -164,7 +163,7 @@ async def main():
         {
             "name": "Test 7 (API)",
             "lightning_address": "receiving@lnbits-allowance.weeksfamily.me",
-            "amount": 7,
+            "amount": random.randint(1, 99),
             "currency": "sats",
             "frequency_type": "minutely",
             "start_datetime": (now - timedelta(hours=13)).isoformat(),
@@ -175,7 +174,7 @@ async def main():
         {
             "name": "Test 8 (API)",
             "lightning_address": "receiving@lnbits-allowance.weeksfamily.me",
-            "amount": 8,
+            "amount": random.randint(1, 99),
             "currency": "sats",
             "frequency_type": "hourly",  # Different frequency
             "start_datetime": now.isoformat(),
@@ -188,7 +187,7 @@ async def main():
         {
             "name": "Test 9 (API)",
             "lightning_address": "receiving@lnbits-allowance.weeksfamily.me",
-            "amount": 9,
+            "amount": random.randint(1, 99),
             "currency": "sats",
             "frequency_type": "monthly",  # Different frequency
             "start_datetime": now.isoformat(),
@@ -199,7 +198,7 @@ async def main():
         {
             "name": "Test 10 (API)",
             "lightning_address": "receiving@lnbits-allowance.weeksfamily.me",
-            "amount": 10,
+            "amount": random.randint(1, 99),
             "currency": "sats",
             "frequency_type": "yearly",  # Different frequency
             "start_datetime": (now + timedelta(hours=12)).isoformat(),  # Future start
@@ -230,7 +229,7 @@ async def main():
                 else:
                     print(f"   End date: {allowance['end_datetime']}")
             else:
-                print(f"   End date: None (runs forever)")
+                print("   End date: None (runs forever)")
 
             if await create_allowance(client, config["base_url"], api_key, allowance):
                 success_count += 1
@@ -238,7 +237,7 @@ async def main():
             # Small delay between requests
             await asyncio.sleep(0.5)
 
-    print(f"\n📊 Summary:")
+    print("\n📊 Summary:")
     print(f"   ✅ Successfully created: {success_count}/{len(test_allowances)}")
     print(
         f"   ❌ Failed: {len(test_allowances) - success_count}/{len(test_allowances)}"

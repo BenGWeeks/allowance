@@ -3,12 +3,13 @@
 Check the status of minutely allowances and why they might not be paying
 """
 
-import httpx
 import asyncio
 from datetime import datetime, timezone
 
+import httpx
 
-async def check_minutely_allowances():
+
+async def check_minutely_allowances():  # noqa: C901
     """Check minutely allowances and their payment status"""
     # Load config from .env.local
     from pathlib import Path
@@ -20,7 +21,7 @@ async def check_minutely_allowances():
         print(f"❌ .env.local not found at {env_path}")
         return False
 
-    with open(env_path, "r") as f:
+    with open(env_path) as f:
         for line in f:
             if "=" in line and not line.startswith("#"):
                 key, value = line.strip().split("=", 1)
@@ -35,8 +36,8 @@ async def check_minutely_allowances():
 
     try:
         # Get admin API key dynamically
-        import sys
         import os
+        import sys
 
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         from get_api_key import get_admin_api_key
@@ -71,9 +72,9 @@ async def check_minutely_allowances():
             for allowance in minutely_allowances:
                 print(f"Allowance: {allowance['name']}")
                 print(f"  ID: {allowance['id']}")
-                print(
-                    f"  Amount: {allowance['amount']} {allowance.get('currency', 'sats')}"
-                )
+                amount = allowance["amount"]
+                currency = allowance.get("currency", "sats")
+                print(f"  Amount: {amount} {currency}")
                 print(f"  Active: {'✅' if allowance.get('active') else '❌'}")
                 print(f"  Lightning Address: {allowance.get('lightning_address')}")
 
@@ -91,17 +92,21 @@ async def check_minutely_allowances():
                         time_until_start = (start_dt - current_time).total_seconds()
 
                         if time_until_start > 0:
+                            mins_to_start = int(time_until_start / 60)
                             print(
-                                f"  ⏳ Start time: {start_dt_str} (starts in {int(time_until_start/60)} minutes)"
+                                f"  ⏳ Start time: {start_dt_str} "
+                                f"(starts in {mins_to_start} minutes)"
                             )
                         else:
+                            mins_since_start = int(-time_until_start / 60)
                             print(
-                                f"  ✅ Start time: {start_dt_str} (started {int(-time_until_start/60)} minutes ago)"
+                                f"  ✅ Start time: {start_dt_str} "
+                                f"(started {mins_since_start} minutes ago)"
                             )
                     except Exception as e:
                         print(f"  ⚠️ Start time: {start_dt_str} (error parsing: {e})")
                 else:
-                    print(f"  ✅ Start time: Immediate (no start_datetime set)")
+                    print("  ✅ Start time: Immediate (no start_datetime set)")
 
                 # Check end datetime
                 end_dt_str = allowance.get("end_datetime")
@@ -115,24 +120,28 @@ async def check_minutely_allowances():
                         time_until_end = (end_dt - current_time).total_seconds()
 
                         if time_until_end > 0:
+                            mins_to_end = int(time_until_end / 60)
                             print(
-                                f"  🏁 End time: {end_dt_str} (ends in {int(time_until_end/60)} minutes)"
+                                f"  🏁 End time: {end_dt_str} "
+                                f"(ends in {mins_to_end} minutes)"
                             )
                         else:
+                            mins_since_end = int(-time_until_end / 60)
                             print(
-                                f"  ❌ End time: {end_dt_str} (ENDED {int(-time_until_end/60)} minutes ago)"
+                                f"  ❌ End time: {end_dt_str} "
+                                f"(ENDED {mins_since_end} minutes ago)"
                             )
                     except Exception as e:
                         print(f"  ⚠️ End time: {end_dt_str} (error: {e})")
                 else:
-                    print(f"  ∞ End time: None (runs indefinitely)")
+                    print("  ∞ End time: None (runs indefinitely)")
 
                 # Check next payment date
                 next_payment = allowance.get("next_payment_date")
                 if next_payment:
                     print(f"  📅 Next payment: {next_payment}")
                 else:
-                    print(f"  ⚠️ Next payment: Not set")
+                    print("  ⚠️ Next payment: Not set")
 
                 # Check total paid (if available)
                 total = allowance.get("total", 0)
@@ -154,7 +163,9 @@ async def check_minutely_allowances():
                 scheduler_status = scheduler_response.json()
                 print(f"✅ Scheduler status: {scheduler_status}")
             else:
-                print(f"ℹ️ Could not get scheduler status (endpoint may not exist)")
+                print(
+                    "ℹ️ Could not get scheduler status (endpoint may not exist)"  # noqa: RUF001
+                )
 
             return True
 

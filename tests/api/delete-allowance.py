@@ -2,11 +2,12 @@
 API test for DELETE /api/v1/allowance/{id} - Delete allowance endpoint
 """
 
-import httpx
 import asyncio
 
+import httpx
 
-async def test_delete_allowance():
+
+async def test_delete_allowance():  # noqa: C901
     """Test deleting an allowance via API - proper test with count verification"""
     # Load config from .env.local
     from pathlib import Path
@@ -18,7 +19,7 @@ async def test_delete_allowance():
         print(f"❌ .env.local not found at {env_path}")
         return False
 
-    with open(env_path, "r") as f:
+    with open(env_path) as f:
         for line in f:
             if "=" in line and not line.startswith("#"):
                 key, value = line.strip().split("=", 1)
@@ -29,7 +30,8 @@ async def test_delete_allowance():
 
     if "base_url" not in config or "lightning_address" not in config:
         print(
-            "❌ Missing required config values in .env.local (TEST_LNBITS_URL or PAYLINK_EMAIL)"
+            "❌ Missing required config values in .env.local "
+            "(TEST_LNBITS_URL or PAYLINK_EMAIL)"
         )
         return False
 
@@ -37,12 +39,13 @@ async def test_delete_allowance():
 
     try:
         # Get admin API key dynamically
-        import sys
         import os
+        import sys
 
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-        from get_api_key import get_admin_api_key
         from datetime import datetime, timedelta, timezone
+
+        from get_api_key import get_admin_api_key
 
         admin_key = await get_admin_api_key()
         if not admin_key:
@@ -132,7 +135,8 @@ async def test_delete_allowance():
                 return True
             else:
                 print(
-                    f"❌ Count verification failed: expected {initial_count}, got {final_count}"
+                    f"❌ Count verification failed: expected {initial_count}, "
+                    f"got {final_count}"
                 )
                 return False
 

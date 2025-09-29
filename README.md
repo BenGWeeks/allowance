@@ -72,23 +72,46 @@ npm install
 cd ..
 ```
 
+#### Running Tests
+
+```bash
+# Run quick API tests only (< 1 minute)
+./tests/run_api_tests.sh
+
+# Run ALL API tests including long-running payment monitoring (3-4 minutes)
+./tests/run_api_tests.sh --all
+
+# Run UI CRUD tests
+./tests/run_ui_crud_tests.sh
+
+# Run all tests (API + UI)
+./tests/run_all_tests.sh
+
+# Clean up test data
+python3 tests/api/delete-all-test-allowances.py
+```
+
+**Note**: The `--all` flag includes tests that monitor scheduled payments for 2-3 minutes to verify payments are executed. Without this flag, only quick tests are run.
+
 #### Test Scripts
 
 **API Tests (Python):**
-- **tests/api/allowance_create.py** - Test POST /api/v1/allowance endpoint
-- **tests/api/allowance_read.py** - Test GET /api/v1/allowance endpoints
-- **tests/api/allowance_update.py** - Test PUT /api/v1/allowance/{id} endpoint
-- **tests/api/allowance_delete.py** - Test DELETE /api/v1/allowance/{id} endpoint
-- **tests/api/currency_rate.py** - Test GET /api/v1/rate/{currency} endpoint
-- **tests/api/scheduled_payments.py** - Test scheduled payment execution
-- **tests/api/create-test-allowances.py** - Create 10 test allowances with various configurations
+- **create-allowance.py** - Test creating allowances via API
+- **read-allowance.py** - Test retrieving allowances
+- **update-allowance.py** - Test updating allowances
+- **delete-allowance.py** - Test deleting allowances
+- **create-currency-allowance.py** - Test GBP/USD currency support
+- **check-scheduled-payments.py** - Monitor scheduled payments (long-running)
+- **check-minutely-allowances.py** - Check minutely payment status (long-running)
+- **create-bulk-allowances.py** - Create 10 test allowances
+- **delete-all-test-allowances.py** - Clean up all test data
 
 **UI Tests (Playwright):**
-- **tests/ui/enable-allowance.js** - Enables the allowance extension via UI
-- **tests/ui/create-allowance.js** - End-to-end allowance creation test
-- **tests/ui/edit-allowance.js** - Tests allowance editing and metadata display
-- **tests/ui/delete-allowance.js** - Tests allowance deletion functionality
-- **tests/ui/check-currencies.js** - Tests currency dropdown functionality
+- **crud/create-allowance.js** - Test creating allowances via UI
+- **crud/update-allowance.js** - Test editing allowances
+- **crud/delete-allowance.js** - Test deleting allowances
+- **crud/read-allowances.js** - List all allowances
+- **setup/*.js** - Setup scripts for wallets, paylinks, and extensions
 - **tests/ui/test-date-persistence.js** - Verifies date changes persist correctly
 
 **Test Runners:**

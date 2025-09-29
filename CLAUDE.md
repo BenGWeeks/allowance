@@ -320,3 +320,22 @@ Note: The MORE button may not appear immediately after config changes - may requ
 
 ### Repo Interaction Guidelines
 - Do not send or create pull requests to https://github.com/lnbits/myextension (or make any changes to that repo)
+
+### Code Quality Checks Before Committing
+Always run these checks before committing code:
+
+```bash
+# Format all Python files (REQUIRED for CI)
+black .
+
+# Check formatting without modifying
+black --check .
+
+# Run type checking
+mypy --ignore-missing-imports *.py
+
+# Run linting
+ruff check .
+```
+
+These checks ensure code quality and consistency. The CI pipeline will fail if Black formatting is not applied.

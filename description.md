@@ -4,5 +4,5 @@ Send regular payments to internal wallets or external lightning addresses. Perfe
 
 Example user cases
 
-- Kids piggy bank (see Lightning Piggy)
-- Corporate rewards and incentives (see Zapp.ie)
+- Kids piggy bank (see [Lightning Piggy](https://www.lightningpiggy.com/))
+- Corporate rewards and incentives (see [KnowAll AI](https://www.knowall.ai))

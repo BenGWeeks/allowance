@@ -1,7 +1,8 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
-const { login, getConfig } = require('./auth-helper');
+const { login, getConfig } = require('../auth-helper');
+const { execSync } = require('child_process');
 
 // Get test data from command line args or default values
 const getTestData = () => {
@@ -15,7 +16,7 @@ const getTestData = () => {
   
   // Default test data
   return {
-    nameToDelete: 'Daily Snacks'
+    nameToDelete: 'Test Delete Via UI'
   };
 };
 
@@ -29,34 +30,83 @@ const getTestData = () => {
 
   try {
     console.log('🚀 Starting delete allowance test...');
-    
+
     // Listen for console errors
     page.on('console', msg => {
       if (msg.type() === 'error') {
         console.log('❌ Browser console error:', msg.text());
       }
     });
-    
+
     page.on('pageerror', error => {
       console.log('💥 Page error:', error.message);
     });
-    
+
     // Monitor network requests
     page.on('request', request => {
       if (request.url().includes('/allowance/api/v1/allowance') && request.method() === 'DELETE') {
         console.log('📤 DELETE request to remove allowance:', request.url());
       }
     });
-    
+
     page.on('response', response => {
       if (response.url().includes('/allowance/api/v1/allowance') && response.request().method() === 'DELETE') {
         console.log(`📥 DELETE response: ${response.status()} ${response.url()}`);
       }
     });
-    
+
     // Step 1: Login first
     console.log('📝 Step 1: Logging in as admin...');
     await login(page);
+
+    // Step 1b: Create an allowance via API to delete
+    console.log('📝 Step 1b: Creating test allowance via API...');
+
+    // Get admin API key using the Python helper script
+    const scriptPath = path.join(__dirname, '..', '..', 'get_api_key.py');
+    const result = execSync(`python3 ${scriptPath}`, {
+      encoding: 'utf8'
+    });
+
+    // Extract API key from output
+    const match = result.match(/Admin API key: (\w+)/);
+    if (!match) {
+      console.log('❌ Could not get admin API key');
+      process.exit(1);
+    }
+
+    const adminKey = match[1];
+    console.log(`✅ Got admin API key: ${adminKey.substring(0, 8)}...`);
+
+    // Create test allowance via API using Playwright's request context
+    const testAllowance = {
+      name: testData.nameToDelete,
+      lightning_address: 'test@localhost',
+      amount: 10,
+      currency: 'sats',
+      frequency_type: 'daily',
+      memo: 'Test allowance for deletion',
+      active: true
+    };
+
+    const apiContext = await page.context().request;
+    const createResponse = await apiContext.post(`${config.baseUrl}/allowance/api/v1/allowance`, {
+      headers: {
+        'X-Api-Key': adminKey,
+        'Content-Type': 'application/json'
+      },
+      data: testAllowance
+    });
+
+    if (createResponse.status() !== 201) {
+      console.log(`❌ Failed to create test allowance: ${createResponse.status()}`);
+      const error = await createResponse.text();
+      console.log('Error:', error);
+      process.exit(1);
+    }
+
+    const created = await createResponse.json();
+    console.log(`✅ Created test allowance: ${created.name} (ID: ${created.id})`);
 
     // Step 2: Navigate to allowance extension
     console.log('📝 Step 2: Navigating to allowance extension...');

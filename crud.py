@@ -14,33 +14,49 @@ async def create_allowance(data: CreateAllowanceData) -> Allowance:
     data.id = urlsafe_short_hash()
 
     # Convert datetime objects to timestamps (integers) for database
-    start_ts = data.start_datetime
+    start_ts: Union[datetime, int] = data.start_datetime
     if isinstance(start_ts, datetime):
         start_ts = int(start_ts.timestamp())
 
-    next_ts = data.next_payment_date
+    next_ts: Union[datetime, int] = data.next_payment_date
     if isinstance(next_ts, datetime):
         next_ts = int(next_ts.timestamp())
 
-    end_ts = data.end_datetime
+    end_ts: Optional[Union[datetime, int]] = data.end_datetime
     if end_ts and isinstance(end_ts, datetime):
         end_ts = int(end_ts.timestamp())
 
-    created_ts = data.created_at
+    created_ts: Optional[Union[datetime, int]] = data.created_at
     if created_ts and isinstance(created_ts, datetime):
         created_ts = int(created_ts.timestamp())
 
     # Use direct SQL to avoid field name mapping issues
-    await db.execute(
-        """
+    # Build the SQL based on whether end_datetime is NULL
+    if end_ts is None:
+        sql = """
         INSERT INTO ext_allowance.maintable
         (id, name, wallet, lightning_address, amount, currency,
          start_datetime, frequency_type, next_payment_date, memo,
          active, end_datetime, created_at)
         VALUES (:id, :name, :wallet, :lightning_address, :amount, :currency,
-         to_timestamp(:start_datetime), :frequency_type, to_timestamp(:next_payment_date), :memo,
+         to_timestamp(:start_datetime), :frequency_type,
+         to_timestamp(:next_payment_date), :memo,
+         :active, NULL, to_timestamp(:created_at))
+        """
+    else:
+        sql = """
+        INSERT INTO ext_allowance.maintable
+        (id, name, wallet, lightning_address, amount, currency,
+         start_datetime, frequency_type, next_payment_date, memo,
+         active, end_datetime, created_at)
+        VALUES (:id, :name, :wallet, :lightning_address, :amount, :currency,
+         to_timestamp(:start_datetime), :frequency_type,
+         to_timestamp(:next_payment_date), :memo,
          :active, to_timestamp(:end_datetime), to_timestamp(:created_at))
-        """,
+        """
+
+    await db.execute(
+        sql,
         {
             "id": data.id,
             "name": data.name,
@@ -103,27 +119,44 @@ async def update_allowance(data: CreateAllowanceData) -> Allowance:
     # Convert datetime objects to timestamps (integers) for database
     from datetime import datetime
 
-    start_ts = data.start_datetime
+    start_ts: Union[datetime, int] = data.start_datetime
     if isinstance(start_ts, datetime):
         start_ts = int(start_ts.timestamp())
 
-    next_ts = data.next_payment_date
+    next_ts: Union[datetime, int] = data.next_payment_date
     if isinstance(next_ts, datetime):
         next_ts = int(next_ts.timestamp())
 
-    end_ts = data.end_datetime
+    end_ts: Optional[Union[datetime, int]] = data.end_datetime
     if end_ts and isinstance(end_ts, datetime):
         end_ts = int(end_ts.timestamp())
 
-    await db.execute(
-        """
+    # Build the SQL based on whether end_datetime is NULL
+    if end_ts is None:
+        sql = """
         UPDATE ext_allowance.maintable
-        SET name = :name, wallet = :wallet, lightning_address = :lightning_address, amount = :amount, currency = :currency,
-            start_datetime = to_timestamp(:start_datetime), frequency_type = :frequency_type,
+        SET name = :name, wallet = :wallet, lightning_address = :lightning_address,
+            amount = :amount, currency = :currency,
+            start_datetime = to_timestamp(:start_datetime),
+            frequency_type = :frequency_type,
+            next_payment_date = to_timestamp(:next_payment_date), memo = :memo,
+            active = :active, end_datetime = NULL
+        WHERE id = :id
+        """
+    else:
+        sql = """
+        UPDATE ext_allowance.maintable
+        SET name = :name, wallet = :wallet, lightning_address = :lightning_address,
+            amount = :amount, currency = :currency,
+            start_datetime = to_timestamp(:start_datetime),
+            frequency_type = :frequency_type,
             next_payment_date = to_timestamp(:next_payment_date), memo = :memo,
             active = :active, end_datetime = to_timestamp(:end_datetime)
         WHERE id = :id
-        """,
+        """
+
+    await db.execute(
+        sql,
         {
             "name": data.name,
             "wallet": data.wallet,

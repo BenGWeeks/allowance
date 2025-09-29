@@ -2,12 +2,14 @@
 API test for POST /api/v1/allowance - Create allowance endpoint
 """
 
-import httpx
 import asyncio
+import random
 from datetime import datetime, timedelta, timezone
 
+import httpx
 
-async def test_create_allowance():
+
+async def test_create_allowance():  # noqa: C901
     """Test creating a new allowance via API"""
     # Load config from .env.local
     from pathlib import Path
@@ -19,7 +21,7 @@ async def test_create_allowance():
         print(f"❌ .env.local not found at {env_path}")
         return False
 
-    with open(env_path, "r") as f:
+    with open(env_path) as f:
         for line in f:
             if "=" in line and not line.startswith("#"):
                 key, value = line.strip().split("=", 1)
@@ -30,7 +32,8 @@ async def test_create_allowance():
 
     if "base_url" not in config or "lightning_address" not in config:
         print(
-            "❌ Missing required config values in .env.local (TEST_LNBITS_URL or PAYLINK_EMAIL)"
+            "❌ Missing required config values in .env.local "
+            "(TEST_LNBITS_URL or PAYLINK_EMAIL)"
         )
         return False
 
@@ -38,8 +41,8 @@ async def test_create_allowance():
 
     try:
         # Get admin API key dynamically
-        import sys
         import os
+        import sys
 
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         from get_api_key import get_admin_api_key
@@ -69,7 +72,7 @@ async def test_create_allowance():
             payload = {
                 "name": "Test API Create Allowance",
                 "lightning_address": config["lightning_address"],
-                "amount": 10,  # Small amount < 100 sats
+                "amount": random.randint(1, 99),  # Random amount between 1-99 sats
                 "currency": "sats",
                 "frequency_type": "daily",
                 "start_datetime": start_datetime.isoformat(),

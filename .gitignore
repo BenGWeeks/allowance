@@ -25,6 +25,8 @@ tests/ui/package-lock.json
 tests/ui/screenshots/
 tests/ui/test-screenshots/
 tests/ui/*.png
+tests/ui/setup/*.png
+tests/ui/archived/
 tests/ui/*.jpg
 *.png
 *.jpg

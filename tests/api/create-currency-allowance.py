@@ -4,12 +4,12 @@ Test creating an allowance with currency conversion (GBP)
 This test validates decimal amount support and currency conversion
 """
 
-import httpx
 import asyncio
-import json
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
+
+import httpx
 
 
 # Load environment variables
@@ -21,7 +21,7 @@ def load_config():
         print(f"❌ .env.local not found at {env_path}")
         exit(1)
 
-    with open(env_path, "r") as f:
+    with open(env_path) as f:
         for line in f:
             if "=" in line and not line.startswith("#"):
                 key, value = line.strip().split("=", 1)
@@ -39,7 +39,6 @@ def load_config():
 
 async def get_admin_wallet():
     """Get admin wallet ID and API key"""
-    import os
     import sys
 
     # Add parent directory to path for imports
@@ -106,11 +105,11 @@ async def test_gbp_allowance():
 
         if response.status_code == 201:
             created = response.json()
-            print(
-                f"✅ Created GBP allowance: {created.get('name')} (ID: {created.get('id')})"
-            )
-            print(f"   Amount: £0.02 GBP (2 pence)")
-            print(f"   This proves decimal amounts are now supported!")
+            name = created.get("name")
+            allowance_id = created.get("id")
+            print(f"✅ Created GBP allowance: {name} (ID: {allowance_id})")
+            print("   Amount: £0.02 GBP (2 pence)")
+            print("   This proves decimal amounts are now supported!")
 
             # Clean up - delete the test allowance
             delete_response = await client.delete(
@@ -124,7 +123,7 @@ async def test_gbp_allowance():
             return True
         elif response.status_code == 422:
             error_detail = response.json()
-            print(f"❌ Validation error (would happen with old int-only validation):")
+            print("❌ Validation error (would happen with old int-only validation):")
             print(f"   {error_detail}")
             return False
         else:

@@ -2,8 +2,9 @@
 API test for GET /api/v1/allowance - List allowances endpoint
 """
 
-import httpx
 import asyncio
+
+import httpx
 
 
 async def test_list_allowances():
@@ -18,7 +19,7 @@ async def test_list_allowances():
         print(f"❌ .env.local not found at {env_path}")
         return False
 
-    with open(env_path, "r") as f:
+    with open(env_path) as f:
         for line in f:
             if "=" in line and not line.startswith("#"):
                 key, value = line.strip().split("=", 1)
@@ -33,8 +34,8 @@ async def test_list_allowances():
 
     try:
         # Get admin API key dynamically
-        import sys
         import os
+        import sys
 
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         from get_api_key import get_admin_api_key
@@ -79,7 +80,7 @@ async def test_get_single_allowance():
         print(f"❌ .env.local not found at {env_path}")
         return False
 
-    with open(env_path, "r") as f:
+    with open(env_path) as f:
         for line in f:
             if "=" in line and not line.startswith("#"):
                 key, value = line.strip().split("=", 1)
@@ -95,8 +96,8 @@ async def test_get_single_allowance():
 
     try:
         # Get admin API key dynamically
-        import sys
         import os
+        import sys
 
         sys.path.append(os.path.dirname(os.path.dirname(__file__)))
         from get_api_key import get_admin_api_key
@@ -120,7 +121,7 @@ async def test_get_single_allowance():
                 print(f"✅ Retrieved allowance: {data.get('name', 'Unknown')}")
                 return True
             elif response.status_code == 404:
-                print(f"⚠️ Allowance not found (expected for test ID)")
+                print("⚠️ Allowance not found (expected for test ID)")
                 return True
             else:
                 print(f"❌ Failed to get allowance: {response.text}")

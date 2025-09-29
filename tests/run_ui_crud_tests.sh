@@ -34,9 +34,11 @@ FAILED=0
 
 # Define CRUD tests to run
 CRUD_TESTS=(
-    "create-allowance.js:Create Allowance"
-    "edit-allowance.js:Edit Allowance"
-    "delete-allowance.js:Delete Allowance"
+    "crud/create-allowance.js:Create Allowance"
+    "crud/read-allowances.js:Read Allowances"
+    "crud/update-allowance.js:Update Allowance"
+    "crud/delete-allowance.js:Delete Allowance"
+    "crud/delete-all-test-allowances.js:Cleanup Test Allowances"
 )
 
 # Run each test
