@@ -103,9 +103,7 @@ def test_end_datetime():
 
         # Clean up
         print("5️⃣ Cleaning up test allowance...")
-        client.delete(
-            f"/allowance/api/v1/allowance/{allowance_id}", headers=headers
-        )
+        client.delete(f"/allowance/api/v1/allowance/{allowance_id}", headers=headers)
 
         # Check if end_datetime was stored
         if retrieved.get("end_datetime"):
