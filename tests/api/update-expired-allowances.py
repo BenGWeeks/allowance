@@ -5,7 +5,6 @@ This test catches the bug where expired allowances keep appearing as active.
 """
 
 import asyncio
-import time
 from datetime import datetime, timedelta, timezone
 
 import httpx

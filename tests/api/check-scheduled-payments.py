@@ -74,9 +74,7 @@ async def create_test_allowance(wallet_id: str, admin_key: str):
     """Create a test allowance via API"""
     try:
         now = datetime.now(timezone.utc)
-        end_time = now + timedelta(
-            minutes=2
-        )  # Stop after 2 minutes for quick test
+        end_time = now + timedelta(minutes=2)  # Stop after 2 minutes for quick test
 
         allowance_data = {
             "name": TEST_ALLOWANCE_NAME,

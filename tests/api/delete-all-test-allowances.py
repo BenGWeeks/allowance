@@ -91,7 +91,7 @@ async def delete_all_test_allowances():  # noqa: C901
                 )
 
                 if delete_response.status_code == 200:
-                    print(f"   ✅ Deleted successfully")
+                    print("   ✅ Deleted successfully")
                     deleted_count += 1
                 else:
                     print(
@@ -122,9 +122,7 @@ async def delete_all_test_allowances():  # noqa: C901
                 ]
 
                 if remaining_test:
-                    print(
-                        f"\n⚠️  {len(remaining_test)} test allowance(s) still remain:"
-                    )
+                    print(f"\n⚠️  {len(remaining_test)} test allowance(s) still remain:")
                     for a in remaining_test:
                         print(f"   - {a['name']} (ID: {a['id']})")
                 else:

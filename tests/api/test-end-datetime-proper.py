@@ -2,11 +2,12 @@
 """Test if end_datetime is being properly stored in the API."""
 
 import asyncio
+import os
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
 import httpx
-import sys
-import os
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -49,25 +50,23 @@ async def test_end_datetime():
         end_time = now + timedelta(hours=1)
 
         test_data = {
-            'name': 'Test End DateTime Storage',
-            'lightning_address': 'test@localhost',
-            'amount': 10,
-            'currency': 'sats',
-            'frequency_type': 'daily',
-            'memo': 'Testing end_datetime field',
-            'active': True,
-            'start_datetime': now.isoformat(),
-            'end_datetime': end_time.isoformat()
+            "name": "Test End DateTime Storage",
+            "lightning_address": "test@localhost",
+            "amount": 10,
+            "currency": "sats",
+            "frequency_type": "daily",
+            "memo": "Testing end_datetime field",
+            "active": True,
+            "start_datetime": now.isoformat(),
+            "end_datetime": end_time.isoformat(),
         }
 
-        print(f"\n2️⃣ Creating allowance with end_datetime...")
+        print("\n2️⃣ Creating allowance with end_datetime...")
         print(f"   Sending end_datetime: {test_data['end_datetime']}")
 
-        headers = {'X-Api-Key': admin_key}
+        headers = {"X-Api-Key": admin_key}
         create_response = await client.post(
-            f'{base_url}/allowance/api/v1/allowance',
-            json=test_data,
-            headers=headers
+            f"{base_url}/allowance/api/v1/allowance", json=test_data, headers=headers
         )
 
         if create_response.status_code != 201:
@@ -76,15 +75,14 @@ async def test_end_datetime():
             return False
 
         created = create_response.json()
-        allowance_id = created.get('id')
+        allowance_id = created.get("id")
         print(f"✓ Created allowance ID: {allowance_id}")
         print(f"   Response end_datetime: {created.get('end_datetime')}")
 
         # Get the allowance to verify end_datetime was stored
-        print(f"\n3️⃣ Retrieving allowance to verify storage...")
+        print("\n3️⃣ Retrieving allowance to verify storage...")
         get_response = await client.get(
-            f'{base_url}/allowance/api/v1/allowance/{allowance_id}',
-            headers=headers
+            f"{base_url}/allowance/api/v1/allowance/{allowance_id}", headers=headers
         )
 
         if get_response.status_code != 200:
@@ -95,27 +93,26 @@ async def test_end_datetime():
         print(f"   Retrieved end_datetime: {retrieved.get('end_datetime')}")
 
         # Clean up
-        print(f"\n4️⃣ Cleaning up test allowance...")
+        print("\n4️⃣ Cleaning up test allowance...")
         delete_response = await client.delete(
-            f'{base_url}/allowance/api/v1/allowance/{allowance_id}',
-            headers=headers
+            f"{base_url}/allowance/api/v1/allowance/{allowance_id}", headers=headers
         )
         if delete_response.status_code == 200:
             print("✓ Deleted test allowance")
 
         # Check results
         print("\n" + "=" * 60)
-        if retrieved.get('end_datetime'):
+        if retrieved.get("end_datetime"):
             print("✅ SUCCESS: end_datetime is being stored correctly!")
             return True
         else:
             print("❌ FAILURE: end_datetime is NOT being stored!")
-            print(f"\nFull retrieved data:")
+            print("\nFull retrieved data:")
             for key, value in retrieved.items():
                 print(f"  {key}: {value}")
             return False
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     success = asyncio.run(test_end_datetime())
     sys.exit(0 if success else 1)
