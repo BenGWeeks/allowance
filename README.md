@@ -1,5 +1,7 @@
 # Allowance - An [LNbits](https://github.com/lnbits/lnbits) Extension
 
+![Allowance Extension Banner](static/image/banner_cropped.png)
+
 > **Note**: This extension was developed as a test of using Claude Code to build an LNBits extension, demonstrating AI-assisted development of Bitcoin Lightning applications.
 
 ## Introduction
