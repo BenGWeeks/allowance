@@ -127,6 +127,21 @@ And I should not be able to submit an active allowance with a past end date
 And when I clear the end_datetime, the Active toggle should re-enable
 ----
 
+=== User Story: Prevent Invalid Date Ranges
+
+As a wallet owner, I want the system to prevent creating allowances where the end date is before the start date so that I don't create invalid schedules.
+
+**Acceptance Criteria:**
+
+[source,gherkin]
+----
+Given I am creating or editing an allowance
+When I set an end_datetime that is before or equal to the start_datetime
+Then the form should show an error: "End date must be after start date"
+And I should not be able to submit the form
+And the error should clear when I fix the date range
+----
+
 === User Story: Mobile-Friendly Popup
 
 As a mobile user, I want to scroll within popups so that I can access all form fields and buttons on small screens.
@@ -417,5 +432,13 @@ And all CRUD operations should work identically on both databases
 
 |Auto-deactivate Past End Dates
 |Automatically uncheck Active toggle when end_datetime is set to past
+|✅ Complete
+
+|Date Range Validation
+|Prevent end_datetime from being before or equal to start_datetime
+|✅ Complete
+
+|Local Timezone Display
+|Display datetime fields in user's local timezone (e.g., BST, PST) instead of UTC
 |✅ Complete
 |===

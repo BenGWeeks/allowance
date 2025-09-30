@@ -3,6 +3,13 @@
 const { chromium } = require('playwright');
 const { getConfig, login } = require('../auth-helper');
 
+// Helper to convert Date to local datetime string for datetime-local inputs
+function toLocalDatetimeString(date) {
+  const offset = date.getTimezoneOffset() * 60000;
+  const localDate = new Date(date.getTime() - offset);
+  return localDate.toISOString().slice(0, 16);
+}
+
 (async () => {
   console.log('⏱️ Creating minutely allowance (2 sats per minute for 5 minutes)...');
 
@@ -78,7 +85,7 @@ const { getConfig, login } = require('../auth-helper');
     const endDateInput = page.locator('input[type="datetime-local"]').nth(1);
     const endDateVisible = await endDateInput.count() > 1;
     if (endDateVisible) {
-      await endDateInput.fill(endTime.toISOString().slice(0, 16));
+      await endDateInput.fill(toLocalDatetimeString(endTime));
     }
 
     // Memo - find the textarea

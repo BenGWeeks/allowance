@@ -79,8 +79,8 @@ window.app = Vue.createApp({
       this.formDialog.data = {}
     },
     openCreateDialog() {
-      // For datetime-local input, we need YYYY-MM-DDTHH:MM format
-      const now = new Date().toISOString().slice(0, 16)
+      // For datetime-local input, we need YYYY-MM-DDTHH:MM format in LOCAL time
+      const now = this.toLocalDatetimeString(new Date())
       this.formDialog.data = {
         wallet: this.g.user.wallets[0].id,
         currency: 'sats',
@@ -117,6 +117,15 @@ window.app = Vue.createApp({
       if (!this.formDialog.data.frequency_type) errors.push('Frequency is required')
       if (!this.formDialog.data.start_datetime) errors.push('Start date & time is required')
 
+      // Validate: end_datetime must be after start_datetime
+      if (this.formDialog.data.end_datetime && this.formDialog.data.start_datetime) {
+        const startDate = new Date(this.formDialog.data.start_datetime)
+        const endDate = new Date(this.formDialog.data.end_datetime)
+        if (endDate <= startDate) {
+          errors.push('End date must be after start date')
+        }
+      }
+
       // Validate: cannot activate if end_datetime is in the past
       if (this.formDialog.data.active && this.formDialog.data.end_datetime) {
         const endDate = new Date(this.formDialog.data.end_datetime)
@@ -138,7 +147,12 @@ window.app = Vue.createApp({
       
       if (errors.length > 0) {
         console.log('❌ Validation errors:', errors)
-        LNbits.utils.notifyApiError('Form validation failed: ' + errors.join(', '))
+        this.$q.notify({
+          type: 'negative',
+          message: 'Validation failed: ' + errors.join(', '),
+          timeout: 5000,
+          position: 'top'
+        })
         return
       }
       
@@ -283,25 +297,23 @@ window.app = Vue.createApp({
       }
       
       console.log('📋 After cloning:', this.formDialog.data)
-      
-      // Convert datetime fields to format required by datetime-local input
-      // API returns ISO strings like "2025-09-28T07:49:00" which is already
-      // compatible with datetime-local, but we need to ensure it's truncated to minutes
+
+      // Convert datetime fields from UTC (API) to local time (for display)
+      // API returns ISO strings like "2025-09-28T07:49:00+00:00" in UTC
+      // datetime-local input needs local time in "YYYY-MM-DDTHH:mm" format
       if (this.formDialog.data.start_datetime) {
-        // If it has seconds or more precision, truncate to minutes
         if (typeof this.formDialog.data.start_datetime === 'string') {
-          // Take first 16 characters: "YYYY-MM-DDTHH:mm"
-          this.formDialog.data.start_datetime = this.formDialog.data.start_datetime.substring(0, 16)
-          console.log('✅ Formatted start_datetime:', this.formDialog.data.start_datetime)
+          const utcDate = new Date(this.formDialog.data.start_datetime)
+          this.formDialog.data.start_datetime = this.toLocalDatetimeString(utcDate)
+          console.log('✅ Converted start_datetime to local:', this.formDialog.data.start_datetime)
         }
       }
 
       if (this.formDialog.data.end_datetime) {
-        // If it has seconds or more precision, truncate to minutes
         if (typeof this.formDialog.data.end_datetime === 'string') {
-          // Take first 16 characters: "YYYY-MM-DDTHH:mm"
-          this.formDialog.data.end_datetime = this.formDialog.data.end_datetime.substring(0, 16)
-          console.log('✅ Formatted end_datetime:', this.formDialog.data.end_datetime)
+          const utcDate = new Date(this.formDialog.data.end_datetime)
+          this.formDialog.data.end_datetime = this.toLocalDatetimeString(utcDate)
+          console.log('✅ Converted end_datetime to local:', this.formDialog.data.end_datetime)
         }
       }
       
@@ -398,9 +410,65 @@ window.app = Vue.createApp({
       console.log('🔄 Manual toggle called - after:', this.formDialog.data.active)
       this.$forceUpdate()
     },
+    formatErrorTime(timestamp) {
+      if (!timestamp) return ''
+
+      let date
+
+      // Handle different timestamp formats
+      if (typeof timestamp === 'string') {
+        // Try parsing as ISO datetime string first
+        date = new Date(timestamp)
+
+        // If that fails, try as Unix timestamp (seconds)
+        if (isNaN(date.getTime())) {
+          const ts = parseInt(timestamp)
+          if (!isNaN(ts) && ts > 0) {
+            date = new Date(ts * 1000)
+          }
+        }
+      } else if (typeof timestamp === 'number') {
+        // Unix timestamp (seconds)
+        date = new Date(timestamp * 1000)
+      } else {
+        return 'Invalid datetime'
+      }
+
+      // Check if date is valid
+      if (!date || isNaN(date.getTime())) return 'Invalid datetime'
+
+      const now = new Date()
+      const diff = now - date
+
+      // Show relative time for recent errors
+      const minutes = Math.floor(diff / 60000)
+      const hours = Math.floor(diff / 3600000)
+      const days = Math.floor(diff / 86400000)
+
+      if (minutes < 1) return 'Just now'
+      if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`
+      if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`
+      if (days < 7) return `${days} day${days !== 1 ? 's' : ''} ago`
+
+      // Show full date for older errors
+      return date.toLocaleString(this.userLocale, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    },
+    toLocalDatetimeString(date) {
+      // Convert a Date object to YYYY-MM-DDTHH:MM format in local timezone
+      // toISOString() gives UTC, but we can offset to local time first
+      const offset = date.getTimezoneOffset() * 60000 // offset in milliseconds
+      const localDate = new Date(date.getTime() - offset)
+      return localDate.toISOString().slice(0, 16) // "YYYY-MM-DDTHH:mm"
+    },
     calculateNextPaymentDate(startDate, frequencyType) {
       const date = new Date(startDate)
-      
+
       switch (frequencyType) {
         case 'minutely':
           date.setMinutes(date.getMinutes() + 1)
@@ -420,7 +488,7 @@ window.app = Vue.createApp({
         default:
           date.setDate(date.getDate() + 7) // Default to weekly
       }
-      
+
       return date.toISOString()
     },
     loadCurrencies() {

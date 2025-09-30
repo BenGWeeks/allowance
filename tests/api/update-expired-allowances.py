@@ -89,13 +89,15 @@ async def test_scheduler_deactivation():  # noqa: C901
             print(f"   Will expire at: {end_time.strftime('%H:%M:%S')}")
 
             # Wait for it to expire and for scheduler to run
-            # Scheduler runs every 60 seconds, so wait 90 seconds to ensure it
-            # processes
+            # Scheduler runs every 60 seconds, so wait 130 seconds to ensure:
+            # - Allowance expires at 70 seconds
+            # - Scheduler has time to run (next cycle could be up to 60s away)
+            # - Total: 70 + 60 = 130 seconds minimum
             print(
-                "⏳ Waiting 90 seconds for allowance to expire and scheduler "
+                "⏳ Waiting 130 seconds for allowance to expire and scheduler "
                 "to deactivate it..."
             )
-            await asyncio.sleep(90)
+            await asyncio.sleep(130)
 
             # Now check the status multiple times over 2 minutes to confirm it
             # stays deactivated

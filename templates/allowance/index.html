@@ -56,9 +56,23 @@
                 </span>
                 <span v-else-if="col.name == 'status'">
                   <q-badge
-                    :color="props.row.active ? 'positive' : 'grey'"
-                    :label="props.row.active ? 'Active' : 'Inactive'"
-                  />
+                    :color="props.row.active ? (props.row.last_error ? 'negative' : 'positive') : 'grey'"
+                    :label="props.row.active ? (props.row.last_error ? 'Error' : 'Active') : 'Inactive'"
+                  >
+                    <q-tooltip v-if="props.row.last_error">
+                      <div class="text-weight-bold">Last Error:</div>
+                      <div class="q-mt-xs" v-text="props.row.last_error"></div>
+                      <div class="q-mt-xs text-caption" v-if="props.row.last_error_time">
+                        <span v-text="formatErrorTime(props.row.last_error_time)"></span>
+                      </div>
+                    </q-tooltip>
+                    <q-tooltip v-else-if="props.row.active && props.row.last_success_time">
+                      <div class="text-weight-bold">Last Successful Payment:</div>
+                      <div class="q-mt-xs text-caption">
+                        <span v-text="formatErrorTime(props.row.last_success_time)"></span>
+                      </div>
+                    </q-tooltip>
+                  </q-badge>
                 </span>
                 <span v-else v-text="col.value"></span>
               </q-td>

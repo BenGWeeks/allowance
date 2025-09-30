@@ -12,6 +12,8 @@ from loguru import logger
 from .crud import (
     deactivate_allowance,
     get_all_active_allowances,
+    update_allowance_error,
+    update_allowance_success,
     update_next_payment_date,
 )
 from .models import Allowance
@@ -242,15 +244,28 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
             if payment:
                 payment.memo = allowance.name
                 await update_payment(payment)
+            # Clear any previous errors and record success
+            await update_allowance_success(
+                allowance.id, int(datetime.now(timezone.utc).timestamp())
+            )
             logger.info(f"✅ Payment successful for allowance: {allowance.name}")
             return True
         else:
+            error_msg = "Payment failed"
             logger.error(f"❌ Payment failed for allowance: {allowance.name}")
+            await update_allowance_error(
+                allowance.id, error_msg, int(datetime.now(timezone.utc).timestamp())
+            )
             return False
 
     except Exception as e:
+        error_msg = str(e)
         logger.error(
-            f"❌ Error executing payment for allowance {allowance.name}: {e!s}"
+            f"❌ Error executing payment for allowance {allowance.name}: {error_msg}"
+        )
+        # Store error information
+        await update_allowance_error(
+            allowance.id, error_msg, int(datetime.now(timezone.utc).timestamp())
         )
         return False
 
@@ -282,6 +297,8 @@ async def check_and_process_allowances():  # noqa: C901
             # Process each allowance
             for allowance in allowances:
                 try:
+                    logger.debug(f"🔍 Checking allowance: {allowance.name} (ID: {allowance.id[:8]}...)")
+
                     # Skip if we've already deactivated this in a previous run
                     if allowance.id in deactivated_ids:
                         logger.debug(
@@ -321,6 +338,8 @@ async def check_and_process_allowances():  # noqa: C901
                     next_payment_date = ensure_timezone_aware(
                         allowance.next_payment_date
                     )
+
+                    logger.debug(f"⏰ {allowance.name}: next_payment={next_payment_date}, current={current_time}, due={current_time >= next_payment_date}")
 
                     if current_time >= next_payment_date:
                         logger.info(

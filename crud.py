@@ -225,3 +225,49 @@ async def get_all_active_allowances() -> list[Allowance]:
         "SELECT * FROM maintable WHERE active = true " "ORDER BY next_payment_date",
         model=Allowance,
     )
+
+
+async def update_allowance_error(
+    allowance_id: str, error_message: str, error_time: int
+) -> None:
+    """Store error information for an allowance"""
+    await db.execute(
+        """
+        UPDATE maintable
+        SET last_error = :error_message,
+            last_error_time = :error_time
+        WHERE id = :allowance_id
+        """,
+        {
+            "error_message": error_message,
+            "error_time": error_time,
+            "allowance_id": allowance_id,
+        },
+    )
+
+
+async def update_allowance_success(allowance_id: str, success_time: int) -> None:
+    """Clear error and store success time for an allowance"""
+    await db.execute(
+        """
+        UPDATE maintable
+        SET last_error = NULL,
+            last_error_time = NULL,
+            last_success_time = :success_time
+        WHERE id = :allowance_id
+        """,
+        {"success_time": success_time, "allowance_id": allowance_id},
+    )
+
+
+async def clear_allowance_error(allowance_id: str) -> None:
+    """Manually clear error information for an allowance"""
+    await db.execute(
+        """
+        UPDATE maintable
+        SET last_error = NULL,
+            last_error_time = NULL
+        WHERE id = :allowance_id
+        """,
+        {"allowance_id": allowance_id},
+    )

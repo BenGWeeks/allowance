@@ -9,6 +9,7 @@ async def m001_initial(db: Any) -> None:
     """
     Initial templates table with lightning address and currency support.
     Supports decimal amounts for fiat currencies.
+    Includes error tracking fields.
     """
     await db.execute(
         """
@@ -25,7 +26,10 @@ async def m001_initial(db: Any) -> None:
             memo TEXT,
             active BOOLEAN DEFAULT TRUE,
             end_datetime TIMESTAMP,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_error TEXT,
+            last_error_time TIMESTAMP,
+            last_success_time TIMESTAMP
         );
     """
     )

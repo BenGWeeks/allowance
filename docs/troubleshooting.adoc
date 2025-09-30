@@ -134,7 +134,8 @@ If the Active status doesn't save:
 
 . Check if the allowance has expired:
   - Expired allowances (end_datetime in past) cannot be reactivated
-  - Update the end_datetime to a future date first
+  - The Active toggle will be automatically disabled if end_datetime is in the past
+  - Update the end_datetime to a future date first, then the Active toggle will be re-enabled
 
 . Verify the update request succeeds:
   - Check browser console for errors
@@ -262,13 +263,30 @@ If you see schema-related errors:
 . This usually means migrations haven't run
 . Check the migrations.py file exists
 . Restart the container to trigger migrations
-. For development, you may need to drop and recreate tables:
+. For development, you may need to reset migrations:
 +
-[source,sql]
+[source,bash]
 ----
--- CAUTION: This deletes all allowance data!
-DROP TABLE IF EXISTS ext_allowance.maintable;
+# Reset migration tracking (forces migrations to re-run)
+docker exec lnbits-dev python3 -c "import sqlite3; \
+  conn = sqlite3.connect('/app/data/database.sqlite3'); \
+  conn.execute('DELETE FROM dbversions WHERE db = \"allowance\"'); \
+  conn.commit()"
+
+# Remove extension database (CAUTION: deletes all data!)
+docker exec lnbits-dev rm -f /app/data/ext_allowance.sqlite3
+
+# Restart to trigger migrations
+docker compose restart lnbits-dev
 ----
+
+**Understanding Migrations:**
+
+* **m001**, **m002**, etc. are migration functions in `migrations.py`
+* LNBits runs them in numerical order on extension startup
+* The `dbversions` table tracks which migrations have run
+* If a migration is modified after running, LNBits won't re-run it
+* Solution: Reset dbversions entry or disable/enable the extension
 
 == Testing Issues
 
@@ -319,6 +337,15 @@ If API tests fail:
 
 |`Amount must be greater than 0`
 |Ensure amount field is positive number
+
+|`Cannot change start_datetime of existing allowance`
+|Start date cannot be modified after creation - this is locked for data integrity
+
+|`Cannot change frequency_type of existing allowance`
+|Frequency cannot be modified after creation - this is locked for data integrity
+
+|`Cannot activate allowance with past end_datetime`
+|The Active toggle is automatically disabled if end_datetime is in the past - update end_datetime first
 |===
 
 == Getting Help
