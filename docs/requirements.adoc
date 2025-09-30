@@ -133,7 +133,8 @@ As a wallet owner, I want to identify allowance payments in transaction history 
 ----
 Given an allowance payment has been made
 When I view the transaction history
-Then the transaction memo should show "#allowance: [allowance name]"
+Then the transaction should have tag "#allowance"
+And the memo field should show the allowance name
 And I should be able to identify which allowance triggered the payment
 ----
 
@@ -182,6 +183,23 @@ When I click the delete button
 And I confirm the deletion
 Then the allowance should be removed
 And no further payments should be processed
+----
+
+=== User Story: Auto-reset Payment Dates
+
+As a wallet owner, I want allowances to start paying immediately when reactivated so that I don't need to manually adjust dates.
+
+**Acceptance Criteria:**
+
+[source,gherkin]
+----
+Given I have an allowance with a past next_payment_date
+When I reactivate the allowance (toggle from inactive to active)
+Or when I update the allowance and next_payment_date is in the past
+Or when I update without providing a start_datetime
+Then the system should automatically reset next_payment_date to NOW
+And payments should start processing immediately on the next scheduler cycle
+And I should not need to manually adjust the start date
 ----
 
 == Security & Configuration
@@ -294,6 +312,24 @@ And not use deprecated datetime.utcnow()
 And all datetime values should be timezone-aware
 ----
 
+=== User Story: Database Compatibility
+
+As a developer or system administrator, I want the extension to work with both SQLite and PostgreSQL so that it can run in different environments.
+
+**Acceptance Criteria:**
+
+[source,gherkin]
+----
+Given the extension needs to work with different databases
+When I deploy to SQLite or PostgreSQL
+Then the extension should:
+  - Not use PostgreSQL-specific functions (like to_timestamp())
+  - Not use schema prefixes incompatible with SQLite (ext_allowance.table)
+  - Store datetime values as Unix timestamps for cross-compatibility
+  - Let LNBits Database class handle schema management automatically
+And all CRUD operations should work identically on both databases
+----
+
 == Implementation Status
 
 [cols="1,3,1", options="header"]
@@ -313,7 +349,7 @@ And all datetime values should be timezone-aware
 |✅ Complete
 
 |Transaction Tracking
-|Payments tagged with "#allowance: {name}"
+|Payments tagged as "#allowance" with name in memo field
 |✅ Complete
 
 |Mobile UI
@@ -330,5 +366,13 @@ And all datetime values should be timezone-aware
 
 |Timezone Handling
 |Proper UTC timezone awareness
+|✅ Complete
+
+|Auto-reset Payment Dates
+|Automatically reset next_payment_date when reactivating or updating with past dates
+|✅ Complete
+
+|Database Compatibility
+|Support for both SQLite and PostgreSQL databases
 |✅ Complete
 |===
