@@ -260,18 +260,15 @@ async def api_allowance_update(
     logger.info(f"📝 Update request for allowance {allowance_id}: {data}")
 
     # Handle datetime fields
-    start_dt = parse_datetime_string(data.get("start_datetime"))
+    start_dt = parse_datetime_string(data.get("start_datetime")) if data.get("start_datetime") else None
     end_dt = parse_datetime_string(data.get("end_datetime"))
 
-    # Validate start_datetime is provided (now mandatory)
+    # For updates, if start_datetime is not provided, use the existing one
+    # (frontend doesn't send it because the field is disabled)
     if start_dt is None:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail="start_datetime is required",
-        )
-
-    # Validate: cannot change start_datetime on existing allowances
-    if start_dt != allowance.start_datetime:
+        start_dt = allowance.start_datetime
+    # If start_datetime is provided and differs from existing, reject the change
+    elif start_dt != allowance.start_datetime:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail="Cannot change start_datetime of existing allowance",

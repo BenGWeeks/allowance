@@ -183,10 +183,14 @@ window.app = Vue.createApp({
         amount: amount,  // Store the original amount (0.02 for GBP, 10 for sats)
         currency: data.currency || 'sats',
         frequency_type: data.frequency_type,
-        start_datetime: data.start_datetime ? new Date(data.start_datetime).toISOString() : new Date().toISOString(),  // Convert to ISO datetime
-        next_payment_date: this.calculateNextPaymentDate(data.start_datetime, data.frequency_type),
         active: Boolean(data.active),  // Ensure boolean type
         end_datetime: data.end_datetime ? new Date(data.end_datetime).toISOString() : null
+      }
+
+      // Only include start_datetime when creating (not updating)
+      if (!data.id) {
+        backendData.start_datetime = data.start_datetime ? new Date(data.start_datetime).toISOString() : new Date().toISOString()
+        backendData.next_payment_date = this.calculateNextPaymentDate(data.start_datetime, data.frequency_type)
       }
       
       console.log('🔥 Backend data active field:', backendData.active, '(type:', typeof backendData.active, ')')
