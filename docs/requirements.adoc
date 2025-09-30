@@ -157,6 +157,36 @@ And the "Create Allowance" button should be accessible
 And all form fields should be reachable by scrolling
 ----
 
+=== User Story: Comprehensive Status Tooltips
+
+As a wallet owner, I want detailed status information when hovering over allowance badges so that I can quickly understand payment history and upcoming schedules.
+
+**Acceptance Criteria:**
+
+[source,gherkin]
+----
+Given I have allowances with different statuses
+When I hover over a status badge
+Then I should see a tooltip with relevant information:
+
+For Error status (red badge):
+  - Last error message and time
+  - Last successful payment time (or "Never - no successful payments yet")
+  - Next payment due date/time
+
+For Active status (green badge):
+  - Last successful payment time (or "Never - no successful payments yet")
+  - Next payment due date/time
+
+For Inactive status (grey badge):
+  - Explanation that allowance is not processing payments
+  - Reason for inactivity (e.g., "End date has passed")
+  - Last successful payment time (or "Never - no successful payments yet")
+
+And all relative times should be displayed in user-friendly format (e.g., "5 minutes ago")
+And all absolute dates should be displayed in user's local timezone
+----
+
 === User Story: Clear Transaction Tracking
 
 As a wallet owner, I want to identify allowance payments in transaction history so that I can track and audit automated payments.
@@ -234,11 +264,12 @@ As a wallet owner, I want allowances to start paying immediately when reactivate
 Given I have an allowance with a past next_payment_date
 When I reactivate the allowance (toggle from inactive to active)
 Or when I update the allowance and next_payment_date is in the past
-Or when I update without providing a start_datetime
 Then the system should automatically reset next_payment_date to NOW
 And payments should start processing immediately on the next scheduler cycle
 And I should not need to manually adjust the start date
 ----
+
+**Important Note:** When editing an active allowance with a future next_payment_date, the system preserves the scheduled payment time. This ensures that fixing errors (like an invalid Lightning address) doesn't disrupt the payment schedule.
 
 == Security & Configuration
 
@@ -440,5 +471,17 @@ And all CRUD operations should work identically on both databases
 
 |Local Timezone Display
 |Display datetime fields in user's local timezone (e.g., BST, PST) instead of UTC
+|✅ Complete
+
+|Comprehensive Status Tooltips
+|Detailed tooltips on status badges showing error info, payment history, and schedules
+|✅ Complete
+
+|Preserve Payment Schedule on Edit
+|Keep next_payment_date when editing active allowances with future payments
+|✅ Complete
+
+|Payment Retry Schedule
+|Advance next_payment_date even when payments fail to maintain regular schedule
 |✅ Complete
 |===

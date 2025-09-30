@@ -65,10 +65,35 @@
                       <div class="q-mt-xs text-caption" v-if="props.row.last_error_time">
                         <span v-text="formatErrorTime(props.row.last_error_time)"></span>
                       </div>
+                      <div class="q-mt-sm text-weight-bold">Last Successful Payment:</div>
+                      <div class="q-mt-xs text-caption">
+                        <span v-if="props.row.last_success_time" v-text="formatErrorTime(props.row.last_success_time)"></span>
+                        <span v-else style="font-style: italic;">Never - no successful payments yet</span>
+                      </div>
+                      <div class="q-mt-sm text-weight-bold" v-if="props.row.next_payment_date">Next Payment Due:</div>
+                      <div class="q-mt-xs text-caption" v-if="props.row.next_payment_date">
+                        <span v-text="formatDatetime(props.row.next_payment_date)"></span>
+                      </div>
                     </q-tooltip>
-                    <q-tooltip v-else-if="props.row.active && props.row.last_success_time">
+                    <q-tooltip v-else-if="props.row.active">
                       <div class="text-weight-bold">Last Successful Payment:</div>
                       <div class="q-mt-xs text-caption">
+                        <span v-if="props.row.last_success_time" v-text="formatErrorTime(props.row.last_success_time)"></span>
+                        <span v-else style="font-style: italic;">Never - no successful payments yet</span>
+                      </div>
+                      <div class="q-mt-sm text-weight-bold" v-if="props.row.next_payment_date">Next Payment Due:</div>
+                      <div class="q-mt-xs text-caption" v-if="props.row.next_payment_date">
+                        <span v-text="formatDatetime(props.row.next_payment_date)"></span>
+                      </div>
+                    </q-tooltip>
+                    <q-tooltip v-else>
+                      <div class="text-weight-bold">Status: Inactive</div>
+                      <div class="q-mt-xs text-caption">This allowance is not currently processing payments</div>
+                      <div class="q-mt-sm text-caption" v-if="props.row.end_datetime && new Date(props.row.end_datetime) < new Date()">
+                        Reason: End date has passed
+                      </div>
+                      <div class="q-mt-sm text-weight-bold" v-if="props.row.last_success_time">Last Successful Payment:</div>
+                      <div class="q-mt-xs text-caption" v-if="props.row.last_success_time">
                         <span v-text="formatErrorTime(props.row.last_success_time)"></span>
                       </div>
                     </q-tooltip>

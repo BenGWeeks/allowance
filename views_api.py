@@ -329,8 +329,13 @@ async def api_allowance_update(  # noqa: C901
             f"🔄 Resetting next_payment_date to NOW for allowance {allowance_id}"
         )
     else:
-        # Use the provided start_datetime
-        next_payment = start_dt
+        # Keep the existing next_payment_date
+        if isinstance(allowance.next_payment_date, datetime):
+            next_payment = allowance.next_payment_date
+        else:
+            next_payment = datetime.fromtimestamp(
+                allowance.next_payment_date, tz=timezone.utc
+            )
 
     # Create update data
     update_data = CreateAllowanceData(

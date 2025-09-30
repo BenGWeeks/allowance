@@ -466,6 +466,21 @@ window.app = Vue.createApp({
       const localDate = new Date(date.getTime() - offset)
       return localDate.toISOString().slice(0, 16) // "YYYY-MM-DDTHH:mm"
     },
+    formatDatetime(timestamp) {
+      // Format a datetime for display in tooltips
+      if (!timestamp) return ''
+
+      const date = new Date(timestamp)
+      if (!date || isNaN(date.getTime())) return 'Invalid datetime'
+
+      return date.toLocaleString(this.userLocale, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    },
     calculateNextPaymentDate(startDate, frequencyType) {
       const date = new Date(startDate)
 

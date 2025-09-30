@@ -350,44 +350,47 @@ async def check_and_process_allowances():  # noqa: C901
                             # Execute Lightning address payment
                             success = await execute_lightning_address_payment(allowance)
 
-                            if success:
-                                # Update next payment date only if payment succeeded
-                                if allowance.frequency_type == "minutely":
-                                    allowance.next_payment_date = (
-                                        current_time + timedelta(minutes=1)
-                                    )
-                                elif allowance.frequency_type == "hourly":
-                                    allowance.next_payment_date = (
-                                        current_time + timedelta(hours=1)
-                                    )
-                                elif allowance.frequency_type == "daily":
-                                    allowance.next_payment_date = (
-                                        current_time + timedelta(days=1)
-                                    )
-                                elif allowance.frequency_type == "weekly":
-                                    allowance.next_payment_date = (
-                                        current_time + timedelta(weeks=1)
-                                    )
-                                elif allowance.frequency_type == "monthly":
-                                    allowance.next_payment_date = (
-                                        current_time + relativedelta(months=1)
-                                    )
-                                elif allowance.frequency_type == "yearly":
-                                    allowance.next_payment_date = (
-                                        current_time + relativedelta(years=1)
-                                    )
-
-                                # Update the next payment date
-                                await update_next_payment_date(
-                                    allowance.id, allowance.next_payment_date
+                            # Update next payment date regardless of success/failure
+                            # This ensures the schedule continues even if a payment fails
+                            if allowance.frequency_type == "minutely":
+                                allowance.next_payment_date = (
+                                    current_time + timedelta(minutes=1)
                                 )
+                            elif allowance.frequency_type == "hourly":
+                                allowance.next_payment_date = (
+                                    current_time + timedelta(hours=1)
+                                )
+                            elif allowance.frequency_type == "daily":
+                                allowance.next_payment_date = (
+                                    current_time + timedelta(days=1)
+                                )
+                            elif allowance.frequency_type == "weekly":
+                                allowance.next_payment_date = (
+                                    current_time + timedelta(weeks=1)
+                                )
+                            elif allowance.frequency_type == "monthly":
+                                allowance.next_payment_date = (
+                                    current_time + relativedelta(months=1)
+                                )
+                            elif allowance.frequency_type == "yearly":
+                                allowance.next_payment_date = (
+                                    current_time + relativedelta(years=1)
+                                )
+
+                            # Update the next payment date in database
+                            await update_next_payment_date(
+                                allowance.id, allowance.next_payment_date
+                            )
+
+                            if success:
                                 logger.info(
                                     f"✅ Next payment scheduled for: "
                                     f"{allowance.next_payment_date}"
                                 )
                             else:
                                 logger.error(
-                                    "❌ Payment failed, will retry on next " "cycle"
+                                    f"❌ Payment failed. Next attempt scheduled for: "
+                                    f"{allowance.next_payment_date}"
                                 )
 
                         except Exception as e:
