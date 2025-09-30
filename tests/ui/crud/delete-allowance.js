@@ -79,12 +79,16 @@ const getTestData = () => {
     console.log(`✅ Got admin API key: ${adminKey.substring(0, 8)}...`);
 
     // Create test allowance via API using Playwright's request context
+    const now = new Date();
+    const startDatetime = now.toISOString();
+
     const testAllowance = {
       name: testData.nameToDelete,
       lightning_address: 'test@localhost',
       amount: 10,
       currency: 'sats',
       frequency_type: 'daily',
+      start_datetime: startDatetime,
       memo: 'Test allowance for deletion',
       active: true
     };

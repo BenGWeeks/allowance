@@ -263,15 +263,35 @@ async def api_allowance_update(
     start_dt = parse_datetime_string(data.get("start_datetime"))
     end_dt = parse_datetime_string(data.get("end_datetime"))
 
-    # Set defaults if not provided
+    # Validate start_datetime is provided (now mandatory)
     if start_dt is None:
-        start_dt = datetime.now(timezone.utc)
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail="start_datetime is required",
+        )
+
+    # Validate: cannot change frequency_type on existing allowances
+    if data.get("frequency_type") and data.get("frequency_type") != allowance.frequency_type:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail="Cannot change frequency_type of existing allowance",
+        )
+
+    # Validate: cannot activate if end_datetime is in the past
+    is_active = data.get("active", allowance.active)
+    if is_active and end_dt is not None:
+        current_time = datetime.now(timezone.utc)
+        if end_dt < current_time:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail="Cannot activate allowance: end_datetime is in the past",
+            )
 
     # Calculate next payment date
     # If the allowance is being activated or if next_payment_date is in the past,
     # set it to now so payments start immediately
     was_inactive = not allowance.active
-    is_being_activated = was_inactive and data.get("active", False)
+    is_being_activated = was_inactive and is_active
 
     # Check if next_payment_date is in the past
     next_payment_in_past = False
@@ -289,9 +309,8 @@ async def api_allowance_update(
             logger.warning(f"⚠️ Error parsing next_payment_date: {e}")
             next_payment_in_past = True
 
-    # If being activated, or next payment is in the past, or no start_datetime provided,
-    # set next_payment to now
-    if is_being_activated or next_payment_in_past or data.get("start_datetime") is None:
+    # If being activated or next payment is in the past, reset to now
+    if is_being_activated or next_payment_in_past:
         next_payment = datetime.now(timezone.utc)
         logger.info(
             f"🔄 Resetting next_payment_date to NOW for allowance {allowance_id}"
@@ -365,9 +384,22 @@ async def api_allowance_create(
     start_dt = parse_datetime_string(data.get("start_datetime"))
     end_dt = parse_datetime_string(data.get("end_datetime"))
 
-    # Set defaults
+    # Validate start_datetime is provided (now mandatory)
     if start_dt is None:
-        start_dt = datetime.now(timezone.utc)
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail="start_datetime is required",
+        )
+
+    # Validate: cannot activate if end_datetime is in the past
+    is_active = data.get("active", True)
+    if is_active and end_dt is not None:
+        current_time = datetime.now(timezone.utc)
+        if end_dt < current_time:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail="Cannot activate allowance: end_datetime is in the past",
+            )
 
     # Calculate next payment date
     next_payment = start_dt
@@ -383,7 +415,7 @@ async def api_allowance_create(
         frequency_type=data.get("frequency_type", "daily"),
         next_payment_date=next_payment,
         memo=data.get("memo", ""),
-        active=data.get("active", True),
+        active=is_active,
         end_datetime=end_dt,
         lnurlpay=data.get("lnurlpay", ""),
         total=data.get("total", 0),

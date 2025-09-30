@@ -233,6 +233,8 @@
           emit-value
           map-options
           :rules="[val => !!val || 'Frequency is required']"
+          :disable="!!formDialog.data.id"
+          :hint="formDialog.data.id ? 'Frequency cannot be changed after creation' : ''"
         ></q-select>
         
         <div v-if="formDialog.data.frequency_type == 'per_second'" class="q-pa-sm bg-yellow-1 text-dark rounded-borders">
@@ -250,9 +252,9 @@
               filled
               dense
               v-model="formDialog.data.start_datetime"
-              label="Start date & time (optional)"
+              label="Start date & time *"
               type="datetime-local"
-              hint="Leave blank to start immediately"
+              :rules="[val => !!val || 'Start date & time is required']"
             ></q-input>
           </div>
           <div class="col">
@@ -271,7 +273,11 @@
             v-model="formDialog.data.active"
             label="Active"
             color="positive"
+            :disable="formDialog.data.end_datetime && new Date(formDialog.data.end_datetime) < new Date()"
           />
+          <span v-if="formDialog.data.end_datetime && new Date(formDialog.data.end_datetime) < new Date()" class="text-caption text-negative q-ml-sm">
+            Cannot activate: End date is in the past
+          </span>
         </div>
         
         <div class="row q-mt-lg">
@@ -279,6 +285,7 @@
             unelevated
             color="primary"
             :loading="formDialog.loading"
+            :disable="formDialog.data.active && formDialog.data.end_datetime && new Date(formDialog.data.end_datetime) < new Date()"
             type="submit"
             >
             <span v-if="formDialog.data.id">Update Allowance</span>

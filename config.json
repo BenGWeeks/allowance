@@ -1,7 +1,7 @@
 {
   "name": "Allowance",
   "version": "1.0.2",
-  "short_description": "Automatic recurring payments for allowances, subscriptions & transfers.",
+  "short_description": "Automatic recurring payments",
   "tile": "/allowance/static/image/allowance.png",
   "min_lnbits_version": "1.0.0",
   "contributors": [
@@ -11,7 +11,11 @@
       "role": "Chief Builder"
     }
   ],
-  "images": [],
+  "images": [
+    "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/1.jpeg",
+    "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/2.jpeg",
+    "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/3.jpeg"
+  ],
   "description_md": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/description.md",
   "terms_and_conditions_md": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/toc.md",
   "license": "DON'T BE A DICK PUBLIC LICENSE"

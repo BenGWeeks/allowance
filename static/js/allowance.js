@@ -115,7 +115,16 @@ window.app = Vue.createApp({
       if (!this.formDialog.data.lightning_address) errors.push('Lightning address is required')
       if (!this.formDialog.data.amount || this.formDialog.data.amount <= 0) errors.push('Amount must be greater than 0')
       if (!this.formDialog.data.frequency_type) errors.push('Frequency is required')
-      // start_datetime is optional - backend will default to now() if not provided
+      if (!this.formDialog.data.start_datetime) errors.push('Start date & time is required')
+
+      // Validate: cannot activate if end_datetime is in the past
+      if (this.formDialog.data.active && this.formDialog.data.end_datetime) {
+        const endDate = new Date(this.formDialog.data.end_datetime)
+        const now = new Date()
+        if (endDate < now) {
+          errors.push('Cannot activate allowance: end date is in the past')
+        }
+      }
       
       console.log('🔍 Validation check:', {
         name: this.formDialog.data.name,
@@ -150,14 +159,8 @@ window.app = Vue.createApp({
       }
       
       console.log('✅ Wallet found, preparing data...')
-      
+
       const data = _.clone(this.formDialog.data)
-      
-      // Set start_datetime to current date if not specified
-      if (!data.start_datetime) {
-        data.start_datetime = new Date().toISOString().split('T')[0]
-        console.log('📅 Set start_datetime to:', data.start_datetime)
-      }
       
       // Transform data to match backend model
       console.log('🔥 Processing active field:', data.active, '(type:', typeof data.active, ')')
@@ -449,10 +452,31 @@ window.app = Vue.createApp({
         })
     }
   },
+  computed: {
+    isEndDateInPast() {
+      if (!this.formDialog.data.end_datetime) {
+        return false
+      }
+      const endDate = new Date(this.formDialog.data.end_datetime)
+      const now = new Date()
+      return endDate < now
+    }
+  },
   watch: {
     'formDialog.data.currency': function(newVal) {
       if (newVal) {
         this.updateFiatRate(newVal)
+      }
+    },
+    'formDialog.data.end_datetime': function(newVal) {
+      // Automatically deactivate if end_datetime is in the past
+      if (newVal) {
+        const endDate = new Date(newVal)
+        const now = new Date()
+        if (endDate < now && this.formDialog.data.active) {
+          console.log('⚠️ End date is in the past, deactivating allowance')
+          this.formDialog.data.active = false
+        }
       }
     }
   },
