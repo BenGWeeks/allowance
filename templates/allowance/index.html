@@ -277,9 +277,6 @@
             color="positive"
             :disable="!!(formDialog.data.end_datetime && formDialog.data.end_datetime.trim() !== '' && new Date(formDialog.data.end_datetime) < new Date())"
           />
-          <span v-if="formDialog.data.end_datetime && formDialog.data.end_datetime.trim() !== '' && new Date(formDialog.data.end_datetime) < new Date()" class="text-caption text-negative q-ml-sm">
-            Cannot activate: End date is in the past
-          </span>
         </div>
         
         <div class="row q-mt-lg">
