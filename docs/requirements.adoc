@@ -94,18 +94,37 @@ Then payments should maintain consistent timing patterns
 
 == User Interface
 
-=== User Story: Optional Start Date
+=== User Story: Mandatory Start Date
 
-As a wallet owner, I want the start date to be optional so that allowances can begin immediately without configuration.
+As a wallet owner, I want to specify when an allowance should start so that I have control over payment scheduling.
 
 **Acceptance Criteria:**
 
 [source,gherkin]
 ----
 Given I am creating an allowance
-When I leave the start date field empty
-Then the allowance should start immediately (using current datetime)
-And the UI should show "Start date & time (optional)"
+When I fill in the form
+Then the start date & time field should be required
+And the UI should show "Start date & time *"
+And I should not be able to create an allowance without a start date
+And the field should default to the current datetime
+----
+
+=== User Story: Prevent Past End Date Activation
+
+As a wallet owner, I want the system to prevent activating allowances with past end dates so that I don't create allowances that immediately expire.
+
+**Acceptance Criteria:**
+
+[source,gherkin]
+----
+Given I am creating or editing an allowance
+When I set an end_datetime that is in the past
+Then the Active toggle should be disabled
+And the Active toggle should be automatically unchecked
+And the Create/Update button should be disabled
+And I should see a message "Cannot activate: End date is in the past"
+And I should not be able to submit an active allowance with a past end date
 ----
 
 === User Story: Mobile-Friendly Popup
@@ -166,7 +185,9 @@ As a wallet owner, I want to modify existing allowances so that I can adjust pay
 Given I have an existing allowance
 When I click the edit button
 Then I should see a form with current values pre-filled
-And I should be able to modify any field
+And I should be able to modify most fields
+But I should not be able to change the frequency_type
+And the frequency dropdown should be disabled with a hint message
 And changes should be saved when I click "Update Allowance"
 ----
 
@@ -374,5 +395,17 @@ And all CRUD operations should work identically on both databases
 
 |Database Compatibility
 |Support for both SQLite and PostgreSQL databases
+|✅ Complete
+
+|Mandatory Start DateTime
+|Start date & time is required for all allowances
+|✅ Complete
+
+|Past End Date Validation
+|Prevent activation of allowances with past end_datetime
+|✅ Complete
+
+|Frequency Lock
+|Prevent editing frequency_type on existing allowances
 |✅ Complete
 |===
