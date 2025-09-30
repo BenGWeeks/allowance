@@ -10,8 +10,8 @@
             "short_description": "Setup recurring payments to lightning addresses. Perfect for allowances, pocket money, subscriptions, and regular transfers.",
             "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/allowance.png",
             "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/config.json",
-            "archive": "https://github.com/BenGWeeks/allowance/archive/refs/heads/main.zip",
-            "hash": "placeholder"
+            "archive": "https://github.com/BenGWeeks/allowance/archive/refs/tags/v1.0.2.zip",
+            "hash": "1f0dca16b0aea53be3e9455dd7f15336c15b92a23a5a3e276090cfda2fbf7dd8"
         }
     ]
 }

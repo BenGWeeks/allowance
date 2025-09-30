@@ -348,6 +348,32 @@ If API tests fail:
 |The Active toggle is automatically disabled if end_datetime is in the past - update end_datetime first
 |===
 
+=== File Hash Mismatch During Installation
+
+If you see "File hash mismatch. Will not install" when installing via extensions.json:
+
+. This error occurs when the SHA256 hash in `extensions.json` doesn't match the actual archive file
+. The extension uses a tagged release (not main branch) to ensure stable hashes
+. If you've just updated to a new version:
+  - Uninstall the extension completely
+  - Clear cached extension files:
++
+[source,bash]
+----
+docker exec lnbits rm -rf /app/lnbits/extensions/allowance
+docker restart lnbits
+----
+  - Reinstall from the extensions marketplace
+
+. The hash is calculated from the release archive:
++
+[source,bash]
+----
+curl -sL "https://github.com/BenGWeeks/allowance/archive/refs/tags/v1.0.2.zip" | sha256sum
+----
+
+. **Why we use tagged releases:** Using `main` branch would cause the hash to change with every commit, making verification impossible. Tagged releases (e.g., v1.0.2) provide immutable snapshots with stable hashes.
+
 == Getting Help
 
 If you can't resolve an issue:
