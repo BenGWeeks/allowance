@@ -255,7 +255,7 @@
               label="Start date & time *"
               type="datetime-local"
               :rules="[val => !!val || 'Start date & time is required']"
-              :readonly="!!formDialog.data.id"
+              :disable="!!formDialog.data.id"
               :hint="formDialog.data.id ? 'Start date cannot be changed after creation' : ''"
             ></q-input>
           </div>
