@@ -12,9 +12,15 @@
     }
   ],
   "images": [
-    "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/1.jpeg",
-    "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/2.jpeg",
-    "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/3.jpeg"
+    {
+      "uri": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/1.jpeg"
+    },
+    {
+      "uri": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/2.jpeg"
+    },
+    {
+      "uri": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/3.jpeg"
+    }
   ],
   "description_md": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/description.md",
   "terms_and_conditions_md": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/toc.md",
