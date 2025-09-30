@@ -270,6 +270,13 @@ async def api_allowance_update(
             detail="start_datetime is required",
         )
 
+    # Validate: cannot change start_datetime on existing allowances
+    if start_dt != allowance.start_datetime:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail="Cannot change start_datetime of existing allowance",
+        )
+
     # Validate: cannot change frequency_type on existing allowances
     if data.get("frequency_type") and data.get("frequency_type") != allowance.frequency_type:
         raise HTTPException(

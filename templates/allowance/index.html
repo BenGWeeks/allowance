@@ -255,6 +255,8 @@
               label="Start date & time *"
               type="datetime-local"
               :rules="[val => !!val || 'Start date & time is required']"
+              :readonly="!!formDialog.data.id"
+              :hint="formDialog.data.id ? 'Start date cannot be changed after creation' : ''"
             ></q-input>
           </div>
           <div class="col">
@@ -273,9 +275,9 @@
             v-model="formDialog.data.active"
             label="Active"
             color="positive"
-            :disable="formDialog.data.end_datetime && new Date(formDialog.data.end_datetime) < new Date()"
+            :disable="!!(formDialog.data.end_datetime && formDialog.data.end_datetime.trim() !== '' && new Date(formDialog.data.end_datetime) < new Date())"
           />
-          <span v-if="formDialog.data.end_datetime && new Date(formDialog.data.end_datetime) < new Date()" class="text-caption text-negative q-ml-sm">
+          <span v-if="formDialog.data.end_datetime && formDialog.data.end_datetime.trim() !== '' && new Date(formDialog.data.end_datetime) < new Date()" class="text-caption text-negative q-ml-sm">
             Cannot activate: End date is in the past
           </span>
         </div>
@@ -285,7 +287,7 @@
             unelevated
             color="primary"
             :loading="formDialog.loading"
-            :disable="formDialog.data.active && formDialog.data.end_datetime && new Date(formDialog.data.end_datetime) < new Date()"
+            :disable="formDialog.data.active && formDialog.data.end_datetime && formDialog.data.end_datetime.trim() !== '' && new Date(formDialog.data.end_datetime) < new Date()"
             type="submit"
             >
             <span v-if="formDialog.data.id">Update Allowance</span>

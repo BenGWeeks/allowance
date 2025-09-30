@@ -470,6 +470,7 @@ window.app = Vue.createApp({
     },
     'formDialog.data.end_datetime': function(newVal) {
       // Automatically deactivate if end_datetime is in the past
+      // Re-enable active if end_datetime is cleared or in the future
       if (newVal) {
         const endDate = new Date(newVal)
         const now = new Date()
@@ -478,6 +479,8 @@ window.app = Vue.createApp({
           this.formDialog.data.active = false
         }
       }
+      // If end_datetime is cleared, no need to change active state
+      // User can now freely toggle active
     }
   },
   created() {
