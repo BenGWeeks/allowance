@@ -48,7 +48,9 @@ class Allowance(BaseModel):
     created_at: Optional[datetime] = None  # When the allowance was created
     last_error: Optional[str] = None  # Last error message
     last_error_time: Optional[datetime] = None  # When the last error occurred
-    last_success_time: Optional[datetime] = None  # When the last successful payment was made
+    last_success_time: Optional[datetime] = (
+        None  # When the last successful payment was made
+    )
 
     @validator("amount")
     def amount_must_be_positive(cls, v):  # noqa: N805

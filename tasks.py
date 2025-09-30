@@ -297,7 +297,9 @@ async def check_and_process_allowances():  # noqa: C901
             # Process each allowance
             for allowance in allowances:
                 try:
-                    logger.debug(f"🔍 Checking allowance: {allowance.name} (ID: {allowance.id[:8]}...)")
+                    logger.debug(
+                        f"🔍 Checking allowance: {allowance.name} (ID: {allowance.id[:8]}...)"
+                    )
 
                     # Skip if we've already deactivated this in a previous run
                     if allowance.id in deactivated_ids:
@@ -339,7 +341,9 @@ async def check_and_process_allowances():  # noqa: C901
                         allowance.next_payment_date
                     )
 
-                    logger.debug(f"⏰ {allowance.name}: next_payment={next_payment_date}, current={current_time}, due={current_time >= next_payment_date}")
+                    logger.debug(
+                        f"⏰ {allowance.name}: next_payment={next_payment_date}, current={current_time}, due={current_time >= next_payment_date}"
+                    )
 
                     if current_time >= next_payment_date:
                         logger.info(
@@ -353,20 +357,20 @@ async def check_and_process_allowances():  # noqa: C901
                             # Update next payment date regardless of success/failure
                             # This ensures the schedule continues even if a payment fails
                             if allowance.frequency_type == "minutely":
-                                allowance.next_payment_date = (
-                                    current_time + timedelta(minutes=1)
+                                allowance.next_payment_date = current_time + timedelta(
+                                    minutes=1
                                 )
                             elif allowance.frequency_type == "hourly":
-                                allowance.next_payment_date = (
-                                    current_time + timedelta(hours=1)
+                                allowance.next_payment_date = current_time + timedelta(
+                                    hours=1
                                 )
                             elif allowance.frequency_type == "daily":
-                                allowance.next_payment_date = (
-                                    current_time + timedelta(days=1)
+                                allowance.next_payment_date = current_time + timedelta(
+                                    days=1
                                 )
                             elif allowance.frequency_type == "weekly":
-                                allowance.next_payment_date = (
-                                    current_time + timedelta(weeks=1)
+                                allowance.next_payment_date = current_time + timedelta(
+                                    weeks=1
                                 )
                             elif allowance.frequency_type == "monthly":
                                 allowance.next_payment_date = (
