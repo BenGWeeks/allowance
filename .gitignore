@@ -6,6 +6,7 @@ node_modules
 # Data and temporary folders
 data/
 data-dev/
+data-test/
 temp/
 test-results/
 pgdata/

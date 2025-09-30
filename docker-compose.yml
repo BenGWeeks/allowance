@@ -13,5 +13,20 @@ services:
       - ./data-dev:/app/data
       - .:/app/lnbits/extensions/allowance
 
+  lnbits-test:
+    image: lnbits/lnbits:latest
+    container_name: lnbits-test
+    restart: unless-stopped
+    ports:
+      - "5003:5000"
+    environment:
+      - LNBITS_BACKEND_WALLET_CLASS=FakeWallet
+      - LNBITS_ADMIN_UI=true
+      - LNBITS_DATA_FOLDER=/app/data
+    volumes:
+      - ./data-test:/app/data
+      - .:/app/lnbits/extensions/allowance
+
 volumes:
   data-dev:
+  data-test:
