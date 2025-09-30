@@ -182,13 +182,14 @@ window.app = Vue.createApp({
         lightning_address: data.lightning_address,
         amount: amount,  // Store the original amount (0.02 for GBP, 10 for sats)
         currency: data.currency || 'sats',
-        frequency_type: data.frequency_type,
         active: Boolean(data.active),  // Ensure boolean type
         end_datetime: data.end_datetime ? new Date(data.end_datetime).toISOString() : null
       }
 
-      // Only include start_datetime when creating (not updating)
+      // Only include start_datetime and frequency_type when creating (not updating)
+      // These fields are locked after creation
       if (!data.id) {
+        backendData.frequency_type = data.frequency_type
         backendData.start_datetime = data.start_datetime ? new Date(data.start_datetime).toISOString() : new Date().toISOString()
         backendData.next_payment_date = this.calculateNextPaymentDate(data.start_datetime, data.frequency_type)
       }

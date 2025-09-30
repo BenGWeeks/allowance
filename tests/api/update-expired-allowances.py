@@ -99,9 +99,7 @@ async def test_scheduler_deactivation():  # noqa: C901
 
             # Now check the status multiple times over 2 minutes to confirm it
             # stays deactivated
-            print(
-                "\n🔍 Checking if allowance stays deactivated over 2 minutes..."
-            )
+            print("\n🔍 Checking if allowance stays deactivated over 2 minutes...")
 
             deactivation_checks = []
             for minute in range(2):

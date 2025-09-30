@@ -50,7 +50,7 @@ def get_wallet_user(wallet) -> str:
         raise ValueError("Cannot extract wallet user from provided object")
 
 
-def parse_datetime_string(date_str: Optional[str]) -> Optional[datetime]:
+def parse_datetime_string(date_str: Optional[str]) -> Optional[datetime]:  # noqa: C901
     """Helper to parse datetime strings from various formats."""
     if not date_str:
         return None
@@ -233,7 +233,7 @@ async def api_allowance(
 
 ## Update a record
 @allowance_api_router.put("/api/v1/allowance/{allowance_id}", status_code=HTTPStatus.OK)
-async def api_allowance_update(
+async def api_allowance_update(  # noqa: C901
     allowance_id: str,
     request: Request,
     wallet: Wallet = Depends(require_admin_key),
@@ -260,7 +260,11 @@ async def api_allowance_update(
     logger.info(f"📝 Update request for allowance {allowance_id}: {data}")
 
     # Handle datetime fields
-    start_dt = parse_datetime_string(data.get("start_datetime")) if data.get("start_datetime") else None
+    start_dt = (
+        parse_datetime_string(data.get("start_datetime"))
+        if data.get("start_datetime")
+        else None
+    )
     end_dt = parse_datetime_string(data.get("end_datetime"))
 
     # For updates, if start_datetime is not provided, use the existing one
@@ -274,8 +278,13 @@ async def api_allowance_update(
             detail="Cannot change start_datetime of existing allowance",
         )
 
-    # Validate: cannot change frequency_type on existing allowances
-    if data.get("frequency_type") and data.get("frequency_type") != allowance.frequency_type:
+    # For updates, if frequency_type is not provided, use the existing one
+    # (frontend doesn't send it because the field is disabled)
+    frequency_type = data.get("frequency_type")
+    if frequency_type is None:
+        frequency_type = allowance.frequency_type
+    # If frequency_type is provided and differs from existing, reject the change
+    elif frequency_type != allowance.frequency_type:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail="Cannot change frequency_type of existing allowance",
@@ -332,7 +341,7 @@ async def api_allowance_update(
         amount=data.get("amount", allowance.amount),
         currency=data.get("currency", allowance.currency),
         start_datetime=start_dt,
-        frequency_type=data.get("frequency_type", allowance.frequency_type),
+        frequency_type=frequency_type,  # Use the validated frequency_type
         next_payment_date=next_payment,
         memo=data.get("memo", allowance.memo),
         active=data.get("active", allowance.active),
