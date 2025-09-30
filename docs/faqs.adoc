@@ -104,13 +104,18 @@ NOTE: Expired allowances (past end date) cannot be reactivated.
 
 === Can I Edit an Existing Allowance?
 
-Yes, all fields can be edited:
+Yes, most fields can be edited:
 
 * Amount and currency
-* Payment frequency
-* Start and end dates
+* End date and time
 * Recipient address
-* Active status
+* Active status (if not expired)
+
+**Note**: The following fields are locked after creation and cannot be changed:
+* Start date and time
+* Payment frequency
+
+**Important**: You cannot reactivate an allowance if the end_datetime is in the past. To restart payments, you must first update the end date to a future date.
 
 Changes take effect immediately after saving.
 
@@ -126,7 +131,7 @@ Click the delete (trash) icon on any allowance row. This:
 
 === What Are the System Requirements?
 
-* LNBits v0.12.0 or higher
+* LNBits v1.1.0 or higher (tested with v1.2.1)
 * PostgreSQL or SQLite database
 * Docker (recommended) or Python 3.9+
 * Active Lightning node connection

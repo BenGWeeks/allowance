@@ -9,7 +9,7 @@ Complete guide for installing and configuring the LNBits Allowance extension.
 
 Before installing the Allowance extension, ensure you have:
 
-* LNBits v0.12.0 or higher installed and running
+* LNBits v1.1.0 or higher installed and running (tested with v1.2.1)
 * Admin access to your LNBits instance
 * PostgreSQL or SQLite database configured
 * Docker (recommended) or Python 3.9+ environment
