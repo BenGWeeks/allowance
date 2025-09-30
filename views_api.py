@@ -267,8 +267,38 @@ async def api_allowance_update(
     if start_dt is None:
         start_dt = datetime.now(timezone.utc)
 
-    # Calculate next payment date based on start_datetime
-    next_payment = start_dt
+    # Calculate next payment date
+    # If the allowance is being activated or if next_payment_date is in the past,
+    # set it to now so payments start immediately
+    was_inactive = not allowance.active
+    is_being_activated = was_inactive and data.get("active", False)
+
+    # Check if next_payment_date is in the past
+    next_payment_in_past = False
+    if allowance.next_payment_date:
+        try:
+            if isinstance(allowance.next_payment_date, datetime):
+                next_payment_datetime = allowance.next_payment_date
+            else:
+                next_payment_datetime = datetime.fromtimestamp(
+                    allowance.next_payment_date, tz=timezone.utc
+                )
+            current_time = datetime.now(timezone.utc)
+            next_payment_in_past = next_payment_datetime < current_time
+        except Exception as e:
+            logger.warning(f"⚠️ Error parsing next_payment_date: {e}")
+            next_payment_in_past = True
+
+    # If being activated, or next payment is in the past, or no start_datetime provided,
+    # set next_payment to now
+    if is_being_activated or next_payment_in_past or data.get("start_datetime") is None:
+        next_payment = datetime.now(timezone.utc)
+        logger.info(
+            f"🔄 Resetting next_payment_date to NOW for allowance {allowance_id}"
+        )
+    else:
+        # Use the provided start_datetime
+        next_payment = start_dt
 
     # Create update data
     update_data = CreateAllowanceData(

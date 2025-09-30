@@ -1,41 +1,17 @@
 services:
-  allowance-lnbits:
+  lnbits-dev:
     image: lnbits/lnbits:latest
-    container_name: allowance-lnbits-dev
+    container_name: lnbits-dev
     restart: unless-stopped
     ports:
-      - "5001:5000"
+      - "5002:5000"
     environment:
       - LNBITS_BACKEND_WALLET_CLASS=FakeWallet
       - LNBITS_ADMIN_UI=true
       - LNBITS_DATA_FOLDER=/app/data
-      - LNBITS_DATABASE_URL=postgres://lnbits:password@allowance-postgres:5432/lnbits
     volumes:
-      - ./data:/app/data
+      - ./data-dev:/app/data
       - .:/app/lnbits/extensions/allowance
-    depends_on:
-      - allowance-postgres
-    networks:
-      - lnbits-network
-
-  allowance-postgres:
-    image: postgres:15
-    container_name: allowance-postgres-dev
-    restart: unless-stopped
-    environment:
-      - POSTGRES_DB=lnbits
-      - POSTGRES_USER=lnbits
-      - POSTGRES_PASSWORD=password
-      - PGDATA=/var/lib/postgresql/data/pgdata
-    volumes:
-      - ./pgdata:/var/lib/postgresql/data
-    networks:
-      - lnbits-network
-
-networks:
-  lnbits-network:
-    driver: bridge
 
 volumes:
-  pgdata:
-  data:
+  data-dev:

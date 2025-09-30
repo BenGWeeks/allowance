@@ -85,8 +85,23 @@ done
 
 TOTAL=${#CORE_TESTS[@]}
 
-# Check if --all flag was passed
-if [[ "$1" == "--all" ]]; then
+# Check for flags
+RUN_ALL=false
+SKIP_CLEANUP=false
+
+for arg in "$@"; do
+    case $arg in
+        --all)
+            RUN_ALL=true
+            ;;
+        --no-cleanup)
+            SKIP_CLEANUP=true
+            ;;
+    esac
+done
+
+# Run long-running tests if --all flag was passed
+if [ "$RUN_ALL" = true ]; then
     echo
     echo "Running long-running tests..."
     for test in "${LONG_TESTS[@]}"; do
@@ -115,13 +130,19 @@ echo
 echo "============================="
 echo "📊 API Test Results: $PASSED/$TOTAL tests passed"
 
-# Always run cleanup at the end
-echo
-echo "🧹 Running cleanup..."
-if python3 "./api/delete-all-test-allowances.py" 2>/dev/null; then
-    echo "✅ Cleanup completed"
+# Run cleanup unless --no-cleanup flag was passed
+if [ "$SKIP_CLEANUP" = true ]; then
+    echo
+    echo "ℹ️  Skipping cleanup (--no-cleanup flag passed)"
+    echo "   Test allowances remain in the database"
 else
-    echo "⚠️ Cleanup may have failed"
+    echo
+    echo "🧹 Running cleanup..."
+    if python3 "./api/delete-all-test-allowances.py" 2>/dev/null; then
+        echo "✅ Cleanup completed"
+    else
+        echo "⚠️ Cleanup may have failed"
+    fi
 fi
 
 if [ $PASSED -eq $TOTAL ]; then

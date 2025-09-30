@@ -2,6 +2,7 @@
 """Test if end_datetime is being properly stored in the API."""
 
 import os
+import random
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -17,7 +18,7 @@ if os.path.exists(env_file):
                 key, value = line.split("=", 1)
                 os.environ[key] = value
 
-BASE_URL = "http://localhost:5001"  # Always use local dev for this test
+BASE_URL = os.getenv("TEST_LNBITS_URL")
 USERNAME = os.getenv("LNBITS_ADMIN_USERNAME")
 PASSWORD = os.getenv("LNBITS_ADMIN_PASSWORD")
 
@@ -64,7 +65,7 @@ def test_end_datetime():
         test_data = {
             "name": "Test End DateTime",
             "lightning_address": "test@localhost",
-            "amount": 10,
+            "amount": random.randint(1, 99),  # Random amount between 1-99 sats
             "currency": "sats",
             "frequency_type": "daily",
             "memo": "Testing end_datetime",

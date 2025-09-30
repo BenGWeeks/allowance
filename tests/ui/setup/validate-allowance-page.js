@@ -2,7 +2,7 @@
 
 // Load environment variables from .env.local
 const { chromium } = require('playwright');
-const { getConfig, login } = require('./auth-helper');
+const { getConfig, login } = require('../auth-helper');
 
 (async () => {
   const { baseUrl } = getConfig();

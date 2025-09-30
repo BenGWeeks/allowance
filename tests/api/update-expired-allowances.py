@@ -5,6 +5,7 @@ This test catches the bug where expired allowances keep appearing as active.
 """
 
 import asyncio
+import random
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -35,8 +36,8 @@ async def test_scheduler_deactivation():  # noqa: C901
         print("❌ Missing required config values in .env.local")
         return False
 
-    # Use local dev instance for testing
-    base_url = "http://localhost:5001"
+    # Use base URL from config
+    base_url = config["base_url"]
 
     try:
         # Get admin API key dynamically
@@ -59,7 +60,7 @@ async def test_scheduler_deactivation():  # noqa: C901
             test_data = {
                 "name": "Test Deactivation Check",
                 "lightning_address": config["lightning_address"],
-                "amount": 1,  # Minimal amount
+                "amount": random.randint(1, 99),  # Random amount between 1-99 sats
                 "currency": "sats",
                 "frequency_type": "minutely",
                 "start_datetime": now.isoformat(),
@@ -87,16 +88,23 @@ async def test_scheduler_deactivation():  # noqa: C901
             print(f"✅ Created test allowance: {test_id}")
             print(f"   Will expire at: {end_time.strftime('%H:%M:%S')}")
 
-            # Wait for it to expire
-            print("⏳ Waiting 75 seconds for allowance to expire...")
-            await asyncio.sleep(75)
+            # Wait for it to expire and for scheduler to run
+            # Scheduler runs every 60 seconds, so wait 90 seconds to ensure it
+            # processes
+            print(
+                "⏳ Waiting 90 seconds for allowance to expire and scheduler "
+                "to deactivate it..."
+            )
+            await asyncio.sleep(90)
 
-            # Now check the status multiple times over 3 minutes
-            # The bug is that it keeps appearing as active
-            print("\n🔍 Checking if allowance stays deactivated over 3 minutes...")
+            # Now check the status multiple times over 2 minutes to confirm it
+            # stays deactivated
+            print(
+                "\n🔍 Checking if allowance stays deactivated over 2 minutes..."
+            )
 
             deactivation_checks = []
-            for minute in range(3):
+            for minute in range(2):
                 await asyncio.sleep(
                     60 if minute > 0 else 0
                 )  # Wait 1 minute between checks

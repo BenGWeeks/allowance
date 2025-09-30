@@ -4,6 +4,7 @@ Create an ACTIVE minutely allowance with proper datetime values
 """
 
 import asyncio
+import random
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -60,7 +61,7 @@ async def create_active_minutely():  # noqa: C901
             test_data = {
                 "name": "Test Active Minutely Payment",
                 "lightning_address": config["lightning_address"],
-                "amount": 2,  # 2 sats per minute
+                "amount": random.randint(1, 99),  # Random amount between 1-99 sats
                 "currency": "sats",
                 "frequency_type": "minutely",
                 "start_datetime": now.isoformat(),

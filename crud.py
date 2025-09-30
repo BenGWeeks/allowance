@@ -34,25 +34,25 @@ async def create_allowance(data: CreateAllowanceData) -> Allowance:
     # Build the SQL based on whether end_datetime is NULL
     if end_ts is None:
         sql = """
-        INSERT INTO ext_allowance.maintable
+        INSERT INTO maintable
         (id, name, wallet, lightning_address, amount, currency,
          start_datetime, frequency_type, next_payment_date, memo,
          active, end_datetime, created_at)
         VALUES (:id, :name, :wallet, :lightning_address, :amount, :currency,
-         to_timestamp(:start_datetime), :frequency_type,
-         to_timestamp(:next_payment_date), :memo,
-         :active, NULL, to_timestamp(:created_at))
+         (:start_datetime), :frequency_type,
+         (:next_payment_date), :memo,
+         :active, NULL, (:created_at))
         """
     else:
         sql = """
-        INSERT INTO ext_allowance.maintable
+        INSERT INTO maintable
         (id, name, wallet, lightning_address, amount, currency,
          start_datetime, frequency_type, next_payment_date, memo,
          active, end_datetime, created_at)
         VALUES (:id, :name, :wallet, :lightning_address, :amount, :currency,
-         to_timestamp(:start_datetime), :frequency_type,
-         to_timestamp(:next_payment_date), :memo,
-         :active, to_timestamp(:end_datetime), to_timestamp(:created_at))
+         (:start_datetime), :frequency_type,
+         (:next_payment_date), :memo,
+         :active, (:end_datetime), (:created_at))
         """
 
     await db.execute(
@@ -80,7 +80,7 @@ async def create_allowance(data: CreateAllowanceData) -> Allowance:
     # allowance_id = urlsafe_short_hash()
     # await db.execute(
     #     """
-    #     INSERT INTO allowance.maintable
+    #     INSERT INTO maintable
     #     (id, wallet, name, lnurlpayamount, lnurlwithdrawamount)
     #     VALUES (?, ?, ?, ?, ?)
     #     """,
@@ -98,7 +98,7 @@ async def create_allowance(data: CreateAllowanceData) -> Allowance:
 
 async def get_allowance(allowance_id: str) -> Optional[Allowance]:
     return await db.fetchone(
-        "SELECT * FROM ext_allowance.maintable WHERE id = :id",
+        "SELECT * FROM maintable WHERE id = :id",
         {"id": allowance_id},
         Allowance,
     )
@@ -109,7 +109,7 @@ async def get_allowances(wallet_ids: Union[str, list[str]]) -> list[Allowance]:
         wallet_ids = [wallet_ids]
     q = ",".join([f"'{w}'" for w in wallet_ids])
     return await db.fetchall(
-        f"SELECT * FROM ext_allowance.maintable WHERE wallet IN ({q}) ORDER BY id",
+        f"SELECT * FROM maintable WHERE wallet IN ({q}) ORDER BY id",
         model=Allowance,
     )
 
@@ -134,24 +134,24 @@ async def update_allowance(data: CreateAllowanceData) -> Allowance:
     # Build the SQL based on whether end_datetime is NULL
     if end_ts is None:
         sql = """
-        UPDATE ext_allowance.maintable
+        UPDATE maintable
         SET name = :name, wallet = :wallet, lightning_address = :lightning_address,
             amount = :amount, currency = :currency,
-            start_datetime = to_timestamp(:start_datetime),
+            start_datetime = (:start_datetime),
             frequency_type = :frequency_type,
-            next_payment_date = to_timestamp(:next_payment_date), memo = :memo,
+            next_payment_date = (:next_payment_date), memo = :memo,
             active = :active, end_datetime = NULL
         WHERE id = :id
         """
     else:
         sql = """
-        UPDATE ext_allowance.maintable
+        UPDATE maintable
         SET name = :name, wallet = :wallet, lightning_address = :lightning_address,
             amount = :amount, currency = :currency,
-            start_datetime = to_timestamp(:start_datetime),
+            start_datetime = (:start_datetime),
             frequency_type = :frequency_type,
-            next_payment_date = to_timestamp(:next_payment_date), memo = :memo,
-            active = :active, end_datetime = to_timestamp(:end_datetime)
+            next_payment_date = (:next_payment_date), memo = :memo,
+            active = :active, end_datetime = (:end_datetime)
         WHERE id = :id
         """
 
@@ -177,15 +177,13 @@ async def update_allowance(data: CreateAllowanceData) -> Allowance:
 
     # q = ", ".join([f"{field[0]} = ?" for field in kwargs.items()])
     # await db.execute(
-    #     f"UPDATE allowance.maintable SET {q} WHERE id = ?",
+    #     f"UPDATE maintable SET {q} WHERE id = ?",
     #     (*kwargs.values(), allowance_id),
     # )
 
 
 async def delete_allowance(allowance_id: str) -> None:
-    await db.execute(
-        "DELETE FROM ext_allowance.maintable WHERE id = :id", {"id": allowance_id}
-    )
+    await db.execute("DELETE FROM maintable WHERE id = :id", {"id": allowance_id})
 
 
 async def update_next_payment_date(allowance_id: str, next_payment_date) -> None:
@@ -201,8 +199,8 @@ async def update_next_payment_date(allowance_id: str, next_payment_date) -> None
     # Use raw SQL without parameter substitution to bypass rewrite_values
     await db.execute(
         f"""
-        UPDATE ext_allowance.maintable
-        SET next_payment_date = to_timestamp({next_payment_ts})
+        UPDATE maintable
+        SET next_payment_date = ({next_payment_ts})
         WHERE id = :id
         """,
         {"id": allowance_id},
@@ -213,7 +211,7 @@ async def deactivate_allowance(allowance_id: str) -> None:
     """Deactivate an allowance"""
     await db.execute(
         """
-        UPDATE ext_allowance.maintable
+        UPDATE maintable
         SET active = false
         WHERE id = :id
         """,
@@ -224,7 +222,6 @@ async def deactivate_allowance(allowance_id: str) -> None:
 async def get_all_active_allowances() -> list[Allowance]:
     """Get all active allowances for scheduled processing"""
     return await db.fetchall(
-        "SELECT * FROM ext_allowance.maintable WHERE active = true "
-        "ORDER BY next_payment_date",
+        "SELECT * FROM maintable WHERE active = true " "ORDER BY next_payment_date",
         model=Allowance,
     )

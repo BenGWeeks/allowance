@@ -3,6 +3,7 @@ API test for DELETE /api/v1/allowance/{id} - Delete allowance endpoint
 """
 
 import asyncio
+import random
 
 import httpx
 
@@ -71,7 +72,7 @@ async def test_delete_allowance():  # noqa: C901
             create_data = {
                 "name": "TEST_DELETE_ALLOWANCE",
                 "lightning_address": config["lightning_address"],
-                "amount": 1,
+                "amount": random.randint(1, 99),  # Random amount between 1-99 sats
                 "currency": "sats",
                 "frequency_type": "weekly",
                 "start_datetime": datetime.now(timezone.utc).isoformat(),

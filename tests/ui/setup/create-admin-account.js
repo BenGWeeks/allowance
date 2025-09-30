@@ -1,5 +1,5 @@
 const { chromium } = require('playwright');
-const { login, getConfig } = require('./auth-helper');
+const { login, getConfig } = require('../auth-helper');
 
 (async () => {
   const browser = await chromium.launch({ headless: true, slowMo: 1000 });

@@ -1,5 +1,15 @@
 - You can reference the best practice implementation at https://github.com/lnbits/myextension (although the documentation on there might not be up-to-date)
 
+## Testing Notes
+
+### Running Full API Tests
+When running full API tests with payment monitoring:
+```bash
+# Requires 10+ minute timeout for long-running payment tests
+Bash(./run_api_tests.sh --all) timeout: 600000  # 10 minutes
+```
+The `--all` flag runs long-running tests that monitor scheduled payments to verify they execute correctly.
+
 ## Environment Configuration
 
 ### NEVER Hardcode Credentials

@@ -4,6 +4,7 @@ from typing import Any
 
 import httpx
 from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
+from lnbits.core.crud import get_standalone_payment, update_payment
 from lnbits.core.services import pay_invoice
 from lnurl import decode as lnurl_decode
 from loguru import logger
@@ -223,23 +224,24 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
         # Step 4: Execute payment using LNBits pay_invoice
         logger.info("💸 Executing payment...")
 
-        # Create a descriptive tag for the payment
-        payment_tag = f"allowance: {allowance.name}"
-
         payment_result = await pay_invoice(
             wallet_id=allowance.wallet,
             payment_request=payment_request,
             extra={
-                "tag": payment_tag,
+                "tag": "allowance",
                 "allowance_id": allowance.id,
                 "allowance_name": allowance.name,
                 "lightning_address": allowance.lightning_address,
-                "memo": allowance.memo or payment_tag,
                 "scheduled": True,
             },
         )
 
         if payment_result:
+            # Update the payment memo field
+            payment = await get_standalone_payment(payment_result.checking_id)
+            if payment:
+                payment.memo = allowance.name
+                await update_payment(payment)
             logger.info(f"✅ Payment successful for allowance: {allowance.name}")
             return True
         else:

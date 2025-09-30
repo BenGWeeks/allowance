@@ -28,10 +28,10 @@ echo "Running core UI test sequence..."
 
 # Only run core tests that exist to avoid false failures
 CORE_TESTS=(
-    "ui/create_admin_account.js"
-    "ui/login_test.js" 
-    "ui/enable_allowance.js"
-    "ui/create_allowance.js"
+    "ui/setup/create-admin-account.js"
+    "ui/setup/enable-allowance.js"
+    "ui/crud/create-allowance.js"
+    "ui/crud/read-allowances.js"
 )
 
 PASSED=0

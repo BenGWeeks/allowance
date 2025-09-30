@@ -38,7 +38,7 @@ When ready to share your extension:
 - **Lightning Address Support**: Send recurring payments to any Lightning address (user@domain.com) or LNURL-pay endpoint
 - **Scheduled Payments**: Automated payment execution with 1-minute minimum frequency using background tasks
 - **Flexible Scheduling**: Support for various frequencies (minutely, hourly, daily, weekly, monthly, yearly)
-- **Payment Tracking**: All payments are tagged as "#allowance: {name}" in the LNBits payment history
+- **Payment Tracking**: All payments are tagged as "#allowance" with the allowance name in the memo field in the LNBits payment history
 - **Multi-Currency Support**: Pay in fiat currencies (USD, EUR, GBP, etc.) with automatic conversion to sats at payment time
 - **Decimal Amount Support**: Precise amounts like 0.02 GBP or 0.30 USD supported
 - **Vue.js Frontend**: Modern reactive interface following LNBits patterns
@@ -91,7 +91,7 @@ cd ..
 python3 tests/api/delete-all-test-allowances.py
 ```
 
-**Note**: The `--all` flag includes tests that monitor scheduled payments for 2-3 minutes to verify payments are executed. Without this flag, only quick tests are run.
+**Note**: The `--all` flag includes tests that monitor scheduled payments for 2-3 minutes to verify payments are actually executed. Without this flag, only quick CRUD tests are run. **For full validation of the payment system, always run with `--all` flag** to ensure allowances are creating actual payments as expected.
 
 #### Test Scripts
 
@@ -174,6 +174,8 @@ PAYLINK_EMAIL=receiving@yourdomain.com
 - LNBits instance running and accessible
 - Valid admin credentials for authentication
 - Fresh database for initial setup tests
+- **LNBits wallet must be funded** - For FakeWallet, use the admin interface to credit the wallet with test sats
+- **PayLinks extension enabled** - Required for testing Lightning address payments
 
 ### Documentation
 
