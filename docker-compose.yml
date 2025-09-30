@@ -25,7 +25,6 @@ services:
       - LNBITS_DATA_FOLDER=/app/data
     volumes:
       - ./data-test:/app/data
-      - .:/app/lnbits/extensions/allowance
 
 volumes:
   data-dev:
