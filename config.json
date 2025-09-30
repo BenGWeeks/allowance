@@ -13,6 +13,10 @@
   ],
   "images": [
     {
+      "uri": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/banner_cropped.png",
+      "link": ""
+    },
+    {
       "uri": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/1.jpeg",
       "link": ""
     },
