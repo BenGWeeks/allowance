@@ -470,17 +470,15 @@ window.app = Vue.createApp({
     },
     'formDialog.data.end_datetime': function(newVal) {
       // Automatically deactivate if end_datetime is in the past
-      // Re-enable active if end_datetime is cleared or in the future
-      if (newVal) {
+      if (newVal && newVal.trim() !== '') {
         const endDate = new Date(newVal)
         const now = new Date()
-        if (endDate < now && this.formDialog.data.active) {
+        if (endDate < now) {
           console.log('⚠️ End date is in the past, deactivating allowance')
           this.formDialog.data.active = false
         }
       }
-      // If end_datetime is cleared, no need to change active state
-      // User can now freely toggle active
+      // If end_datetime is cleared or in the future, user can freely toggle active
     }
   },
   created() {

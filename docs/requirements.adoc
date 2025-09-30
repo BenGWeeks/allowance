@@ -120,11 +120,11 @@ As a wallet owner, I want the system to prevent activating allowances with past 
 ----
 Given I am creating or editing an allowance
 When I set an end_datetime that is in the past
-Then the Active toggle should be disabled
-And the Active toggle should be automatically unchecked
+Then the Active toggle should be automatically unchecked (set to inactive)
+And the Active toggle should be disabled (greyed out)
 And the Create/Update button should be disabled
-And I should see a message "Cannot activate: End date is in the past"
 And I should not be able to submit an active allowance with a past end date
+And when I clear the end_datetime, the Active toggle should re-enable
 ----
 
 === User Story: Mobile-Friendly Popup
@@ -185,9 +185,11 @@ As a wallet owner, I want to modify existing allowances so that I can adjust pay
 Given I have an existing allowance
 When I click the edit button
 Then I should see a form with current values pre-filled
-And I should be able to modify most fields
-But I should not be able to change the frequency_type
-And the frequency dropdown should be disabled with a hint message
+And I should be able to modify most fields (amount, end date, active status, etc.)
+But I should not be able to change the start_datetime
+And the start_datetime field should be disabled (greyed out) with hint "Start date cannot be changed after creation"
+And I should not be able to change the frequency_type
+And the frequency dropdown should be disabled (greyed out) with hint "Frequency cannot be changed after creation"
 And changes should be saved when I click "Update Allowance"
 ----
 
@@ -407,5 +409,13 @@ And all CRUD operations should work identically on both databases
 
 |Frequency Lock
 |Prevent editing frequency_type on existing allowances
+|✅ Complete
+
+|Start DateTime Lock
+|Prevent editing start_datetime on existing allowances
+|✅ Complete
+
+|Auto-deactivate Past End Dates
+|Automatically uncheck Active toggle when end_datetime is set to past
 |✅ Complete
 |===
