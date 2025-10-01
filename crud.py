@@ -109,7 +109,7 @@ async def get_allowances(wallet_ids: Union[str, list[str]]) -> list[Allowance]:
         wallet_ids = [wallet_ids]
     q = ",".join([f"'{w}'" for w in wallet_ids])
     return await db.fetchall(
-        f"SELECT * FROM maintable WHERE wallet IN ({q}) ORDER BY id",
+        f"SELECT * FROM maintable WHERE wallet IN ({q}) ORDER BY created_at DESC",
         model=Allowance,
     )
 

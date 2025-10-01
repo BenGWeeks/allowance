@@ -12,15 +12,34 @@ window.app = Vue.createApp({
       fiatRates: {},
       allowanceTable: {
         columns: [
-          {name: 'name', align: 'left', label: 'Description', field: 'name'},
-          {name: 'amount', align: 'right', label: 'Amount', field: 'amount'},
-          {name: 'lightning_address', align: 'left', label: 'Recipient', field: 'lightning_address'},
-          {name: 'frequency_type', align: 'left', label: 'Frequency', field: 'frequency_type'},
-          {name: 'status', align: 'center', label: 'Status', field: 'active'}
+          {name: 'name', align: 'left', label: 'Description', field: 'name', sortable: true},
+          {name: 'amount', align: 'right', label: 'Amount', field: 'amount', sortable: true, sort: (a, b) => {
+            const numA = parseFloat(a);
+            const numB = parseFloat(b);
+            if (isNaN(numA) && isNaN(numB)) return 0;
+            if (isNaN(numA)) return 1;
+            if (isNaN(numB)) return -1;
+            return numA - numB;
+          }},
+          {name: 'lightning_address', align: 'left', label: 'Recipient', field: 'lightning_address', sortable: true},
+          {name: 'frequency_type', align: 'left', label: 'Frequency', field: 'frequency_type', sortable: true, sort: (a, b) => {
+            const order = ['minutely', 'hourly', 'daily', 'weekly', 'monthly', 'yearly']
+            return order.indexOf(a) - order.indexOf(b)
+          }},
+          {name: 'status', align: 'center', label: 'Status', field: 'active', sortable: true, sort: (a, b, rowA, rowB) => {
+            // Sort by: Error (2), Active (1), Inactive (0)
+            const getStatusValue = (row) => {
+              if (row.last_error) return 2
+              if (row.active) return 1
+              return 0
+            }
+            return getStatusValue(rowA) - getStatusValue(rowB)
+          }}
         ],
         pagination: {
           rowsPerPage: 10
         },
+        filter: '',
         loading: false
       },
       formDialog: {
