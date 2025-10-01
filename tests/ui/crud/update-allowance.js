@@ -182,10 +182,6 @@ async function testEditMetadata() {
       }
     }
 
-    if (!allRequiredPresent) {
-      datetimeSuccess = false;
-    }
-
     // Validate that form values match table values
     console.log('\n🔍 Validating form values match table data:');
     let valuesMatch = true;
@@ -226,25 +222,49 @@ async function testEditMetadata() {
 
     if (!valuesMatch) {
       console.log('\n⚠️ WARNING: Form values do not match table data!');
-      datetimeSuccess = false;
     }
 
     // Specifically check datetime fields (now using Quasar pickers)
     console.log('\n📅 Checking datetime fields:');
 
-    // Check datetime values in Vue app data
+    // Check datetime values in Vue component instance data
     const datetimeData = await page.evaluate(() => {
-      if (window.app && window.app.formDialog && window.app.formDialog.data) {
-        return {
-          start_datetime: window.app.formDialog.data.start_datetime,
-          end_datetime: window.app.formDialog.data.end_datetime
-        };
+      // Get Vue instance from DOM element
+      const vueEl = document.querySelector('#vue');
+      if (!vueEl) return { error: 'No #vue element' };
+
+      // Try different Vue 3 property names
+      let vueInstance = vueEl.__vueParentComponent ||
+                        vueEl.__vnode?.component ||
+                        vueEl._vnode?.component;
+
+      if (!vueInstance) {
+        // Try accessing child components
+        const firstChild = vueEl.firstElementChild;
+        if (firstChild && firstChild.__vnode) {
+          vueInstance = firstChild.__vnode.component;
+        }
       }
-      return null;
+
+      if (!vueInstance) {
+        return { error: 'No Vue instance' };
+      }
+
+      if (!vueInstance.data || !vueInstance.data.formDialog) {
+        return { error: 'No formDialog in data' };
+      }
+
+      return {
+        start_datetime: vueInstance.data.formDialog.data.start_datetime,
+        end_datetime: vueInstance.data.formDialog.data.end_datetime
+      };
     });
 
-    datetimeSuccess = true;
-    if (datetimeData) {
+    let datetimeSuccess = true;
+    if (datetimeData && datetimeData.error) {
+      console.log(`  ❌ Error accessing datetime data: ${datetimeData.error}`);
+      datetimeSuccess = false;
+    } else if (datetimeData) {
       // Check start datetime
       if (datetimeData.start_datetime && datetimeData.start_datetime !== '') {
         // Parse Quasar format "YYYY-MM-DD HH:mm"
