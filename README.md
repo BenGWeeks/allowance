@@ -14,9 +14,6 @@ This is an LNBits extension that allows you to setup recurring payments from you
 |:---:|:---:|:---:|
 | ![Allowance Management](static/image/1.jpeg) | ![Transaction History](static/image/2.jpeg) | ![Edit Allowance](static/image/3.jpeg) |
 
-✅ CI/CD Status: Tests configured and working
-✅ API Architecture: Refactored to use LNBits best practices
-
 ### Installation
 
 Install and enable the "Allowance" extension either through the official LNbits manifest (**not yet vetted**) or by adding https://raw.githubusercontent.com/BenGWeeks/allowance/main/extensions.json to `Server` / `Extension Sources`.
