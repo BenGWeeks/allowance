@@ -6,14 +6,14 @@
 
 ## Introduction
 
-This is an LNBits extension that allows you to setup recurring payments from your LNBits wallet to any Lightning address (user@domain.com) or LNURL-pay endpoint. Perfect for allowances, pocket money, subscriptions, and regular transfers. This enables scheduled payments to external services and Lightning addresses, not just wallet-to-wallet transfers within the same LNBits instance.
+This is an LNBits extension that allows you to setup recurring payments from your LNBits wallet to any Lightning address or LNURL-pay endpoint. Perfect for allowances, pocket money, subscriptions, and regular transfers. This enables scheduled payments to external services and Lightning addresses, not just wallet-to-wallet transfers within the same LNBits instance.
 
 ✅ CI/CD Status: Tests configured and working
 ✅ API Architecture: Refactored to use LNBits best practices
 
 ### Installation
 
-Install and enable the "Allowance" extension either through the official LNbits manifest (**not yet vetted**) or by adding https://raw.githubusercontent.com/BenGWeeks/allowance/main/manifest.json to `Server`/ `Server` / `Extension Sources`.
+Install and enable the "Allowance" extension either through the official LNbits manifest (**not yet vetted**) or by adding https://raw.githubusercontent.com/BenGWeeks/allowance/main/extensions.json to `Server` / `Extension Sources`.
 
 ### Development
 
@@ -24,29 +24,22 @@ For development, we use Docker Compose to run LNBits:
    ```bash
    docker-compose up -d
    ```
-3. Access the development instance at `http://localhost:5001`
+3. Access the development instance at `http://localhost:5002`
 4. Enable the Allowance extension through the Extensions menu
 
 The Docker Compose configuration automatically mounts the current directory into the container, so changes to the code are reflected immediately.
 
 > Note: LNBits cannot be installed on Windows.
 
-When ready to share your extension:
-- Update `manifest.json` with your repository details
-- Follow [LNBits extension guidelines](https://github.com/lnbits/lnbits-extensions#important) for official submission
-
 ### Features
 
-- **Lightning Address Support**: Send recurring payments to any Lightning address (user@domain.com) or LNURL-pay endpoint
-- **Scheduled Payments**: Automated payment execution with 1-minute minimum frequency using background tasks
-- **Flexible Scheduling**: Support for various frequencies (minutely, hourly, daily, weekly, monthly, yearly)
-- **Payment Tracking**: All payments are tagged as "#allowance" with the allowance name in the memo field in the LNBits payment history
-- **Multi-Currency Support**: Pay in fiat currencies (USD, EUR, GBP, etc.) with automatic conversion to sats at payment time
-- **Decimal Amount Support**: Precise amounts like 0.02 GBP or 0.30 USD supported
-- **Vue.js Frontend**: Modern reactive interface following LNBits patterns
-- **Comprehensive Testing**: Full Playwright test suite for automated testing
-- **API Architecture**: Uses LNBits decorators and database abstraction (no hardcoded credentials)
-- **Smart Scheduler**: Automatic deactivation of expired allowances with proper timezone handling
+- **Recurring Payments to Lightning Addresses**: Set up automated payments to any Lightning address or LNURL-pay endpoint
+- **Flexible Payment Schedules**: Choose from minutely, hourly, daily, weekly, monthly, or yearly payment frequencies
+- **Multi-Currency Support**: Pay in Bitcoin (sats) or fiat currencies (USD, EUR, GBP, etc.) with automatic conversion at payment time
+- **Decimal Precision**: Support for precise amounts like 0.02 GBP or 0.30 USD for small regular payments
+- **Payment History Tracking**: All payments appear in your LNBits wallet history with clear allowance names
+- **Automatic Start and End Dates**: Schedule when payments should begin and end, with automatic deactivation when expired
+- **Easy Management**: Create, edit, activate/deactivate, and delete allowances through a simple interface
 
 ### Testing
 
@@ -105,25 +98,22 @@ allowance/
 │   └── troubleshooting.adoc # Problem resolution
 ├── tests/                   # Comprehensive test suite
 │   ├── api/                # API endpoint tests (Python)
-│   │   ├── allowance_*.py  # CRUD operation tests
-│   │   ├── currency_rate.py # Currency conversion tests
-│   │   ├── scheduled_payments.py # Payment scheduler tests
-│   │   └── create-test-allowances.py # Bulk test data creation
+│   │   ├── check-*.py      # Validation tests
+│   │   ├── create-*.py     # Creation tests
+│   │   ├── read-*.py       # Read operation tests
+│   │   ├── update-*.py     # Update operation tests
+│   │   └── delete-*.py     # Deletion tests
 │   ├── ui/                 # UI automation tests (Playwright)
+│   │   ├── setup/          # Setup and configuration tests
+│   │   ├── crud/           # CRUD operation tests
 │   │   ├── auth-helper.js  # Centralized authentication
-│   │   ├── enable-allowance.js
-│   │   ├── create-allowance.js
-│   │   ├── edit-allowance.js
-│   │   ├── delete-allowance.js
-│   │   ├── check-currencies.js
-│   │   └── test-date-persistence.js
+│   │   └── helpers.js      # Shared test utilities
 │   ├── run_all_tests.sh    # Run all tests
 │   ├── run_api_tests.sh    # Run API tests only
-│   └── run_ui_tests.sh     # Run UI tests only
+│   └── run_ui_crud_tests.sh # Run UI tests only
 ├── static/
-│   ├── js/                 # Frontend JavaScript
-│   │   └── index.js        # Vue.js application
-│   └── css/                # Styles (if any)
+│   └── js/                 # Frontend JavaScript
+│       └── allowance.js    # Vue.js application
 ├── templates/allowance/    # HTML templates
 │   └── index.html         # Main extension page
 ├── __init__.py            # Extension initialization
@@ -135,9 +125,8 @@ allowance/
 ├── views_api.py           # API endpoints
 ├── migrations.py          # Database schema
 ├── manifest.json          # Extension manifest
-├── pyproject.toml         # Python dependencies
+├── extensions.json        # Extension source manifest
 ├── README.md              # This file
-├── CLAUDE.md              # Development notes
-└── .gitignore             # Git ignore patterns
+└── CLAUDE.md              # Development notes
 ```
 
