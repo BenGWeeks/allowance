@@ -144,20 +144,23 @@
 
   <div class="col-12 col-md-5 q-gutter-y-md">
     <q-card>
+      <q-card-section class="q-pa-none">
+        <img src="/allowance/static/image/banner_cropped.png"
+             alt="Bitcoin Lightning Allowance - Colorful piggy bank with Bitcoin symbol"
+             style="width: 100%; display: block;"
+             loading="lazy" />
+      </q-card-section>
       <q-card-section>
-        <h6 class="text-subtitle1 q-my-none">
-          <q-icon size="1.2em" name="account_balance_wallet" class="q-mr-sm"></q-icon>
-          Allowance Extension
-        </h6>
-        <p>
-          Setup recurring payments to lightning addresses. Perfect for allowances, pocket money, subscriptions, and regular transfers.
+        <p class="q-mb-none">
+          Setup automated recurring payments to any Lightning address or LNURL-pay endpoint.
+          Choose from flexible payment schedules (daily, weekly, monthly, yearly) and pay in Bitcoin
+          or fiat currencies with automatic conversion. Perfect for allowances, pocket money,
+          subscriptions, and regular transfers.
         </p>
       </q-card-section>
       <q-card-section class="q-pa-none">
         <q-separator></q-separator>
         <q-list>
-          {% include "allowance/_api_docs.html" %}
-          <q-separator></q-separator>
           <q-expansion-item
             expand-separator
             icon="help_outline"
@@ -168,17 +171,60 @@
                 <p class="text-subtitle2 q-mb-sm">How to use Allowances:</p>
                 <ol class="q-pl-md">
                   <li class="q-mb-sm">Create a new allowance by clicking "New Allowance"</li>
-                  <li class="q-mb-sm">Set the recipient's Lightning address</li>
+                  <li class="q-mb-sm">Set the recipient's Lightning address (looks like an email address, e.g. user@getalby.com, but it's for Bitcoin payments not email)</li>
                   <li class="q-mb-sm">Configure the amount and currency</li>
                   <li class="q-mb-sm">Choose the payment frequency (daily, weekly, monthly)</li>
                   <li class="q-mb-sm">Set start and end dates for the allowance</li>
                   <li class="q-mb-sm">Save and activate the allowance</li>
                 </ol>
-                <q-separator class="q-my-md"></q-separator>
-                <p class="text-caption text-grey-7">
-                  Allowances will automatically send payments according to your schedule. 
+                <p class="text-caption text-grey-7 q-mt-md">
+                  Allowances will automatically send payments according to your schedule.
                   You can pause, edit, or delete them at any time.
                 </p>
+              </q-card-section>
+            </q-card>
+          </q-expansion-item>
+          <q-separator></q-separator>
+          {% include "allowance/_api_docs.html" %}
+          <q-separator></q-separator>
+          <q-expansion-item
+            expand-separator
+            icon="support"
+            label="Help"
+          >
+            <q-card>
+              <q-card-section>
+                <p class="text-body2 q-mb-sm">
+                  Check the FAQs for answers to common questions.
+                </p>
+                <div class="q-mb-md">
+                  <q-btn
+                    flat
+                    color="primary"
+                    label="View FAQs"
+                    icon="help_outline"
+                    type="a"
+                    href="https://github.com/BenGWeeks/allowance/blob/main/docs/faqs.adoc"
+                    target="_blank"
+                    class="full-width"
+                  />
+                </div>
+
+                <p class="text-body2 q-mb-sm">
+                  We'd love to hear your feedback! Found a bug? Have an idea for a new feature? Let us know on GitHub.
+                </p>
+                <div>
+                  <q-btn
+                    flat
+                    color="primary"
+                    label="Share Feedback on GitHub"
+                    icon="favorite"
+                    type="a"
+                    href="https://github.com/BenGWeeks/allowance/issues"
+                    target="_blank"
+                    class="full-width"
+                  />
+                </div>
               </q-card-section>
             </q-card>
           </q-expansion-item>
