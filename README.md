@@ -8,6 +8,12 @@
 
 This is an LNBits extension that allows you to setup recurring payments from your LNBits wallet to any Lightning address or LNURL-pay endpoint. Perfect for allowances, pocket money, subscriptions, and regular transfers. This enables scheduled payments to external services and Lightning addresses, not just wallet-to-wallet transfers within the same LNBits instance.
 
+### Screenshots
+
+| Allowance Management | Transaction History | Edit Allowance |
+|:---:|:---:|:---:|
+| ![Allowance Management](static/image/1.jpeg) | ![Transaction History](static/image/2.jpeg) | ![Edit Allowance](static/image/3.jpeg) |
+
 ✅ CI/CD Status: Tests configured and working
 ✅ API Architecture: Refactored to use LNBits best practices
 
