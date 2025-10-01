@@ -191,15 +191,23 @@
   <q-dialog v-model="formDialog.show" @hide="closeFormDialog">
     <q-card class="q-pa-lg q-pt-xl" style="width: 500px">
       <q-form @submit.prevent="saveAllowance" class="q-gutter-md" ref="allowanceForm" no-error-focus>
+        <div v-if="!formDialog.data.id" class="q-mb-md text-body2">
+          Set up regular scheduled payments to automatically send Bitcoin to a recipient's Lightning address on your chosen schedule.
+        </div>
+        <div v-else class="q-mb-md text-body2">
+          Edit the settings for this scheduled payment allowance.
+        </div>
+
         <q-input
           filled
           dense
           v-model.trim="formDialog.data.name"
-          label="Description *"
+          label="Allowance description *"
           placeholder="e.g., Weekly allowance for Alice"
+          hint="A descriptive name to help you identify this allowance"
           :rules="[val => !!val || 'Description is required']"
         ></q-input>
-        
+
         <q-select
           filled
           dense
@@ -209,25 +217,23 @@
           option-value="id"
           emit-value
           map-options
-          label="Wallet *"
+          label="Wallet to send funds from *"
+          hint="The wallet that will send the allowance payments"
           :rules="[val => !!val || 'Wallet is required']"
-        >
-          <q-tooltip>The wallet that will send the allowance payments</q-tooltip>
-        </q-select>
-        
+        ></q-select>
+
         <q-input
           filled
           dense
           v-model.trim="formDialog.data.lightning_address"
-          label="Lightning Address *"
+          label="Recipient lightning address *"
           placeholder="alice@getalby.com"
+          hint="The Lightning address where payments will be sent"
           :rules="[
             val => !!val || 'Lightning address is required',
             val => val.includes('@') || 'Please enter a valid Lightning address'
           ]"
-        >
-          <q-tooltip>The Lightning address where payments will be sent</q-tooltip>
-        </q-input>
+        ></q-input>
         
         <div class="row q-gutter-sm">
           <div class="col">
@@ -241,7 +247,7 @@
               :min="formDialog.data.currency === 'sats' ? '1' : '0.01'"
               :step="formDialog.data.currency === 'sats' ? '1' : '0.01'"
               input-style="text-align: left"
-              :hint="formDialog.data.currency && formDialog.data.currency !== 'sats' && fiatRates[formDialog.data.currency] ? (formDialog.data.amount || 0) + ' ' + formDialog.data.currency + ' = ' + Math.round((formDialog.data.amount || 0) * fiatRates[formDialog.data.currency]) + ' sats (actual conversion calculated at the time of sending)' : ''"
+              :hint="formDialog.data.currency && formDialog.data.currency !== 'sats' && fiatRates[formDialog.data.currency] ? (formDialog.data.amount || 0) + ' ' + formDialog.data.currency + ' = ' + Math.round((formDialog.data.amount || 0) * fiatRates[formDialog.data.currency]) + ' sats (actual conversion calculated at the time of sending)' : 'The amount to send with each payment'"
             >
             </q-input>
           </div>
@@ -260,7 +266,7 @@
             ></q-select>
           </div>
         </div>
-        
+
         <q-select
           filled
           dense
@@ -273,7 +279,7 @@
           map-options
           :rules="[val => !!val || 'Frequency is required']"
           :disable="!!formDialog.data.id"
-          :hint="formDialog.data.id ? 'Frequency cannot be changed after creation' : ''"
+          :hint="formDialog.data.id ? 'Frequency cannot be changed after creation' : 'How often payments should be sent'"
         ></q-select>
         
         <div v-if="formDialog.data.frequency_type == 'per_second'" class="q-pa-sm bg-yellow-1 text-dark rounded-borders">
@@ -294,7 +300,7 @@
               label="Start date & time *"
               :rules="[val => !!val || 'Start date & time is required']"
               :disable="!!formDialog.data.id"
-              :hint="formDialog.data.id ? 'Start date cannot be changed after creation' : ''"
+              :hint="formDialog.data.id ? 'Start date cannot be changed after creation' : 'When the first payment should be sent'"
               readonly
               data-cy="start-datetime-input"
             >
@@ -335,6 +341,7 @@
               dense
               v-model="formattedEndDatetime"
               label="End date & time (optional)"
+              hint="When to stop sending payments (leave blank for ongoing)"
               readonly
               data-cy="end-datetime-input"
             >
@@ -385,7 +392,9 @@
             label="Active"
             color="positive"
             :disable="isEndDateInPast"
-          />
+          >
+            <q-tooltip>Enable or disable this allowance</q-tooltip>
+          </q-toggle>
         </div>
 
         <div class="row q-mt-lg">
