@@ -3,11 +3,23 @@
 const { chromium } = require('playwright');
 const { getConfig, login } = require('../auth-helper');
 
-// Helper to convert Date to local datetime string for datetime-local inputs
-function toLocalDatetimeString(date) {
+// Helper to convert Date to Quasar datetime format "YYYY-MM-DD HH:mm"
+function toQuasarDatetimeString(date) {
   const offset = date.getTimezoneOffset() * 60000;
   const localDate = new Date(date.getTime() - offset);
-  return localDate.toISOString().slice(0, 16);
+  const isoString = localDate.toISOString();
+  return isoString.slice(0, 16).replace('T', ' ');
+}
+
+// Helper to set datetime using Quasar date/time pickers
+async function setQuasarDatetime(page, fieldName, datetimeValue) {
+  // Set the date/time value directly via Vue
+  await page.evaluate(({ field, value }) => {
+    if (window.app && window.app.formDialog && window.app.formDialog.data) {
+      window.app.formDialog.data[field] = value;
+    }
+  }, { field: fieldName, value: datetimeValue });
+  await page.waitForTimeout(300);
 }
 
 (async () => {
@@ -80,19 +92,13 @@ function toLocalDatetimeString(date) {
     await page.waitForTimeout(500);
     console.log('✅ Selected hourly frequency');
 
-    // Start date & time (optional - will use current time)
-    const startDateInput = page.locator('input[type="datetime-local"]').first();
-    const startDateVisible = await startDateInput.count() > 0;
-    if (startDateVisible) {
-      await startDateInput.fill(toLocalDatetimeString(now));
-    }
+    // Start date & time - set using Quasar helper
+    await setQuasarDatetime(page, 'start_datetime', toQuasarDatetimeString(now));
+    console.log('✅ Set start time to now');
 
-    // End date & time - set to 3 hours from now
-    const endDateInput = page.locator('input[type="datetime-local"]').nth(1);
-    const endDateVisible = await endDateInput.count() > 1;
-    if (endDateVisible) {
-      await endDateInput.fill(toLocalDatetimeString(endTime));
-    }
+    // End date & time - set to 3 hours from now using Quasar helper
+    await setQuasarDatetime(page, 'end_datetime', toQuasarDatetimeString(endTime));
+    console.log('✅ Set end time to 3 hours from now');
 
     // Memo - find the textarea
     const memoField = page.locator('textarea').first();

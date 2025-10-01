@@ -3,11 +3,34 @@
 const { chromium } = require('playwright');
 const { getConfig, login } = require('../auth-helper');
 
-// Helper to convert Date to local datetime string for datetime-local inputs
-function toLocalDatetimeString(date) {
+// Helper to convert Date to Quasar datetime format "YYYY-MM-DD HH:mm"
+function toQuasarDatetimeString(date) {
   const offset = date.getTimezoneOffset() * 60000;
   const localDate = new Date(date.getTime() - offset);
-  return localDate.toISOString().slice(0, 16);
+  const isoString = localDate.toISOString();
+  return isoString.slice(0, 16).replace('T', ' ');
+}
+
+// Helper to set datetime using Quasar date/time pickers
+async function setQuasarDatetime(page, labelText, datetimeValue) {
+  // Find the input by its label
+  const input = page.locator(`input[data-cy="end-datetime-input"]`);
+
+  // Click the calendar icon to open date picker
+  const calendarIcon = input.locator('..').locator('[name="event"]');
+  await calendarIcon.click();
+  await page.waitForTimeout(500);
+
+  // Set the date/time value directly via Vue
+  await page.evaluate((value) => {
+    if (window.app && window.app.formDialog && window.app.formDialog.data) {
+      window.app.formDialog.data.end_datetime = value;
+    }
+  }, datetimeValue);
+
+  // Close the picker by clicking outside
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
 }
 
 (async () => {
@@ -80,13 +103,10 @@ function toLocalDatetimeString(date) {
     // Set end time to 5 minutes from now
     const now = new Date();
     const endTime = new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes
+    const endTimeStr = toQuasarDatetimeString(endTime);
 
-    // End date & time
-    const endDateInput = page.locator('input[type="datetime-local"]').nth(1);
-    const endDateVisible = await endDateInput.count() > 1;
-    if (endDateVisible) {
-      await endDateInput.fill(toLocalDatetimeString(endTime));
-    }
+    // Set end date & time using Quasar picker
+    await setQuasarDatetime(page, 'End date & time', endTimeStr);
 
     // Memo - find the textarea
     const memoField = page.locator('textarea').first();
