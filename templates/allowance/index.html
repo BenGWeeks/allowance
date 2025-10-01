@@ -304,7 +304,6 @@
                     <q-date
                       v-model="formDialog.data.start_datetime"
                       mask="YYYY-MM-DD HH:mm"
-                      @update:model-value="() => $refs.startDateProxy && $refs.startDateProxy.hide()"
                     >
                       <div class="row items-center justify-end">
                         <q-btn v-close-popup label="Close" color="primary" flat />
@@ -320,7 +319,6 @@
                       v-model="formDialog.data.start_datetime"
                       mask="YYYY-MM-DD HH:mm"
                       format24h
-                      @update:model-value="() => $refs.startTimeProxy && $refs.startTimeProxy.hide()"
                     >
                       <div class="row items-center justify-end">
                         <q-btn v-close-popup label="Close" color="primary" flat />
@@ -346,7 +344,6 @@
                     <q-date
                       v-model="formDialog.data.end_datetime"
                       mask="YYYY-MM-DD HH:mm"
-                      @update:model-value="() => $refs.endDateProxy && $refs.endDateProxy.hide()"
                     >
                       <div class="row items-center justify-end">
                         <q-btn v-close-popup label="Close" color="primary" flat />
@@ -362,7 +359,6 @@
                       v-model="formDialog.data.end_datetime"
                       mask="YYYY-MM-DD HH:mm"
                       format24h
-                      @update:model-value="() => $refs.endTimeProxy && $refs.endTimeProxy.hide()"
                     >
                       <div class="row items-center justify-end">
                         <q-btn v-close-popup label="Close" color="primary" flat />
