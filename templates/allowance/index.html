@@ -313,14 +313,6 @@
                 </q-icon>
               </template>
               <template v-slot:append>
-                <q-icon
-                  v-if="!formDialog.data.id && formDialog.data.start_datetime && formDialog.data.start_datetime !== ''"
-                  name="clear"
-                  class="cursor-pointer"
-                  @click="formDialog.data.start_datetime = ''"
-                >
-                  <q-tooltip>Clear start date</q-tooltip>
-                </q-icon>
                 <q-icon name="access_time" class="cursor-pointer">
                   <q-popup-proxy v-if="!formDialog.data.id" ref="startTimeProxy" transition-show="scale" transition-hide="scale">
                     <q-time

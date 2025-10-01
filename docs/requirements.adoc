@@ -157,6 +157,31 @@ And the "Create Allowance" button should be accessible
 And all form fields should be reachable by scrolling
 ----
 
+=== User Story: Locale-Aware DateTime Pickers
+
+As a wallet owner, I want date and time inputs to respect my browser locale so that dates are displayed in my familiar format (DD/MM/YYYY vs MM/DD/YYYY).
+
+**Acceptance Criteria:**
+
+[source,gherkin]
+----
+Given I am creating or editing an allowance
+When I interact with date and time fields
+Then I should see Quasar QDate calendar picker for dates
+And I should see Quasar QTime clock picker for times
+And dates should display in my browser's locale format:
+  - DD/MM/YYYY for UK/European locales
+  - MM/DD/YYYY for US locales
+  - Other locale-specific formats as appropriate
+And I should be able to:
+  - Click calendar icon to select a date
+  - Click clock icon to select hours and minutes separately
+  - Click "Close" button to dismiss the picker
+  - Click clear icon (X) to remove the datetime value
+And the pickers should not auto-close when selecting values
+And the display should show locale-formatted datetime (e.g., "01/02/2025, 14:30")
+----
+
 === User Story: Comprehensive Status Tooltips
 
 As a wallet owner, I want detailed status information when hovering over allowance badges so that I can quickly understand payment history and upcoming schedules.
@@ -483,5 +508,9 @@ And all CRUD operations should work identically on both databases
 
 |Payment Retry Schedule
 |Advance next_payment_date even when payments fail to maintain regular schedule
+|✅ Complete
+
+|Locale-Aware DateTime Pickers
+|Quasar QDate/QTime pickers with browser locale support, replacing HTML5 datetime-local inputs
 |✅ Complete
 |===
