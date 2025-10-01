@@ -182,10 +182,6 @@ async function testEditMetadata() {
       }
     }
 
-    if (!allRequiredPresent) {
-      datetimeSuccess = false;
-    }
-
     // Validate that form values match table values
     console.log('\n🔍 Validating form values match table data:');
     let valuesMatch = true;
@@ -226,66 +222,88 @@ async function testEditMetadata() {
 
     if (!valuesMatch) {
       console.log('\n⚠️ WARNING: Form values do not match table data!');
-      datetimeSuccess = false;
     }
 
-    // Specifically check datetime fields
+    // Specifically check datetime fields (now using Quasar pickers)
     console.log('\n📅 Checking datetime fields:');
 
-    const datetimeInputs = await page.locator('.q-dialog input[type="datetime-local"]');
-    const datetimeCount = await datetimeInputs.count();
+    // Check datetime values in Vue component instance data
+    const datetimeData = await page.evaluate(() => {
+      // Get Vue instance from DOM element
+      const vueEl = document.querySelector('#vue');
+      if (!vueEl) return { error: 'No #vue element' };
 
-    // Don't redeclare datetimeSuccess - it's already declared above
-    datetimeSuccess = true;
-    if (datetimeCount > 0) {
-      for (let i = 0; i < datetimeCount; i++) {
-        const input = datetimeInputs.nth(i);
-        const value = await input.inputValue();
-        const label = await input.getAttribute('label') || '';
+      // Try different Vue 3 property names
+      let vueInstance = vueEl.__vueParentComponent ||
+                        vueEl.__vnode?.component ||
+                        vueEl._vnode?.component;
 
-        if (i === 0) {
-          // Start datetime is required and should be populated
-          if (value && value !== '') {
-            // Check if the date is reasonable (not 1970 which indicates timestamp conversion error)
-            const dateObj = new Date(value);
-            const year = dateObj.getFullYear();
-
-            if (year === 1970) {
-              console.log(`  ❌ Start datetime: ${value} - TIMESTAMP CONVERSION ERROR (showing 1970)!`);
-              datetimeSuccess = false;
-            } else if (year < 2020 || year > 2030) {
-              console.log(`  ⚠️ Start datetime: ${value} - Suspicious year ${year}`);
-              datetimeSuccess = false;
-            } else {
-              console.log(`  ✅ Start datetime: ${value} (format: YYYY-MM-DDTHH:MM)`);
-            }
-          } else {
-            console.log(`  ❌ Start datetime: EMPTY - This should be populated!`);
-            datetimeSuccess = false;
-          }
-        } else if (i === 1) {
-          // End datetime is optional
-          if (value && value !== '') {
-            // Check if the date is reasonable
-            const dateObj = new Date(value);
-            const year = dateObj.getFullYear();
-
-            if (year === 1970) {
-              console.log(`  ❌ End datetime: ${value} - TIMESTAMP CONVERSION ERROR (showing 1970)!`);
-              datetimeSuccess = false;
-            } else if (year < 2020 || year > 2030) {
-              console.log(`  ⚠️ End datetime: ${value} - Suspicious year ${year}`);
-              datetimeSuccess = false;
-            } else {
-              console.log(`  ✅ End datetime: ${value} (format: YYYY-MM-DDTHH:MM)`);
-            }
-          } else {
-            console.log(`  ℹ️ End datetime: Not set (optional field)`);
-          }
+      if (!vueInstance) {
+        // Try accessing child components
+        const firstChild = vueEl.firstElementChild;
+        if (firstChild && firstChild.__vnode) {
+          vueInstance = firstChild.__vnode.component;
         }
       }
+
+      if (!vueInstance) {
+        return { error: 'No Vue instance' };
+      }
+
+      if (!vueInstance.data || !vueInstance.data.formDialog) {
+        return { error: 'No formDialog in data' };
+      }
+
+      return {
+        start_datetime: vueInstance.data.formDialog.data.start_datetime,
+        end_datetime: vueInstance.data.formDialog.data.end_datetime
+      };
+    });
+
+    let datetimeSuccess = true;
+    if (datetimeData && datetimeData.error) {
+      console.log(`  ❌ Error accessing datetime data: ${datetimeData.error}`);
+      datetimeSuccess = false;
+    } else if (datetimeData) {
+      // Check start datetime
+      if (datetimeData.start_datetime && datetimeData.start_datetime !== '') {
+        // Parse Quasar format "YYYY-MM-DD HH:mm"
+        const dateObj = new Date(datetimeData.start_datetime.replace(' ', 'T'));
+        const year = dateObj.getFullYear();
+
+        if (year === 1970) {
+          console.log(`  ❌ Start datetime: ${datetimeData.start_datetime} - TIMESTAMP CONVERSION ERROR (showing 1970)!`);
+          datetimeSuccess = false;
+        } else if (year < 2020 || year > 2030) {
+          console.log(`  ⚠️ Start datetime: ${datetimeData.start_datetime} - Suspicious year ${year}`);
+          datetimeSuccess = false;
+        } else {
+          console.log(`  ✅ Start datetime: ${datetimeData.start_datetime} (format: YYYY-MM-DD HH:mm)`);
+        }
+      } else {
+        console.log(`  ❌ Start datetime: EMPTY - This should be populated!`);
+        datetimeSuccess = false;
+      }
+
+      // Check end datetime (optional)
+      if (datetimeData.end_datetime && datetimeData.end_datetime !== '') {
+        const dateObj = new Date(datetimeData.end_datetime.replace(' ', 'T'));
+        const year = dateObj.getFullYear();
+
+        if (year === 1970) {
+          console.log(`  ❌ End datetime: ${datetimeData.end_datetime} - TIMESTAMP CONVERSION ERROR (showing 1970)!`);
+          datetimeSuccess = false;
+        } else if (year < 2020 || year > 2030) {
+          console.log(`  ⚠️ End datetime: ${datetimeData.end_datetime} - Suspicious year ${year}`);
+          datetimeSuccess = false;
+        } else {
+          console.log(`  ✅ End datetime: ${datetimeData.end_datetime} (format: YYYY-MM-DD HH:mm)`);
+        }
+      } else {
+        console.log(`  ℹ️ End datetime: Not set (optional field)`);
+      }
     } else {
-      console.log('  ❌ No datetime-local inputs found!');
+      console.log('  ❌ Could not access Vue app datetime data!');
       datetimeSuccess = false;
     }
 

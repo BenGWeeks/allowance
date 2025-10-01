@@ -290,40 +290,110 @@
             <q-input
               filled
               dense
-              v-model="formDialog.data.start_datetime"
+              v-model="formattedStartDatetime"
               label="Start date & time *"
-              type="datetime-local"
               :rules="[val => !!val || 'Start date & time is required']"
               :disable="!!formDialog.data.id"
               :hint="formDialog.data.id ? 'Start date cannot be changed after creation' : ''"
-            ></q-input>
+              readonly
+              data-cy="start-datetime-input"
+            >
+              <template v-slot:prepend>
+                <q-icon name="event" class="cursor-pointer">
+                  <q-popup-proxy v-if="!formDialog.data.id" ref="startDateProxy" transition-show="scale" transition-hide="scale">
+                    <q-date
+                      v-model="formDialog.data.start_datetime"
+                      mask="YYYY-MM-DD HH:mm"
+                    >
+                      <div class="row items-center justify-end">
+                        <q-btn v-close-popup label="Close" color="primary" flat />
+                      </div>
+                    </q-date>
+                  </q-popup-proxy>
+                </q-icon>
+              </template>
+              <template v-slot:append>
+                <q-icon name="access_time" class="cursor-pointer">
+                  <q-popup-proxy v-if="!formDialog.data.id" ref="startTimeProxy" transition-show="scale" transition-hide="scale">
+                    <q-time
+                      v-model="formDialog.data.start_datetime"
+                      mask="YYYY-MM-DD HH:mm"
+                      format24h
+                    >
+                      <div class="row items-center justify-end">
+                        <q-btn v-close-popup label="Close" color="primary" flat />
+                      </div>
+                    </q-time>
+                  </q-popup-proxy>
+                </q-icon>
+              </template>
+            </q-input>
           </div>
           <div class="col">
             <q-input
               filled
               dense
-              v-model="formDialog.data.end_datetime"
+              v-model="formattedEndDatetime"
               label="End date & time (optional)"
-              type="datetime-local"
-            ></q-input>
+              readonly
+              data-cy="end-datetime-input"
+            >
+              <template v-slot:prepend>
+                <q-icon name="event" class="cursor-pointer">
+                  <q-popup-proxy ref="endDateProxy" transition-show="scale" transition-hide="scale">
+                    <q-date
+                      v-model="formDialog.data.end_datetime"
+                      mask="YYYY-MM-DD HH:mm"
+                    >
+                      <div class="row items-center justify-end">
+                        <q-btn v-close-popup label="Close" color="primary" flat />
+                      </div>
+                    </q-date>
+                  </q-popup-proxy>
+                </q-icon>
+              </template>
+              <template v-slot:append>
+                <q-icon
+                  v-if="formDialog.data.end_datetime && formDialog.data.end_datetime !== ''"
+                  name="clear"
+                  class="cursor-pointer"
+                  @click="formDialog.data.end_datetime = ''"
+                >
+                  <q-tooltip>Clear end date</q-tooltip>
+                </q-icon>
+                <q-icon name="access_time" class="cursor-pointer">
+                  <q-popup-proxy ref="endTimeProxy" transition-show="scale" transition-hide="scale">
+                    <q-time
+                      v-model="formDialog.data.end_datetime"
+                      mask="YYYY-MM-DD HH:mm"
+                      format24h
+                    >
+                      <div class="row items-center justify-end">
+                        <q-btn v-close-popup label="Close" color="primary" flat />
+                      </div>
+                    </q-time>
+                  </q-popup-proxy>
+                </q-icon>
+              </template>
+            </q-input>
           </div>
         </div>
-        
+
         <div class="row">
           <q-toggle
             v-model="formDialog.data.active"
             label="Active"
             color="positive"
-            :disable="!!(formDialog.data.end_datetime && formDialog.data.end_datetime.trim() !== '' && new Date(formDialog.data.end_datetime) < new Date())"
+            :disable="isEndDateInPast"
           />
         </div>
-        
+
         <div class="row q-mt-lg">
           <q-btn
             unelevated
             color="primary"
             :loading="formDialog.loading"
-            :disable="formDialog.data.active && formDialog.data.end_datetime && formDialog.data.end_datetime.trim() !== '' && new Date(formDialog.data.end_datetime) < new Date()"
+            :disable="formDialog.data.active && isEndDateInPast"
             type="submit"
             >
             <span v-if="formDialog.data.id">Update Allowance</span>

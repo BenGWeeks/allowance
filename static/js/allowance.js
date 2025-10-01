@@ -79,8 +79,8 @@ window.app = Vue.createApp({
       this.formDialog.data = {}
     },
     openCreateDialog() {
-      // For datetime-local input, we need YYYY-MM-DDTHH:MM format in LOCAL time
-      const now = this.toLocalDatetimeString(new Date())
+      // For Quasar QDate/QTime, we need "YYYY-MM-DD HH:mm" format in LOCAL time
+      const now = this.toQuasarDatetimeString(new Date())
       this.formDialog.data = {
         wallet: this.g.user.wallets[0].id,
         currency: 'sats',
@@ -298,22 +298,22 @@ window.app = Vue.createApp({
       
       console.log('📋 After cloning:', this.formDialog.data)
 
-      // Convert datetime fields from UTC (API) to local time (for display)
+      // Convert datetime fields from UTC (API) to local time (for Quasar)
       // API returns ISO strings like "2025-09-28T07:49:00+00:00" in UTC
-      // datetime-local input needs local time in "YYYY-MM-DDTHH:mm" format
+      // Quasar QDate/QTime needs "YYYY-MM-DD HH:mm" format in local time
       if (this.formDialog.data.start_datetime) {
         if (typeof this.formDialog.data.start_datetime === 'string') {
           const utcDate = new Date(this.formDialog.data.start_datetime)
-          this.formDialog.data.start_datetime = this.toLocalDatetimeString(utcDate)
-          console.log('✅ Converted start_datetime to local:', this.formDialog.data.start_datetime)
+          this.formDialog.data.start_datetime = this.toQuasarDatetimeString(utcDate)
+          console.log('✅ Converted start_datetime to Quasar format:', this.formDialog.data.start_datetime)
         }
       }
 
       if (this.formDialog.data.end_datetime) {
         if (typeof this.formDialog.data.end_datetime === 'string') {
           const utcDate = new Date(this.formDialog.data.end_datetime)
-          this.formDialog.data.end_datetime = this.toLocalDatetimeString(utcDate)
-          console.log('✅ Converted end_datetime to local:', this.formDialog.data.end_datetime)
+          this.formDialog.data.end_datetime = this.toQuasarDatetimeString(utcDate)
+          console.log('✅ Converted end_datetime to Quasar format:', this.formDialog.data.end_datetime)
         }
       }
       
@@ -466,6 +466,14 @@ window.app = Vue.createApp({
       const localDate = new Date(date.getTime() - offset)
       return localDate.toISOString().slice(0, 16) // "YYYY-MM-DDTHH:mm"
     },
+    toQuasarDatetimeString(date) {
+      // Convert a Date object to "YYYY-MM-DD HH:mm" format for Quasar QDate/QTime
+      const offset = date.getTimezoneOffset() * 60000 // offset in milliseconds
+      const localDate = new Date(date.getTime() - offset)
+      const isoString = localDate.toISOString() // "YYYY-MM-DDTHH:mm:ss.sssZ"
+      // Replace T with space and remove seconds: "YYYY-MM-DD HH:mm"
+      return isoString.slice(0, 16).replace('T', ' ')
+    },
     formatDatetime(timestamp) {
       // Format a datetime for display in tooltips
       if (!timestamp) return ''
@@ -479,6 +487,24 @@ window.app = Vue.createApp({
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
+      })
+    },
+    formatDatetimeForDisplay(datetimeString) {
+      // Format datetime from "YYYY-MM-DD HH:mm" to locale-aware display string
+      if (!datetimeString) return ''
+
+      // Parse the datetime string (in format "YYYY-MM-DD HH:mm")
+      const date = new Date(datetimeString.replace(' ', 'T'))
+      if (!date || isNaN(date.getTime())) return ''
+
+      // Use locale-aware formatting for display
+      return date.toLocaleString(this.userLocale, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
       })
     },
     calculateNextPaymentDate(startDate, frequencyType) {
@@ -542,12 +568,20 @@ window.app = Vue.createApp({
   },
   computed: {
     isEndDateInPast() {
-      if (!this.formDialog.data.end_datetime) {
+      if (!this.formDialog.data.end_datetime || this.formDialog.data.end_datetime === '') {
         return false
       }
       const endDate = new Date(this.formDialog.data.end_datetime)
       const now = new Date()
       return endDate < now
+    },
+    formattedStartDatetime() {
+      if (!this.formDialog.data.start_datetime || this.formDialog.data.start_datetime === '') return ''
+      return this.formatDatetimeForDisplay(this.formDialog.data.start_datetime)
+    },
+    formattedEndDatetime() {
+      if (!this.formDialog.data.end_datetime || this.formDialog.data.end_datetime === '') return ''
+      return this.formatDatetimeForDisplay(this.formDialog.data.end_datetime)
     }
   },
   watch: {
