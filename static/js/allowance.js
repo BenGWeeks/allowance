@@ -576,11 +576,11 @@ window.app = Vue.createApp({
       return endDate < now
     },
     formattedStartDatetime() {
-      if (!this.formDialog.data.start_datetime) return ''
+      if (!this.formDialog.data.start_datetime || this.formDialog.data.start_datetime === '') return ''
       return this.formatDatetimeForDisplay(this.formDialog.data.start_datetime)
     },
     formattedEndDatetime() {
-      if (!this.formDialog.data.end_datetime) return ''
+      if (!this.formDialog.data.end_datetime || this.formDialog.data.end_datetime === '') return ''
       return this.formatDatetimeForDisplay(this.formDialog.data.end_datetime)
     }
   },
