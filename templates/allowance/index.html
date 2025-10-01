@@ -29,6 +29,21 @@
             >
           </div>
         </div>
+        <div class="row q-mb-md">
+          <div class="col-12">
+            <q-input
+              dense
+              outlined
+              v-model="allowanceTable.filter"
+              placeholder="Search allowances..."
+              clearable
+            >
+              <template v-slot:prepend>
+                <q-icon name="search" />
+              </template>
+            </q-input>
+          </div>
+        </div>
         <q-table
           dense
           flat
@@ -36,6 +51,7 @@
           :columns="allowanceTable.columns"
           row-key="id"
           v-model:pagination="allowanceTable.pagination"
+          :filter="allowanceTable.filter"
         >
           <template v-slot:header="props">
             <q-tr class="text-left" :props="props">
