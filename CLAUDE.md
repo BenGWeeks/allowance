@@ -335,6 +335,10 @@ Note: The MORE button may not appear immediately after config changes - may requ
 Always run these checks before committing code:
 
 ```bash
+# Run all CI checks automatically (recommended)
+python3 tests/run_ci_checks.py
+
+# Or run individual checks manually:
 # Format all Python files (REQUIRED for CI)
 black .
 
@@ -348,4 +352,4 @@ mypy --ignore-missing-imports *.py
 ruff check .
 ```
 
-These checks ensure code quality and consistency. The CI pipeline will fail if Black formatting is not applied.
+The `tests/run_ci_checks.py` script automates all code quality checks that run in CI/CD. These checks ensure code quality and consistency. The CI pipeline will fail if Black formatting is not applied.
