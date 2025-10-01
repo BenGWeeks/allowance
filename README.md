@@ -36,13 +36,13 @@ The Docker Compose configuration automatically mounts the current directory into
 
 ### Features
 
-- **Recurring Payments to Lightning Addresses**: Set up automated payments to any Lightning address or LNURL-pay endpoint
-- **Flexible Payment Schedules**: Choose from minutely, hourly, daily, weekly, monthly, or yearly payment frequencies
-- **Multi-Currency Support**: Pay in Bitcoin (sats) or fiat currencies (USD, EUR, GBP, etc.) with automatic conversion at payment time
-- **Decimal Precision**: Support for precise amounts like 0.02 GBP or 0.30 USD for small regular payments
-- **Payment History Tracking**: All payments appear in your LNBits wallet history with clear allowance names
-- **Automatic Start and End Dates**: Schedule when payments should begin and end, with automatic deactivation when expired
-- **Easy Management**: Create, edit, activate/deactivate, and delete allowances through a simple interface
+- ⚡ **Recurring Payments to Lightning Addresses**: Set up automated payments to any Lightning address or LNURL-pay endpoint
+- 📅 **Flexible Payment Schedules**: Choose from minutely, hourly, daily, weekly, monthly, or yearly payment frequencies
+- 💱 **Multi-Currency Support**: Pay in Bitcoin (sats) or fiat currencies (USD, EUR, GBP, etc.) with automatic conversion at payment time
+- 🎯 **Decimal Precision**: Support for precise amounts like 0.02 GBP or 0.30 USD for small regular payments
+- 📊 **Payment History Tracking**: All payments appear in your LNBits wallet history with clear allowance names
+- ⏰ **Automatic Start and End Dates**: Schedule when payments should begin and end, with automatic deactivation when expired
+- 🎛️ **Easy Management**: Create, edit, activate/deactivate, and delete allowances through a simple interface
 
 ### Testing
 
