@@ -568,7 +568,7 @@ window.app = Vue.createApp({
   },
   computed: {
     isEndDateInPast() {
-      if (!this.formDialog.data.end_datetime) {
+      if (!this.formDialog.data.end_datetime || this.formDialog.data.end_datetime === '') {
         return false
       }
       const endDate = new Date(this.formDialog.data.end_datetime)
