@@ -460,6 +460,58 @@ print(f"Body: {json.dumps(response.json(), indent=2)}")
 docker logs lnbits --tail 100 | grep ERROR
 ----
 
+== Diagnostic Tools
+
+=== Payment Timing Debugger
+
+Investigate payment processing and confirmation delays:
+
+[source,bash]
+----
+python3 tests/debug_payment_timing.py
+----
+
+**Purpose**: Debug payment timing issues by checking when payments were created vs confirmed
+
+**Features**:
+- Checks sending and receiving wallets
+- Shows created/confirmed timestamps
+- Calculates confirmation delays
+- Filters for specific time windows (e.g., 3am-4am overnight)
+- Highlights pending payments
+- Provides summary statistics
+
+**Configuration**:
+
+Copy `.env.test.example` to `.env.test` and fill in:
+
+[source,bash]
+----
+TEST_LNBITS_URL=https://your-instance.com
+TEST_SENDING_WALLET_ID=your-sending-wallet-id
+TEST_SENDING_WALLET_KEY=your-admin-or-invoice-key
+TEST_RECEIVING_WALLET_ID=your-receiving-wallet-id
+TEST_RECEIVING_WALLET_KEY=your-admin-or-invoice-key
+----
+
+**Example Output**:
+
+----
+💳 Payment: Nini's Tutoring
+   Amount: 647 sats
+   Created: 2025-10-01 03:59:08 UTC
+   Confirmed: 2025-10-01 03:59:08 UTC
+   Delay: 0.0s
+   Status: ✅ CONFIRMED
+   Payment ID: internal_ded1967...
+----
+
+**Use Cases**:
+- Investigate reports of pending payments
+- Verify scheduler is running overnight
+- Check payment confirmation delays
+- Audit payment history for specific time periods
+
 == Test Data Management
 
 === Cleanup Between Tests
