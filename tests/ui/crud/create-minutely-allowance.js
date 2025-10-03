@@ -134,12 +134,12 @@ async function setQuasarDatetime(page, labelText, datetimeValue) {
     }
 
     // Take screenshot
-    await page.screenshot({ path: 'test-screenshots/minutely-allowance-created.png' });
+    await page.screenshot({ path: 'tests/test-results/minutely-allowance-created.png' });
     console.log('📸 Screenshot saved: minutely-allowance-created.png');
 
   } catch (error) {
     console.error('❌ Failed to create minutely allowance:', error.message);
-    await page.screenshot({ path: 'test-screenshots/minutely-allowance-error.png' });
+    await page.screenshot({ path: 'tests/test-results/minutely-allowance-error.png' });
     process.exit(1);
   } finally {
     await browser.close();

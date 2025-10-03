@@ -50,13 +50,13 @@ async function enablePaylinks() {
       }
     } else {
       console.log('❌ Pay Links extension not found');
-      await page.screenshot({ path: 'test-paylinks-not-found.png', fullPage: true });
+      await page.screenshot({ path: 'tests/test-results/test-paylinks-not-found.png', fullPage: true });
       return false;
     }
 
   } catch (error) {
     console.error('❌ Error enabling Pay Links:', error.message);
-    await page.screenshot({ path: 'test-paylinks-error.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/test-paylinks-error.png', fullPage: true });
     return false;
   } finally {
     await browser.close();

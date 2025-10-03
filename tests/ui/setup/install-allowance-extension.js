@@ -27,7 +27,7 @@ async function installAllowanceExtension() {
     console.log('✓ Navigated to extensions page');
 
     // Take screenshot
-    await page.screenshot({ path: 'install-allowance-1-extensions-page.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/install-allowance-1-extensions-page.png', fullPage: true });
 
     // Search for Allowance extension
     await page.fill('input[aria-label="Search"]', 'allowance');
@@ -35,7 +35,7 @@ async function installAllowanceExtension() {
     console.log('✓ Searched for Allowance extension');
 
     // Take screenshot after search
-    await page.screenshot({ path: 'install-allowance-2-search-results.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/install-allowance-2-search-results.png', fullPage: true });
 
     // Find the Allowance extension card
     const allowanceCard = page.locator('.q-card').filter({ hasText: 'Allowance' }).first();
@@ -46,7 +46,7 @@ async function installAllowanceExtension() {
 
     if (await uninstallButton.isVisible()) {
       console.log('✓ Allowance extension is already installed');
-      await page.screenshot({ path: 'install-allowance-3-already-installed.png', fullPage: true });
+      await page.screenshot({ path: 'tests/test-results/install-allowance-3-already-installed.png', fullPage: true });
       await browser.close();
       return 0;
     }
@@ -68,7 +68,7 @@ async function installAllowanceExtension() {
       );
 
       console.log('✓ Allowance extension installed successfully');
-      await page.screenshot({ path: 'install-allowance-4-installed.png', fullPage: true });
+      await page.screenshot({ path: 'tests/test-results/install-allowance-4-installed.png', fullPage: true });
     } else {
       throw new Error('Could not find Install or Uninstall button for Allowance');
     }
@@ -79,7 +79,7 @@ async function installAllowanceExtension() {
 
   } catch (error) {
     console.error('❌ Error installing Allowance extension:', error);
-    await page.screenshot({ path: 'install-allowance-error.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/install-allowance-error.png', fullPage: true });
     await browser.close();
     return 1;
   }

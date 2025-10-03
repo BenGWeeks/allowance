@@ -82,13 +82,13 @@ async function createReceivingWallet() {
       }
     } else {
       console.log('❌ Add wallet button not found');
-      await page.screenshot({ path: 'test-add-wallet-not-found.png', fullPage: true });
+      await page.screenshot({ path: 'tests/test-results/test-add-wallet-not-found.png', fullPage: true });
       return false;
     }
 
   } catch (error) {
     console.error('❌ Error creating receiving wallet:', error.message);
-    await page.screenshot({ path: 'test-receiving-wallet-error.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/test-receiving-wallet-error.png', fullPage: true });
     return false;
   } finally {
     await browser.close();

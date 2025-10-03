@@ -27,7 +27,7 @@ async function installPaylinkExtension() {
     console.log('✓ Navigated to extensions page');
 
     // Take screenshot
-    await page.screenshot({ path: 'install-paylinks-1-extensions-page.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/install-paylinks-1-extensions-page.png', fullPage: true });
 
     // Search for Paylinks extension
     await page.fill('input[aria-label="Search"]', 'paylinks');
@@ -35,7 +35,7 @@ async function installPaylinkExtension() {
     console.log('✓ Searched for Paylinks extension');
 
     // Take screenshot after search
-    await page.screenshot({ path: 'install-paylinks-2-search-results.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/install-paylinks-2-search-results.png', fullPage: true });
 
     // Find the Paylinks extension card
     const paylinkCard = page.locator('.q-card').filter({ hasText: 'Paylinks' }).first();
@@ -46,7 +46,7 @@ async function installPaylinkExtension() {
 
     if (await uninstallButton.isVisible()) {
       console.log('✓ Paylinks extension is already installed');
-      await page.screenshot({ path: 'install-paylinks-3-already-installed.png', fullPage: true });
+      await page.screenshot({ path: 'tests/test-results/install-paylinks-3-already-installed.png', fullPage: true });
       await browser.close();
       return 0;
     }
@@ -68,7 +68,7 @@ async function installPaylinkExtension() {
       );
 
       console.log('✓ Paylinks extension installed successfully');
-      await page.screenshot({ path: 'install-paylinks-4-installed.png', fullPage: true });
+      await page.screenshot({ path: 'tests/test-results/install-paylinks-4-installed.png', fullPage: true });
     } else {
       throw new Error('Could not find Install or Uninstall button for Paylinks');
     }
@@ -79,7 +79,7 @@ async function installPaylinkExtension() {
 
   } catch (error) {
     console.error('❌ Error installing Paylinks extension:', error);
-    await page.screenshot({ path: 'install-paylinks-error.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/install-paylinks-error.png', fullPage: true });
     await browser.close();
     return 1;
   }

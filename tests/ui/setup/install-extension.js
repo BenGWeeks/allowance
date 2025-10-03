@@ -45,7 +45,7 @@ async function installAllowanceExtension() {
       await page.waitForTimeout(2000);
     }
 
-    await page.screenshot({ path: 'install-extensions-page.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/install-extensions-page.png', fullPage: true });
     console.log('📷 Extensions page: install-extensions-page.png');
 
     // Check if Allowance extension is already visible
@@ -73,7 +73,7 @@ async function installAllowanceExtension() {
         console.log('✅ Allowance extension is already enabled');
       } else {
         console.log('⚠️ Could not find Enable or Disable button for Allowance extension');
-        await page.screenshot({ path: 'install-allowance-buttons.png', fullPage: true });
+        await page.screenshot({ path: 'tests/test-results/install-allowance-buttons.png', fullPage: true });
         console.log('📷 Button debug screenshot: install-allowance-buttons.png');
       }
 
@@ -105,7 +105,7 @@ async function installAllowanceExtension() {
 
       if (addButtonFound) {
         console.log('📝 Looking for Allowance in extension list...');
-        await page.screenshot({ path: 'install-extension-list.png', fullPage: true });
+        await page.screenshot({ path: 'tests/test-results/install-extension-list.png', fullPage: true });
         console.log('📷 Extension list: install-extension-list.png');
 
         // Try to find and install Allowance
@@ -123,7 +123,7 @@ async function installAllowanceExtension() {
     }
 
     // Final verification
-    await page.screenshot({ path: 'install-final-state.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/install-final-state.png', fullPage: true });
     console.log('📷 Final state: install-final-state.png');
 
     // Try to navigate to the Allowance extension
@@ -137,7 +137,7 @@ async function installAllowanceExtension() {
     if (currentUrl.includes('/extensions/allowance') && !bodyText.includes('404')) {
       console.log('✅ Allowance extension is accessible');
 
-      await page.screenshot({ path: 'install-allowance-working.png', fullPage: true });
+      await page.screenshot({ path: 'tests/test-results/install-allowance-working.png', fullPage: true });
       console.log('📷 Working extension: install-allowance-working.png');
 
     } else {
@@ -147,7 +147,7 @@ async function installAllowanceExtension() {
 
   } catch (error) {
     console.error('❌ Error installing extension:', error.message);
-    await page.screenshot({ path: 'install-error.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/install-error.png', fullPage: true });
     console.log('📷 Error screenshot: install-error.png');
   }
 

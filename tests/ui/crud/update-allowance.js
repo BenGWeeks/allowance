@@ -116,7 +116,7 @@ async function testEditMetadata() {
 
     if (!editButton) {
       console.log('❌ Could not find edit button');
-      await page.screenshot({ path: 'test-screenshots/edit-metadata-no-button.png', fullPage: true });
+      await page.screenshot({ path: 'tests/test-results/edit-metadata-no-button.png', fullPage: true });
       process.exit(1);
     }
 
@@ -386,7 +386,7 @@ async function testEditMetadata() {
     }
 
     // Take screenshot of edit form
-    await page.screenshot({ path: 'test-screenshots/edit-metadata-test.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/edit-metadata-test.png', fullPage: true });
     console.log('\n📸 Screenshot saved: edit-metadata-test.png');
 
     // Close dialog

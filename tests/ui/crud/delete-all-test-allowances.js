@@ -27,7 +27,7 @@ async function deleteAllTestAllowances() {
     console.log('✓ Navigated to Allowance extension');
 
     // Take initial screenshot
-    await page.screenshot({ path: 'delete-all-test-1-before.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/delete-all-test-1-before.png', fullPage: true });
 
     // Find all rows that contain "Test" or "TEST" in the name
     const allRows = await page.locator('tbody tr').all();
@@ -83,7 +83,7 @@ async function deleteAllTestAllowances() {
     console.log(`✓ Deleted ${deletedCount} test allowance(s)`);
 
     // Take final screenshot
-    await page.screenshot({ path: 'delete-all-test-2-after.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/delete-all-test-2-after.png', fullPage: true });
 
     // Check if any test allowances remain
     const remainingRows = await page.locator('tbody tr').all();
@@ -106,7 +106,7 @@ async function deleteAllTestAllowances() {
 
   } catch (error) {
     console.error('❌ Error deleting test allowances:', error);
-    await page.screenshot({ path: 'delete-all-test-error.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/delete-all-test-error.png', fullPage: true });
     await browser.close();
     return 1;
   }

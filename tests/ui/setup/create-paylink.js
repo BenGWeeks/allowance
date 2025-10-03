@@ -29,7 +29,7 @@ async function createPaylink() {
     console.log('✓ Navigated to Pay Links extension');
 
     // Take screenshot
-    await page.screenshot({ path: 'create-paylink-1-paylinks-page.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/create-paylink-1-paylinks-page.png', fullPage: true });
 
     // Check if paylink already exists
     const existingPaylink = page.locator('tr').filter({ hasText: payLinkEmail });
@@ -40,7 +40,7 @@ async function createPaylink() {
       const lnAddress = await existingPaylink.locator('td').nth(1).textContent();
       console.log(`✓ Lightning address: ${lnAddress}`);
 
-      await page.screenshot({ path: 'create-paylink-2-already-exists.png', fullPage: true });
+      await page.screenshot({ path: 'tests/test-results/create-paylink-2-already-exists.png', fullPage: true });
       await browser.close();
       return 0;
     }
@@ -110,7 +110,7 @@ async function createPaylink() {
     }
 
     // Take screenshot of dialog
-    await page.screenshot({ path: 'create-paylink-3-dialog.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/create-paylink-3-dialog.png', fullPage: true });
 
     // Click CREATE PAY LINK button
     const submitButton = page.locator('button:has-text("CREATE PAY LINK")');
@@ -138,7 +138,7 @@ async function createPaylink() {
     }
 
     // Take final screenshot
-    await page.screenshot({ path: 'create-paylink-4-created.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/create-paylink-4-created.png', fullPage: true });
 
     await browser.close();
     console.log(`✅ Paylink creation complete for ${payLinkEmail}`);
@@ -146,7 +146,7 @@ async function createPaylink() {
 
   } catch (error) {
     console.error('❌ Error creating paylink:', error);
-    await page.screenshot({ path: 'create-paylink-error.png', fullPage: true });
+    await page.screenshot({ path: 'tests/test-results/create-paylink-error.png', fullPage: true });
     await browser.close();
     return 1;
   }
