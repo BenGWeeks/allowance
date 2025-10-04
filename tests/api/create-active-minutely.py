@@ -51,12 +51,15 @@ async def create_active_minutely():  # noqa: C901
             return False
 
         async with httpx.AsyncClient() as client:
-            # Create active minutely allowance starting NOW
+            # Create active minutely allowance starting 2 minutes from now
+            # (Backend requires start_datetime to be at least 1 minute in future,
+            # use 2 minutes to ensure buffer for processing time)
             now = datetime.now(timezone.utc)
-            end_time = now + timedelta(minutes=3)  # Run for 3 minutes
+            start_time = now + timedelta(minutes=2)  # Start 2 minutes from now
+            end_time = start_time + timedelta(minutes=3)  # Run for 3 minutes
 
-            # Calculate next payment date (1 minute from now for minutely)
-            next_payment = now + timedelta(minutes=1)
+            # Calculate next payment date (1 minute from start for minutely)
+            next_payment = start_time + timedelta(minutes=1)
 
             test_data = {
                 "name": "Test Active Minutely Payment",
@@ -64,7 +67,7 @@ async def create_active_minutely():  # noqa: C901
                 "amount": random.randint(1, 99),  # Random amount between 1-99 sats
                 "currency": "sats",
                 "frequency_type": "minutely",
-                "start_datetime": now.isoformat(),
+                "start_datetime": start_time.isoformat(),
                 "end_datetime": end_time.isoformat(),
                 "next_payment_date": next_payment.isoformat(),
                 "active": True,  # IMPORTANT: Set to active
@@ -75,8 +78,8 @@ async def create_active_minutely():  # noqa: C901
             print(f"   Name: {test_data['name']}")
             print(f"   Amount: {test_data['amount']} sats per minute")
             print(f"   Active: {test_data['active']}")
-            print(f"   Start: NOW ({now.strftime('%H:%M:%S')})")
-            print(f"   End: In 3 minutes ({end_time.strftime('%H:%M:%S')})")
+            print(f"   Start: In 2 minutes ({start_time.strftime('%H:%M:%S')})")
+            print(f"   End: In 5 minutes ({end_time.strftime('%H:%M:%S')})")
             print(f"   Lightning address: {test_data['lightning_address']}")
 
             create_response = await client.post(
@@ -90,9 +93,12 @@ async def create_active_minutely():  # noqa: C901
                 print("\n✅ Successfully created active minutely allowance!")
                 print(f"   ID: {created['id']}")
                 print("   Status: ACTIVE ✅")
-                print("\n⏳ Waiting 65 seconds for first payment...")
+                print(
+                    "\n⏳ Waiting 185 seconds for first payment "
+                    "(2 min until start + 1 min frequency + 5 sec buffer)..."
+                )
 
-                await asyncio.sleep(65)
+                await asyncio.sleep(185)
 
                 # Check if payment was made
                 fetch_response = await client.get(
@@ -104,7 +110,7 @@ async def create_active_minutely():  # noqa: C901
                     allowances = fetch_response.json()
                     for allowance in allowances:
                         if allowance["id"] == created["id"]:
-                            print("\n📊 Allowance status after 1 minute:")
+                            print("\n📊 Allowance status after ~2 minutes:")
                             is_active = "✅" if allowance.get("active") else "❌"
                             print(f"   Active: {is_active}")
                             print(

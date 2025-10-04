@@ -138,8 +138,15 @@ window.app = Vue.createApp({
       if (!this.formDialog.data.frequency_type) errors.push('Frequency is required')
       if (!this.formDialog.data.start_datetime) errors.push('Start date & time is required')
 
-      // Note: start_datetime validation (must be at least 1 minute in future) is handled by backend
-      // No client-side validation needed since the form defaults to 1 minute from now when opened
+      // Validate: start_datetime must be at least 1 minute in the future (only for new allowances)
+      if (!this.formDialog.data.id && this.formDialog.data.start_datetime) {
+        const startDate = new Date(this.formDialog.data.start_datetime)
+        const now = new Date()
+        const oneMinuteFromNow = new Date(now.getTime() + 60 * 1000)
+        if (startDate < oneMinuteFromNow) {
+          errors.push('Start date & time must be at least 1 minute in the future.')
+        }
+      }
 
       // Validate: end_datetime must be after start_datetime
       if (this.formDialog.data.end_datetime && this.formDialog.data.start_datetime) {

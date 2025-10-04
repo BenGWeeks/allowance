@@ -53,9 +53,14 @@ async def test_scheduler_deactivation():  # noqa: C901
             return False
 
         async with httpx.AsyncClient() as client:
-            # Create an allowance that will expire in 1 minute
+            # Create an allowance that starts in 2 minutes and expires 70 seconds later
+            # (Backend requires start_datetime to be at least 1 minute in future,
+            # use 2 minutes to ensure buffer for processing time)
             now = datetime.now(timezone.utc)
-            end_time = now + timedelta(seconds=70)  # Expires in 70 seconds
+            start_time = now + timedelta(minutes=2)  # Start 2 minutes from now
+            end_time = start_time + timedelta(
+                seconds=70
+            )  # Expires 70 seconds after start
 
             test_data = {
                 "name": "Test Deactivation Check",
@@ -63,14 +68,16 @@ async def test_scheduler_deactivation():  # noqa: C901
                 "amount": random.randint(1, 99),  # Random amount between 1-99 sats
                 "currency": "sats",
                 "frequency_type": "minutely",
-                "start_datetime": now.isoformat(),
+                "start_datetime": start_time.isoformat(),
                 "end_datetime": end_time.isoformat(),
-                "next_payment_date": (now + timedelta(minutes=1)).isoformat(),
+                "next_payment_date": (start_time + timedelta(minutes=1)).isoformat(),
                 "active": True,
                 "memo": "Testing scheduler deactivation",
             }
 
-            print("📝 Creating test allowance that expires in 70 seconds...")
+            print(
+                "📝 Creating test allowance that starts in 2 min, expires 70 sec later..."
+            )
             create_response = await client.post(
                 f"{base_url}/allowance/api/v1/allowance",
                 json=test_data,
@@ -88,16 +95,16 @@ async def test_scheduler_deactivation():  # noqa: C901
             print(f"✅ Created test allowance: {test_id}")
             print(f"   Will expire at: {end_time.strftime('%H:%M:%S')}")
 
-            # Wait for it to expire and for scheduler to run
-            # Scheduler runs every 60 seconds, so wait 130 seconds to ensure:
-            # - Allowance expires at 70 seconds
+            # Wait for:
+            # - Allowance to start (120 seconds from now)
+            # - Allowance to expire (70 seconds after start)
             # - Scheduler has time to run (next cycle could be up to 60s away)
-            # - Total: 70 + 60 = 130 seconds minimum
+            # - Total: 120 + 70 + 60 = 250 seconds minimum
             print(
-                "⏳ Waiting 130 seconds for allowance to expire and scheduler "
+                "⏳ Waiting 250 seconds for allowance to start, expire, and scheduler "
                 "to deactivate it..."
             )
-            await asyncio.sleep(130)
+            await asyncio.sleep(250)
 
             # Now check the status multiple times over 2 minutes to confirm it
             # stays deactivated
