@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from typing import Optional
 
@@ -428,10 +428,22 @@ async def api_allowance_create(
             detail="start_datetime is required",
         )
 
+    # Validate: start_datetime must be at least 1 minute in the future
+    # This ensures the first payment will definitely be made
+    current_time = datetime.now(timezone.utc)
+    minimum_start = current_time + timedelta(minutes=1)
+    if start_dt < minimum_start:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=(
+                "start_datetime must be at least 1 minute in the future. "
+                "Please select a time at least 1 minute from now."
+            ),
+        )
+
     # Validate: cannot activate if end_datetime is in the past
     is_active = data.get("active", True)
     if is_active and end_dt is not None:
-        current_time = datetime.now(timezone.utc)
         if end_dt < current_time:
             raise HTTPException(
                 status_code=HTTPStatus.BAD_REQUEST,

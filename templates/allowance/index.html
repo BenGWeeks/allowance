@@ -372,7 +372,7 @@
               label="Start date & time *"
               :rules="[val => !!val || 'Start date & time is required']"
               :disable="!!formDialog.data.id"
-              :hint="formDialog.data.id ? 'Start date cannot be changed after creation' : 'When the first payment should be sent'"
+              :hint="formDialog.data.id ? 'Start date cannot be changed after creation' : 'When the first payment should be sent (must be at least 1 minute in the future)'"
               readonly
               data-cy="start-datetime-input"
             >
@@ -382,6 +382,7 @@
                     <q-date
                       v-model="formDialog.data.start_datetime"
                       mask="YYYY-MM-DD HH:mm"
+                      :options="isDateInFuture"
                     >
                       <div class="row items-center justify-end">
                         <q-btn v-close-popup label="Close" color="primary" flat />

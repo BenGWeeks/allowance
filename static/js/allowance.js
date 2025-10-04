@@ -99,16 +99,18 @@ window.app = Vue.createApp({
     },
     openCreateDialog() {
       // For Quasar QDate/QTime, we need "YYYY-MM-DD HH:mm" format in LOCAL time
-      const now = this.toQuasarDatetimeString(new Date())
+      // Default to 5 minutes in the future to ensure first payment is made
+      const fiveMinutesFromNow = new Date(Date.now() + 5 * 60 * 1000)
+      const defaultStart = this.toQuasarDatetimeString(fiveMinutesFromNow)
       this.formDialog.data = {
         wallet: this.g.user.wallets[0].id,
         currency: 'sats',
         frequency_type: 'weekly', // Default to weekly to help with testing
         active: true,
-        start_datetime: now
+        start_datetime: defaultStart
       }
       this.formDialog.show = true
-      console.log('📅 Form opened with default start datetime:', now)
+      console.log('📅 Form opened with default start datetime (5 min from now):', defaultStart)
       console.log('🔘 Active state set to:', this.formDialog.data.active)
     },
     saveAllowance(event) {
@@ -135,6 +137,9 @@ window.app = Vue.createApp({
       if (!this.formDialog.data.amount || this.formDialog.data.amount <= 0) errors.push('Amount must be greater than 0')
       if (!this.formDialog.data.frequency_type) errors.push('Frequency is required')
       if (!this.formDialog.data.start_datetime) errors.push('Start date & time is required')
+
+      // Note: start_datetime validation (must be at least 1 minute in future) is handled by backend
+      // No client-side validation needed since the form defaults to 1 minute from now when opened
 
       // Validate: end_datetime must be after start_datetime
       if (this.formDialog.data.end_datetime && this.formDialog.data.start_datetime) {
@@ -583,6 +588,23 @@ window.app = Vue.createApp({
             this.currencies = ['sats', 'USD', 'EUR']
           }
         })
+    },
+    // Date validation functions for QDate pickers
+    isDateInFuture(date) {
+      // date format: "YYYY/MM/DD" (QDate format)
+      const selectedDate = new Date(date)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0) // Reset to start of day
+      selectedDate.setHours(0, 0, 0, 0)
+      return selectedDate >= today
+    },
+    getTodayDateString() {
+      // Returns "YYYY/MM/DD" format for today (QDate format)
+      const today = new Date()
+      const year = today.getFullYear()
+      const month = String(today.getMonth() + 1).padStart(2, '0')
+      const day = String(today.getDate()).padStart(2, '0')
+      return `${year}/${month}/${day}`
     }
   },
   computed: {
