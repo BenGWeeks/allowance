@@ -152,17 +152,30 @@ async def api_allowances(
     wallet: Wallet = Depends(require_admin_key),
     all_wallets: bool = Query(False),
 ):
-    """Get allowances for the authenticated wallet or all wallets (if admin)."""
+    """Get allowances for all of the user's wallets."""
     wallet_id = get_wallet_id(wallet)
-    logger.info(f"🔗 API called: Getting allowances for wallet {wallet_id}")
+    wallet_user = get_wallet_user(wallet)
 
     try:
+        # Get user to access all their wallets
+        user = await get_user(wallet_user)
+        if not user:
+            logger.error(f"❌ User not found for wallet {wallet_id}")
+            return []
+
+        # Get all wallet IDs for this user
+        user_wallet_ids = [w.id for w in user.wallets]
+        logger.info(
+            f"🔗 API called: Getting allowances for "
+            f"user's {len(user_wallet_ids)} wallets: {user_wallet_ids}"
+        )
+
         if all_wallets:
             # For admin viewing all wallets, get all active allowances
             allowances = await get_all_active_allowances()
         else:
-            # Get allowances for specific wallet
-            allowances = await get_allowances(wallet_id)
+            # Get allowances for all of the user's wallets
+            allowances = await get_allowances(user_wallet_ids)
 
         # Convert to list of dicts with proper datetime formatting
         result = []
@@ -187,11 +200,17 @@ async def api_allowances(
 
             result.append(data)
 
-        logger.info(f"✅ Returning {len(result)} allowances")
+        logger.info(
+            f"✅ Returning {len(result)} allowances "
+            f"(found {len(allowances)} before formatting)"
+        )
         return result
 
     except Exception as e:
         logger.error(f"❌ Error getting allowances: {e}")
+        import traceback
+
+        logger.error(traceback.format_exc())
         return []
 
 
