@@ -266,7 +266,7 @@
           v-model.trim="formDialog.data.name"
           label="Allowance description *"
           placeholder="e.g., Weekly allowance for Alice"
-          hint="A descriptive name to help you identify this allowance"
+          hint="A name to help you identify this allowance in your transaction history"
           :rules="[val => !!val || 'Description is required']"
         ></q-input>
 
@@ -296,7 +296,17 @@
             val => val.includes('@') || 'Please enter a valid Lightning address'
           ]"
         ></q-input>
-        
+
+        <q-input
+          filled
+          dense
+          v-model.trim="formDialog.data.memo"
+          label="Message (optional)"
+          placeholder="e.g., Weekly pocket money"
+          hint="The message the recipient will see with each payment"
+          maxlength="255"
+        ></q-input>
+
         <div class="row q-gutter-sm">
           <div class="col">
             <q-input

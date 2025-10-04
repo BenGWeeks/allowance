@@ -239,10 +239,10 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
         )
 
         if payment_result:
-            # Update the payment memo field
+            # Update the payment memo field to match what was sent
             payment = await get_standalone_payment(payment_result.checking_id)
             if payment:
-                payment.memo = allowance.name
+                payment.memo = memo or allowance.name
                 await update_payment(payment)
             # Clear any previous errors and record success
             await update_allowance_success(
