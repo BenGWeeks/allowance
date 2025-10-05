@@ -76,7 +76,8 @@ async def test_scheduler_deactivation():  # noqa: C901
             }
 
             print(
-                "📝 Creating test allowance that starts in 2 min, expires 70 sec later..."
+                "📝 Creating test allowance that starts in 2 min, "
+                "expires 70 sec later..."
             )
             create_response = await client.post(
                 f"{base_url}/allowance/api/v1/allowance",

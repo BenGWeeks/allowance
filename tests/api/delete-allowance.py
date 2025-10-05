@@ -69,16 +69,17 @@ async def test_delete_allowance():  # noqa: C901
             print(f"📊 Initial allowance count: {initial_count}")
 
             # Step 2: Create a test allowance to delete
+            # Backend requires start_datetime to be at least 1 minute in future
+            now = datetime.now(timezone.utc)
+            start_time = now + timedelta(minutes=2)
             create_data = {
                 "name": "TEST_DELETE_ALLOWANCE",
                 "lightning_address": config["lightning_address"],
                 "amount": random.randint(1, 99),  # Random amount between 1-99 sats
                 "currency": "sats",
                 "frequency_type": "weekly",
-                "start_datetime": datetime.now(timezone.utc).isoformat(),
-                "next_payment_date": (
-                    datetime.now(timezone.utc) + timedelta(days=7)
-                ).isoformat(),
+                "start_datetime": start_time.isoformat(),
+                "next_payment_date": (start_time + timedelta(days=7)).isoformat(),
                 "active": True,
                 "memo": "Test allowance for deletion",
             }

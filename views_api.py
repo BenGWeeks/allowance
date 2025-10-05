@@ -408,7 +408,7 @@ async def api_allowance_update(  # noqa: C901
 
 ## Create a new record
 @allowance_api_router.post("/api/v1/allowance", status_code=HTTPStatus.CREATED)
-async def api_allowance_create(
+async def api_allowance_create(  # noqa: C901
     request: Request,
     wallet: Wallet = Depends(require_admin_key),
 ):

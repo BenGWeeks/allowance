@@ -79,8 +79,9 @@ const getTestData = () => {
     console.log(`✅ Got admin API key: ${adminKey.substring(0, 8)}...`);
 
     // Create test allowance via API using Playwright's request context
-    const now = new Date();
-    const startDatetime = now.toISOString();
+    // Backend requires start_datetime to be at least 1 minute in future
+    const twoMinutesFromNow = new Date(Date.now() + 2 * 60 * 1000);
+    const startDatetime = twoMinutesFromNow.toISOString();
 
     const testAllowance = {
       name: testData.nameToDelete,
