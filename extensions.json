@@ -24,6 +24,18 @@
             "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/config.json",
             "archive": "https://github.com/BenGWeeks/allowance/archive/refs/tags/v1.0.3.zip",
             "hash": "ad560cb9c0493faaa6bf13017b0e865722530c03c785be0b41fc4c2a12a8ff64"
+        },
+        {
+            "id": "allowance",
+            "repo": "https://github.com/BenGWeeks/allowance",
+            "name": "Allowance",
+            "version": "1.0.4",
+            "min_lnbits_version": "1.1.0",
+            "short_description": "Added 1-minute future validation for allowances, 5-minute default start time, and comprehensive test suite improvements.",
+            "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/allowance.png",
+            "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/config.json",
+            "archive": "https://github.com/BenGWeeks/allowance/archive/refs/tags/v1.0.4.zip",
+            "hash": "983ab0ca460e7aa245e9825a0c97ad440d60e13cffef58a0067e25a7822eea10"
         }
     ]
 }
