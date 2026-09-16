@@ -229,6 +229,7 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
         payment_result = await pay_invoice(
             wallet_id=allowance.wallet,
             payment_request=payment_request,
+            max_sat=amount_sats,
             extra={
                 "tag": "allowance",
                 "allowance_id": allowance.id,
