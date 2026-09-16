@@ -363,7 +363,7 @@ async def check_and_process_allowances():  # noqa: C901
                             # Execute Lightning address payment
                             success = await execute_lightning_address_payment(allowance)
 
-                            # Keep the original cadence, including after failed attempts.
+                            # Keep the original cadence after every attempt.
                             # Use completion time so a slow attempt cannot leave the
                             # next occurrence in the past and trigger a catch-up burst.
                             allowance.next_payment_date = next_occurrence(
