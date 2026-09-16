@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 import httpx
-from lnbits.core.crud import get_standalone_payment, update_payment
 from lnbits.core.services import pay_invoice
+from lnbits.utils.exchange_rates import fiat_amount_as_satoshis
 from lnurl import decode as lnurl_decode
 from loguru import logger
 
@@ -127,31 +127,9 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
                 f"💱 Converting {allowance.amount} {allowance.currency} to sats"
             )
 
-            # Get exchange rate from CoinGecko API
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    "https://api.coingecko.com/api/v3/simple/price",
-                    params={
-                        "ids": "bitcoin",
-                        "vs_currencies": allowance.currency.lower(),
-                    },
-                )
-                response.raise_for_status()
-                data = response.json()
-
-                if "bitcoin" in data and allowance.currency.lower() in data["bitcoin"]:
-                    btc_price_in_currency = data["bitcoin"][allowance.currency.lower()]
-                    # Convert: amount in currency -> BTC -> sats
-                    btc_amount = allowance.amount / btc_price_in_currency
-                    amount_sats = int(btc_amount * 100_000_000)  # Convert BTC to sats
-                    logger.info(
-                        f"💱 Converted to {amount_sats} sats "
-                        f"(rate: 1 BTC = {btc_price_in_currency} {allowance.currency})"
-                    )
-                else:
-                    raise Exception(
-                        f"Could not get exchange rate for {allowance.currency}"
-                    )
+            amount_sats = await fiat_amount_as_satoshis(
+                allowance.amount, allowance.currency.upper()
+            )
         else:
             # Already in sats, ensure integer
             amount_sats = int(amount_sats)
@@ -230,6 +208,8 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
             wallet_id=allowance.wallet,
             payment_request=payment_request,
             max_sat=amount_sats,
+            description=memo or allowance.name,
+            tag="allowance",
             extra={
                 "tag": "allowance",
                 "allowance_id": allowance.id,
@@ -239,12 +219,7 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
             },
         )
 
-        if payment_result:
-            # Update the payment memo field to match what was sent
-            payment = await get_standalone_payment(payment_result.checking_id)
-            if payment:
-                payment.memo = memo or allowance.name
-                await update_payment(payment)
+        if payment_result.success:
             # Clear any previous errors and record success
             await update_allowance_success(
                 allowance.id, int(datetime.now(timezone.utc).timestamp())
@@ -252,7 +227,11 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
             logger.info(f"✅ Payment successful for allowance: {allowance.name}")
             return True
         else:
-            error_msg = "Payment failed"
+            error_msg = (
+                "Payment pending settlement"
+                if payment_result.pending
+                else "Payment failed"
+            )
             logger.error(f"❌ Payment failed for allowance: {allowance.name}")
             await update_allowance_error(
                 allowance.id, error_msg, int(datetime.now(timezone.utc).timestamp())

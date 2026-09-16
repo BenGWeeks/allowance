@@ -5,8 +5,8 @@ description = "Setup automatic recurring payments as an allowance between wallet
 authors = ["bengweeks", ""]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.13"
-lnbits = "*"
+python = ">=3.10,<3.13"
+lnbits = ">=1.6.0,<2.0.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.3.0"

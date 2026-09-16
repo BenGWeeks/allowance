@@ -29,7 +29,9 @@ def allowance_renderer():
 async def index(request: Request, user: User = Depends(check_user_exists)):
     # Back to the original approach but we'll handle it in the template
     return allowance_renderer().TemplateResponse(
-        "allowance/index.html", {"request": request, "user": user.json()}
+        request=request,
+        name="allowance/index.html",
+        context={"user": user.json()},
     )
 
 
