@@ -132,7 +132,7 @@ async def api_wallet_info(
 
 ## Get all the records belonging to the user
 @allowance_api_router.get("/api/v1/allowance", status_code=HTTPStatus.OK)
-async def api_allowances(
+async def api_allowances(  # noqa: C901
     wallet: Wallet = Depends(require_admin_key),
     all_wallets: bool = Query(False),
 ):

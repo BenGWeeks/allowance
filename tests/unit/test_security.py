@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 from fastapi import FastAPI
-
 from lnbits.extensions.allowance import crud, views_api
 
 
