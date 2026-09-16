@@ -186,3 +186,6 @@ testing. CI does not claim browser or PostgreSQL coverage. Configure the
 The obsolete automatic Claude-review workflow was removed because its configured
 model is unavailable. CodeRabbit reviews require enabling the GitHub App for this
 repository; comments requesting a review alone do not install the app.
+
+`.coderabbit.yaml` enables review of stacked PRs targeting `fix/*` or `ci/*`,
+as well as the default branch and `develop`, once the app has repository access.
