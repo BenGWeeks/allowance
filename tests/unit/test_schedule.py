@@ -117,3 +117,46 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
                     save.assert_awaited_once_with(
                         allowance.id, dt("2026-04-30T09:00:00")
                     )
+
+
+class ScheduleEditTests(unittest.IsolatedAsyncioTestCase):
+    async def test_edit_and_reactivation_preserve_due_date(self):
+        from types import SimpleNamespace
+
+        from lnbits.extensions.allowance import views_api
+
+        for active, start in [
+            (True, "2020-01-31"),
+            (False, "2020-01-31"),
+            (False, "2090-01-31"),
+        ]:
+            with self.subTest(active=active, start=start):
+                allowance = Allowance(
+                    id="edit-test",
+                    name="Original",
+                    wallet="wallet",
+                    lightning_address="recipient@example.invalid",
+                    amount=1,
+                    start_datetime=dt(start),
+                    next_payment_date=dt(start),
+                    frequency_type="monthly",
+                    active=active,
+                )
+                request = SimpleNamespace(
+                    json=AsyncMock(return_value={"name": "Renamed", "active": True})
+                )
+                wallet = SimpleNamespace(id="wallet", user="owner")
+
+                async def save(data):
+                    return Allowance(**data.dict())
+
+                with patch.object(
+                    views_api, "get_allowance", AsyncMock(return_value=allowance)
+                ), patch.object(
+                    views_api, "update_allowance", AsyncMock(side_effect=save)
+                ) as update:
+                    await views_api.api_allowance_update(allowance.id, request, wallet)
+                    self.assertEqual(
+                        update.await_args.args[0].next_payment_date,
+                        allowance.next_payment_date,
+                    )
