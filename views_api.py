@@ -319,42 +319,9 @@ async def api_allowance_update(  # noqa: C901
                 detail="Cannot activate allowance: end_datetime is in the past",
             )
 
-    # Calculate next payment date
-    # If the allowance is being activated or if next_payment_date is in the past,
-    # set it to now so payments start immediately
-    was_inactive = not allowance.active
-    is_being_activated = was_inactive and is_active
-
-    # Check if next_payment_date is in the past
-    next_payment_in_past = False
-    if allowance.next_payment_date:
-        try:
-            if isinstance(allowance.next_payment_date, datetime):
-                next_payment_datetime = allowance.next_payment_date
-            else:
-                next_payment_datetime = datetime.fromtimestamp(
-                    allowance.next_payment_date, tz=timezone.utc
-                )
-            current_time = datetime.now(timezone.utc)
-            next_payment_in_past = next_payment_datetime < current_time
-        except Exception as e:
-            logger.warning(f"⚠️ Error parsing next_payment_date: {e}")
-            next_payment_in_past = True
-
-    # If being activated or next payment is in the past, reset to now
-    if is_being_activated or next_payment_in_past:
-        next_payment = datetime.now(timezone.utc)
-        logger.info(
-            f"🔄 Resetting next_payment_date to NOW for allowance {allowance_id}"
-        )
-    else:
-        # Keep the existing next_payment_date
-        if isinstance(allowance.next_payment_date, datetime):
-            next_payment = allowance.next_payment_date
-        else:
-            next_payment = datetime.fromtimestamp(
-                allowance.next_payment_date, tz=timezone.utc
-            )
+    # Editing or reactivating an allowance must not reset its schedule.
+    # An overdue occurrence is handled once by the worker on its next pass.
+    next_payment = allowance.next_payment_date
 
     # Create update data
     update_data = CreateAllowanceData(

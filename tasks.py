@@ -1,9 +1,8 @@
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
-from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
 from lnbits.core.crud import get_standalone_payment, update_payment
 from lnbits.core.services import pay_invoice
 from lnurl import decode as lnurl_decode
@@ -17,6 +16,7 @@ from .crud import (
     update_next_payment_date,
 )
 from .models import Allowance
+from .schedule import next_occurrence
 
 
 async def resolve_lightning_address(
@@ -354,35 +354,23 @@ async def check_and_process_allowances():  # noqa: C901
                         )
 
                         try:
+                            # Validate recurrence before attempting a payment.
+                            next_occurrence(
+                                allowance.start_datetime,
+                                allowance.frequency_type,
+                                current_time,
+                            )
                             # Execute Lightning address payment
                             success = await execute_lightning_address_payment(allowance)
 
-                            # Update next payment date regardless of success/failure
-                            # This ensures schedule continues if a payment fails
-                            if allowance.frequency_type == "minutely":
-                                allowance.next_payment_date = current_time + timedelta(
-                                    minutes=1
-                                )
-                            elif allowance.frequency_type == "hourly":
-                                allowance.next_payment_date = current_time + timedelta(
-                                    hours=1
-                                )
-                            elif allowance.frequency_type == "daily":
-                                allowance.next_payment_date = current_time + timedelta(
-                                    days=1
-                                )
-                            elif allowance.frequency_type == "weekly":
-                                allowance.next_payment_date = current_time + timedelta(
-                                    weeks=1
-                                )
-                            elif allowance.frequency_type == "monthly":
-                                allowance.next_payment_date = (
-                                    current_time + relativedelta(months=1)
-                                )
-                            elif allowance.frequency_type == "yearly":
-                                allowance.next_payment_date = (
-                                    current_time + relativedelta(years=1)
-                                )
+                            # Keep the original cadence, including after failed attempts.
+                            # Use completion time so a slow attempt cannot leave the
+                            # next occurrence in the past and trigger a catch-up burst.
+                            allowance.next_payment_date = next_occurrence(
+                                allowance.start_datetime,
+                                allowance.frequency_type,
+                                datetime.now(timezone.utc),
+                            )
 
                             # Update the next payment date in database
                             await update_next_payment_date(
