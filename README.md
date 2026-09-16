@@ -157,3 +157,28 @@ retains internal `1.6.1-rc2` metadata, so the declared minimum is 1.6.0.
 This remains a native Python extension, not a sandboxed WASM component. Porting
 to WASM requires replacing direct database, HTTP and payment-service access with
 permission-scoped host APIs and a migration strategy for existing allowances.
+
+### Automated pull-request checks
+
+`Allowance checks` runs on every PR, main/develop push, manual invocation, and
+weekly. It discovers real unit tests and fails if none are found. Tests run in
+the official LNbits 1.6.0, 1.6.1, and latest stable release images (deduplicated),
+with networking disabled, a read-only checkout, and disposable SQLite data.
+Payment/HTTP interactions are mocked; these checks cannot send real payments.
+The suite covers calendar recurrence, worker timing, authorization, wallet/task
+integration, and database persistence. Formatting and lint errors fail CI.
+
+Run the same suite locally:
+
+```bash
+docker run --rm --network none \
+  -e LNBITS_DATA_FOLDER=/tmp/allowance-tests \
+  -e LOGURU_LEVEL=ERROR \
+  -v "$PWD:/app/lnbits/extensions/allowance:ro" \
+  lnbits/lnbits:v1.6.1 /app/.venv/bin/python \
+  /app/lnbits/extensions/allowance/tests/run_unit_tests.py
+```
+
+The historical network/API/browser scripts remain available for manual dev
+testing. CI does not claim browser or PostgreSQL coverage. Configure the
+`quality` and `Regression (...)` jobs as required branch-protection checks.
