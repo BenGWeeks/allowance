@@ -182,3 +182,7 @@ docker run --rm --network none \
 The historical network/API/browser scripts remain available for manual dev
 testing. CI does not claim browser or PostgreSQL coverage. Configure the
 `quality` and `Regression (...)` jobs as required branch-protection checks.
+
+The obsolete automatic Claude-review workflow was removed because its configured
+model is unavailable. CodeRabbit reviews require enabling the GitHub App for this
+repository; comments requesting a review alone do not install the app.
