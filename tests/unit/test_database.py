@@ -1,15 +1,30 @@
+import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
+from lnbits.db import SQLITE, Database
 from lnbits.extensions.allowance import crud, migrations
 from lnbits.extensions.allowance.models import CreateAllowanceData
+from lnbits.settings import settings
 
 
 class DatabaseTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        # The runner uses a disposable data folder in an isolated container.
-        await crud.db.execute("DROP TABLE IF EXISTS maintable")
-        await migrations.m001_initial(crud.db)
+        # Own a temporary database even if somebody invokes this test locally.
+        if crud.db.type != SQLITE:
+            raise RuntimeError("Run database regressions in the isolated SQLite runner")
+        folder = tempfile.TemporaryDirectory(prefix="allowance-regression-")
+        self.addCleanup(folder.cleanup)
+        with patch.object(settings, "lnbits_data_folder", folder.name):
+            self.database = Database("ext_allowance_regression")
+        patcher = patch.object(crud, "db", self.database)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        await migrations.m001_initial(self.database)
+
+    async def asyncTearDown(self):
+        await self.database.engine.dispose()
 
     async def test_persisted_schedule_and_error_tracking(self):
         start = datetime(2026, 1, 31, 9, tzinfo=timezone.utc)
