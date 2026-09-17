@@ -251,7 +251,6 @@ async def api_allowance_update(  # noqa: C901
             422, "A non-negative integer revision is required; reload before saving"
         )
 
-
     # Handle datetime fields
     start_dt = (
         parse_datetime_string(data.get("start_datetime"))
