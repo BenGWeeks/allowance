@@ -103,6 +103,7 @@ window.app = Vue.createApp({
       const fiveMinutesFromNow = new Date(Date.now() + 5 * 60 * 1000)
       const defaultStart = this.toQuasarDatetimeString(fiveMinutesFromNow)
       this.formDialog.data = {
+        memo: '',
         wallet: this.g.user.wallets[0].id,
         currency: 'sats',
         frequency_type: 'weekly', // Default to weekly to help with testing
@@ -167,7 +168,6 @@ window.app = Vue.createApp({
       }
       
       console.log('🔍 Validation check:', {
-        memo: '',
         name: this.formDialog.data.name,
         wallet: this.formDialog.data.wallet,
         lightning_address: this.formDialog.data.lightning_address,
