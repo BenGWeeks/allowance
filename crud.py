@@ -1,8 +1,10 @@
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional, Union
 
-from lnbits.db import POSTGRES, Database
+from lnbits.db import POSTGRES, SQLITE, Connection, Database
 from lnbits.helpers import urlsafe_short_hash
+from sqlalchemy import text
 
 from .models import Allowance, CreateAllowanceData
 
@@ -18,6 +20,35 @@ class AllowanceDatabase(Database):
 
 
 db = AllowanceDatabase("ext_allowance")
+
+
+class TransactionConnection(Connection):
+    """Leave commit/rollback to the transaction, unlike LNbits Connection.execute."""
+
+    async def execute(self, query: str, values: Optional[dict] = None):
+        params = self.rewrite_values(values) if values else {}
+        return await self.conn.execute(text(self.rewrite_query(query)), params)
+
+
+@asynccontextmanager
+async def transaction(database):
+    if isinstance(database, Database):
+        async with database.connect() as connection:
+            async with transaction(connection) as atomic:
+                yield atomic
+    else:
+        atomic = TransactionConnection(
+            database.conn, database.type, database.name, database.schema
+        )
+        if database.conn.in_transaction():
+            async with database.conn.begin_nested():
+                yield atomic
+        else:
+            async with database.conn.begin():
+                # SQLite's legacy driver does not begin a transaction for DDL.
+                if database.type == SQLITE:
+                    await database.conn.exec_driver_sql("BEGIN")
+                yield atomic
 
 
 async def create_allowance(data: CreateAllowanceData) -> Allowance:
@@ -143,7 +174,7 @@ async def update_allowance(data: CreateAllowanceData) -> Allowance:
 
 
 async def delete_allowance(allowance_id: str) -> None:
-    async with db.connect() as conn:
+    async with transaction(db) as conn:
         await conn.execute(
             f"DELETE FROM {db.references_schema}payment_history "
             "WHERE allowance_id = :id",
@@ -175,15 +206,17 @@ async def update_next_payment_date(allowance_id: str, next_payment_date) -> None
     )
 
 
-async def deactivate_allowance(allowance_id: str) -> None:
+async def deactivate_allowance(
+    allowance_id: str, revision: Optional[int] = None
+) -> None:
     """Deactivate an allowance"""
     await db.execute(
         f"""
         UPDATE {db.references_schema}maintable
         SET active = false, revision = revision + 1
-        WHERE id = :id
+        WHERE id = :id AND (CAST(:revision AS INTEGER) IS NULL OR revision = :revision)
         """,
-        {"id": allowance_id},
+        {"id": allowance_id, "revision": revision},
     )
 
 
@@ -196,37 +229,49 @@ async def get_all_active_allowances() -> list[Allowance]:
     )
 
 
-async def update_allowance_error(
-    allowance_id: str, error_message: str, error_time: int
-) -> None:
-    """Store error information for an allowance"""
-    await db.execute(
-        f"""
-        UPDATE {db.references_schema}maintable
-        SET last_error = :error_message,
-            last_error_time = {db.timestamp_placeholder("error_time")}
-        WHERE id = :allowance_id
-        """,
+def payment_state_filter(allowance: Allowance):
+    condition = (
+        "pending_payment_hash = :hash"
+        if allowance.pending_payment_hash
+        else "pending_payment_hash IS NULL AND revision = :revision"
+    )
+    return (
+        f"id = :id AND {condition} "
+        f"AND next_payment_date = {db.timestamp_placeholder('due')}",
         {
-            "error_message": error_message,
-            "error_time": error_time,
-            "allowance_id": allowance_id,
+            "id": allowance.id,
+            "hash": allowance.pending_payment_hash,
+            "revision": allowance.revision,
+            "due": int(allowance.next_payment_date.timestamp()),
         },
     )
 
 
-async def update_allowance_success(allowance_id: str, success_time: int) -> None:
-    """Clear error and store success time for an allowance"""
-    await db.execute(
-        f"""
-        UPDATE {db.references_schema}maintable
-        SET last_error = NULL,
-            last_error_time = NULL,
-            last_success_time = {db.timestamp_placeholder("success_time")}
-        WHERE id = :allowance_id
-        """,
-        {"success_time": success_time, "allowance_id": allowance_id},
+async def update_allowance_error(
+    allowance: Allowance, error_message: str, error_time: int
+) -> bool:
+    """Record an error only while the observed occurrence still owns the claim."""
+    condition, values = payment_state_filter(allowance)
+    result = await db.execute(
+        f"UPDATE {db.references_schema}maintable SET last_error = :error_message, "
+        f"last_error_time = {db.timestamp_placeholder('error_time')} "
+        f"WHERE {condition}",
+        {**values, "error_message": error_message, "error_time": error_time},
     )
+    return result.rowcount == 1
+
+
+async def update_allowance_success(allowance: Allowance, success_time: int) -> bool:
+    """Record success only while the observed occurrence still owns the claim."""
+    condition, values = payment_state_filter(allowance)
+    result = await db.execute(
+        f"UPDATE {db.references_schema}maintable SET last_error = NULL, "
+        "last_error_time = NULL, "
+        f"last_success_time = {db.timestamp_placeholder('success_time')} "
+        f"WHERE {condition}",
+        {**values, "success_time": success_time},
+    )
+    return result.rowcount == 1
 
 
 async def clear_allowance_error(allowance_id: str) -> None:
@@ -284,7 +329,7 @@ async def finish_payment_attempt(
     else:
         assignment = f"next_payment_date = {db.timestamp_placeholder('next')}"
         values["next"] = int(next_date.timestamp())
-    async with db.connect() as conn:
+    async with transaction(db) as conn:
         result = await conn.execute(
             f"UPDATE {db.references_schema}maintable SET {assignment}, "
             "pending_payment_hash = NULL, revision = revision + 1 WHERE id = :id "

@@ -63,7 +63,6 @@ async def test_update_allowance():  # noqa: C901
                 "currency": "sats",
                 "frequency_type": "weekly",
                 "start_datetime": start_datetime.isoformat(),
-                "next_payment_date": (start_datetime + timedelta(days=7)).isoformat(),
                 "active": True,
                 "memo": "Test allowance for update",
             }
@@ -87,12 +86,12 @@ async def test_update_allowance():  # noqa: C901
             # Step 2: Update the allowance
             # Note: start_datetime and frequency_type are locked and should not be sent
             update_data = {
+                "revision": created_allowance["revision"],
                 "name": "Test Updated Allowance",
                 "lightning_address": config["lightning_address"],
                 "amount": random.randint(1, 99),  # Random amount between 1-99 sats
                 "currency": "sats",
                 # Don't send frequency_type or start_datetime - they're locked
-                "next_payment_date": (start_datetime + timedelta(days=7)).isoformat(),
                 "active": False,
                 "memo": "Updated via API test",
             }
