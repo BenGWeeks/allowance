@@ -100,7 +100,7 @@ async def m006_operational_history(db):
     async with transaction(db) as atomic:
         await atomic.execute(
             f"""
-            CREATE TABLE {db.references_schema}payment_history (
+            CREATE TABLE IF NOT EXISTS {db.references_schema}payment_history (
                 id TEXT PRIMARY KEY, allowance_id TEXT NOT NULL,
                 scheduled_at BIGINT NOT NULL, completed_at BIGINT NOT NULL,
                 outcome TEXT NOT NULL, payment_hash TEXT
@@ -109,13 +109,13 @@ async def m006_operational_history(db):
         )
         await atomic.execute(
             f"""
-            CREATE INDEX allowance_history_lookup
+            CREATE INDEX IF NOT EXISTS allowance_history_lookup
             ON {db.references_schema}payment_history (allowance_id, completed_at)
         """
         )
         await atomic.execute(
             f"""
-            CREATE TABLE {db.references_schema}scheduler_health (
+            CREATE TABLE IF NOT EXISTS {db.references_schema}scheduler_health (
                 id TEXT PRIMARY KEY, last_started BIGINT, last_completed BIGINT,
                 state TEXT NOT NULL
             )
@@ -123,5 +123,5 @@ async def m006_operational_history(db):
         )
         await atomic.execute(
             f"INSERT INTO {db.references_schema}scheduler_health "
-            "(id, state) VALUES ('worker', 'starting')"
+            "(id, state) VALUES ('worker', 'starting') ON CONFLICT (id) DO NOTHING"
         )

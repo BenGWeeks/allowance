@@ -306,8 +306,30 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
             async with self.database.connect() as connection:
                 with self.assertRaisesRegex(RuntimeError, "Injected migration"):
                     await migrations.m006_operational_history(connection)
-        # Retrying would fail on existing tables if the DDL had been committed.
+        if self.database.type == POSTGRES:
+            tables = await self.database.fetchall(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = :schema AND table_name IN "
+                "('payment_history', 'scheduler_health')",
+                {"schema": self.database.schema},
+            )
+        else:
+            tables = await self.database.fetchall(
+                "SELECT name FROM sqlite_master WHERE type = 'table' "
+                "AND name IN ('payment_history', 'scheduler_health')"
+            )
+        self.assertEqual(tables, [])
         async with self.database.connect() as connection:
             await migrations.m006_operational_history(connection)
         self.assertEqual((await crud.get_scheduler_health())["state"], "starting")
         self.assertEqual(await crud.get_payment_history("missing"), [])
+
+    async def test_history_migration_retry_preserves_committed_data(self):
+        allowance = await self.history_fixture()
+        await crud.finish_payment_attempt(allowance, None, True)
+        await crud.record_scheduler_heartbeat("healthy")
+        before = await crud.get_scheduler_health()
+        async with self.database.connect() as connection:
+            await migrations.m006_operational_history(connection)
+        self.assertEqual(await crud.get_scheduler_health(), before)
+        self.assertEqual(len(await crud.get_payment_history(allowance.id)), 1)
