@@ -79,12 +79,12 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         loaded = await crud.get_allowance(created.id)
         self.assertEqual(loaded.next_payment_date, next_date)
         await crud.update_allowance_error(
-            created.id, "Temporary failure", int(start.timestamp())
+            loaded, "Temporary failure", int(start.timestamp())
         )
         loaded = await crud.get_allowance(created.id)
         self.assertEqual(loaded.last_error, "Temporary failure")
         self.assertEqual(loaded.last_error_time, start)
-        await crud.update_allowance_success(created.id, int(next_date.timestamp()))
+        await crud.update_allowance_success(loaded, int(next_date.timestamp()))
         loaded = await crud.get_allowance(created.id)
         self.assertIsNone(loaded.last_error)
         self.assertEqual(loaded.last_success_time, next_date)
@@ -142,3 +142,61 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         paused = await crud.get_allowance(created.id)
         self.assertFalse(await crud.claim_payment(paused, "paused"))
         self.assertFalse(await crud.claim_payment(updated, "stale-active"))
+
+    async def test_stale_expiry_cannot_deactivate_an_edited_allowance(self):
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        allowance = await crud.create_allowance(
+            CreateAllowanceData(
+                name="Expiry race",
+                wallet="wallet",
+                lightning_address="test@example.invalid",
+                amount=1,
+                start_datetime=now,
+                next_payment_date=now,
+                frequency_type="weekly",
+                memo="",
+            )
+        )
+        edit = CreateAllowanceData(**allowance.dict())
+        edit.end_datetime = now + timedelta(days=7)
+        current = await crud.update_allowance(edit)
+        await crud.deactivate_allowance(allowance.id, revision=allowance.revision)
+        self.assertTrue((await crud.get_allowance(allowance.id)).active)
+        await crud.deactivate_allowance(current.id, revision=current.revision)
+        self.assertFalse((await crud.get_allowance(current.id)).active)
+
+    async def test_stale_payment_metadata_cannot_overwrite_a_new_occurrence(self):
+        start = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        original = await crud.create_allowance(
+            CreateAllowanceData(
+                name="Reconciliation race",
+                wallet="wallet",
+                amount=1,
+                lightning_address="test@example.invalid",
+                start_datetime=start,
+                next_payment_date=start,
+                frequency_type="weekly",
+                memo="",
+            )
+        )
+        self.assertTrue(await crud.claim_payment(original, "first-hash"))
+        self.assertFalse(
+            await crud.update_allowance_error(original, "Pre-claim error", 1)
+        )
+        old = await crud.get_allowance(original.id)
+        await crud.finish_payment_attempt(old, start + timedelta(days=7))
+        current = await crud.get_allowance(original.id)
+        self.assertTrue(await crud.claim_payment(current, "second-hash"))
+        current = await crud.get_allowance(original.id)
+        self.assertTrue(await crud.update_allowance_success(current, 2000))
+        self.assertTrue(
+            await crud.update_allowance_error(current, "Current error", 2001)
+        )
+        self.assertFalse(await crud.update_allowance_success(old, 1000))
+        self.assertFalse(await crud.update_allowance_error(old, "Stale error", 1001))
+        old.pending_payment_hash = current.pending_payment_hash
+        self.assertFalse(await crud.update_allowance_success(old, 1000))
+        loaded = await crud.get_allowance(original.id)
+        self.assertEqual(int(loaded.last_success_time.timestamp()), 2000)
+        self.assertEqual(loaded.last_error, "Current error")
+        self.assertEqual(int(loaded.last_error_time.timestamp()), 2001)
