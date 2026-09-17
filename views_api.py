@@ -503,8 +503,13 @@ async def api_currency_rate(
     wallet: WalletTypeInfo = Depends(require_invoice_key),
 ):
     """Get currency conversion rate to sats."""
-    from lnbits.utils.exchange_rates import get_fiat_rate_and_price_satoshis
+    from lnbits.utils.exchange_rates import (
+        allowed_currencies,
+        get_fiat_rate_and_price_satoshis,
+    )
 
+    if currency.upper() not in allowed_currencies():
+        raise HTTPException(status_code=400, detail="Unsupported currency")
     try:
         rate, price = await get_fiat_rate_and_price_satoshis(currency.upper())
         if not (rate > 0 and price > 0):
@@ -548,6 +553,23 @@ async def api_allowance_trigger(
         logger.info(f"🚀 Manually triggering payment for allowance: {allowance.name}")
         success = await execute_lightning_address_payment(allowance)
 
+        if success is None:
+            return {
+                "success": False,
+                "pending": True,
+                "message": "Payment outcome unresolved; no new invoice sent",
+            }
+        from .crud import finish_payment_attempt
+        from .schedule import next_occurrence
+
+        await finish_payment_attempt(
+            allowance,
+            next_occurrence(
+                allowance.start_datetime,
+                allowance.frequency_type,
+                datetime.now(timezone.utc),
+            ),
+        )
         if success:
             return {
                 "success": True,

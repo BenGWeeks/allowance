@@ -53,6 +53,7 @@ class Allowance(BaseModel):
     lnurlpay: Optional[str] = None  # LNURL pay string for compatibility
     total: Optional[float] = 0  # Total amount processed
     created_at: Optional[datetime] = None  # When the allowance was created
+    pending_payment_hash: Optional[str] = None
     last_error: Optional[str] = None  # Last error message
     last_error_time: Optional[datetime] = None  # When the last error occurred
     last_success_time: Optional[datetime] = (

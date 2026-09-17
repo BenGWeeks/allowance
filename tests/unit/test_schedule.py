@@ -104,9 +104,9 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
                 "execute_lightning_address_payment",
                 AsyncMock(return_value=success),
             ) as pay, patch.object(
-                tasks, "deactivate_allowance", AsyncMock()
+                tasks, "finish_payment_attempt", AsyncMock()
             ) as stop, patch.object(
-                tasks, "update_next_payment_date", AsyncMock()
+                tasks, "update_allowance_error", AsyncMock()
             ) as advance, patch.object(
                 tasks.asyncio,
                 "sleep",
@@ -115,7 +115,7 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(tasks.asyncio.CancelledError):
                     await tasks.check_and_process_allowances()
                 pay.assert_awaited_once()
-                stop.assert_awaited_once_with(allowance.id)
+                stop.assert_awaited_once_with(allowance, None)
                 advance.assert_not_awaited()
 
     async def test_success_and_failure_advance_from_original_anchor(self):
@@ -141,7 +141,7 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
                     "execute_lightning_address_payment",
                     AsyncMock(return_value=success),
                 ) as pay, patch.object(
-                    tasks, "update_next_payment_date", AsyncMock()
+                    tasks, "finish_payment_attempt", AsyncMock()
                 ) as save, patch.object(
                     tasks.asyncio,
                     "sleep",
@@ -154,9 +154,7 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
                     with self.assertRaises(tasks.asyncio.CancelledError):
                         await tasks.check_and_process_allowances()
                     pay.assert_awaited_once()
-                    save.assert_awaited_once_with(
-                        allowance.id, dt("2026-04-30T09:00:00")
-                    )
+                    save.assert_awaited_once_with(allowance, dt("2026-04-30T09:00:00"))
 
 
 class ScheduleEditTests(unittest.IsolatedAsyncioTestCase):
@@ -200,3 +198,29 @@ class ScheduleEditTests(unittest.IsolatedAsyncioTestCase):
                         update.await_args.args[0].next_payment_date,
                         allowance.next_payment_date,
                     )
+
+
+class PendingWorkerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_pending_does_not_advance_or_deactivate(self):
+        allowance = Allowance(
+            id="pending",
+            name="Pending",
+            wallet="wallet",
+            amount=1,
+            lightning_address="recipient@example.invalid",
+            frequency_type="once",
+            start_datetime=dt("2020-01-01"),
+            next_payment_date=dt("2020-01-01"),
+        )
+        with patch.object(
+            tasks, "get_all_active_allowances", AsyncMock(return_value=[allowance])
+        ), patch.object(
+            tasks, "execute_lightning_address_payment", AsyncMock(return_value=None)
+        ), patch.object(
+            tasks, "finish_payment_attempt", AsyncMock()
+        ) as finish, patch.object(
+            tasks.asyncio, "sleep", AsyncMock(side_effect=tasks.asyncio.CancelledError)
+        ):
+            with self.assertRaises(tasks.asyncio.CancelledError):
+                await tasks.check_and_process_allowances()
+            finish.assert_not_awaited()

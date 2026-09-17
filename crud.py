@@ -1,6 +1,6 @@
 from typing import Optional, Union
 
-from lnbits.db import COCKROACH, POSTGRES, Database
+from lnbits.db import POSTGRES, Database
 from lnbits.helpers import urlsafe_short_hash
 
 from .models import Allowance, CreateAllowanceData
@@ -11,7 +11,7 @@ class AllowanceDatabase(Database):
 
     def timestamp_placeholder(self, key: str) -> str:
         placeholder = super().timestamp_placeholder(key)
-        if self.type in {POSTGRES, COCKROACH}:
+        if self.type == POSTGRES:
             return f"({placeholder} AT TIME ZONE 'UTC')"
         return placeholder
 
@@ -267,4 +267,45 @@ async def clear_allowance_error(allowance_id: str) -> None:
         WHERE id = :allowance_id
         """,
         {"allowance_id": allowance_id},
+    )
+
+
+async def claim_payment(allowance: Allowance, payment_hash: str) -> bool:
+    """Claim this due occurrence before handing its invoice to LNbits."""
+    row = await db.fetchone(
+        f"UPDATE {db.references_schema}maintable "
+        "SET pending_payment_hash = :hash "
+        "WHERE id = :id AND pending_payment_hash IS NULL "
+        f"AND next_payment_date = {db.timestamp_placeholder('due')} RETURNING id",
+        {
+            "id": allowance.id,
+            "hash": payment_hash,
+            "due": int(allowance.next_payment_date.timestamp()),
+        },
+    )
+    return row is not None
+
+
+async def finish_payment_attempt(allowance: Allowance, next_date) -> None:
+    """Atomically release this attempt and advance or finish its schedule."""
+    values = {
+        "id": allowance.id,
+        "hash": allowance.pending_payment_hash,
+        "due": int(allowance.next_payment_date.timestamp()),
+    }
+    condition = (
+        "pending_payment_hash = :hash"
+        if allowance.pending_payment_hash
+        else "pending_payment_hash IS NULL"
+    )
+    if next_date is None:
+        assignment = "active = false"
+    else:
+        assignment = f"next_payment_date = {db.timestamp_placeholder('next')}"
+        values["next"] = int(next_date.timestamp())
+    await db.execute(
+        f"UPDATE {db.references_schema}maintable SET {assignment}, "
+        "pending_payment_hash = NULL WHERE id = :id "
+        f"AND {condition} AND next_payment_date = {db.timestamp_placeholder('due')}",
+        values,
     )

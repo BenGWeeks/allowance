@@ -57,8 +57,17 @@ class CompatibilityTests(unittest.IsolatedAsyncioTestCase):
             next_payment_date=datetime.now(timezone.utc),
         )
         for success, pending in [(True, False), (False, True), (False, False)]:
+            allowance.pending_payment_hash = None
             with self.subTest(success=success, pending=pending):
                 with patch.object(
+                    tasks, "get_allowance", AsyncMock(return_value=allowance)
+                ), patch.object(
+                    tasks, "claim_payment", AsyncMock(return_value=True)
+                ), patch.object(
+                    tasks,
+                    "decode_invoice",
+                    return_value=SimpleNamespace(payment_hash="hash"),
+                ), patch.object(
                     tasks, "fiat_amount_as_satoshis", AsyncMock(return_value=2000)
                 ) as convert, patch.object(
                     tasks,
@@ -86,7 +95,7 @@ class CompatibilityTests(unittest.IsolatedAsyncioTestCase):
                 ) as error:
                     self.assertEqual(
                         await tasks.execute_lightning_address_payment(allowance),
-                        success,
+                        None if pending else success,
                     )
                     convert.assert_awaited_once_with(2, "GBP")
                     self.assertEqual(
@@ -119,3 +128,48 @@ class CompatibilityTests(unittest.IsolatedAsyncioTestCase):
                 await views_api.api_currency_rate("gbp", None),
                 {"currency": "GBP", "rate": 100, "btc_price": 1000000},
             )
+
+    async def test_invalid_currency_is_a_client_error(self):
+        from starlette.exceptions import HTTPException
+
+        with self.assertRaises(HTTPException) as error:
+            await views_api.api_currency_rate("not-a-currency", None)
+        self.assertEqual(error.exception.status_code, 400)
+
+    async def test_pending_is_reconciled_without_another_invoice(self):
+        allowance = Allowance(
+            id="pending-test",
+            wallet="wallet",
+            name="Pending",
+            amount=1,
+            lightning_address="recipient@example.invalid",
+            frequency_type="monthly",
+            start_datetime=datetime.now(timezone.utc),
+            next_payment_date=datetime.now(timezone.utc),
+            pending_payment_hash="hash",
+        )
+        for result, expected in [
+            (None, None),
+            (SimpleNamespace(pending=True, success=False), None),
+            (SimpleNamespace(pending=False, success=True), True),
+            (SimpleNamespace(pending=False, success=False), False),
+        ]:
+            with patch.object(
+                tasks, "get_allowance", AsyncMock(return_value=allowance)
+            ), patch.object(
+                tasks, "get_standalone_payment", AsyncMock(return_value=result)
+            ) as lookup, patch.object(
+                tasks, "resolve_lightning_address", AsyncMock()
+            ) as resolve, patch.object(
+                tasks, "pay_invoice", AsyncMock()
+            ) as pay, patch.object(
+                tasks, "update_allowance_success", AsyncMock()
+            ), patch.object(
+                tasks, "update_allowance_error", AsyncMock()
+            ):
+                self.assertIs(
+                    await tasks.execute_lightning_address_payment(allowance), expected
+                )
+                lookup.assert_awaited_once_with("hash", wallet_id="wallet")
+                resolve.assert_not_awaited()
+                pay.assert_not_awaited()
