@@ -366,11 +366,19 @@ async def check_and_process_allowances():  # noqa: C901
                             # Keep the original cadence after every attempt.
                             # Use completion time so a slow attempt cannot leave the
                             # next occurrence in the past and trigger a catch-up burst.
-                            allowance.next_payment_date = next_occurrence(
+                            next_date = next_occurrence(
                                 allowance.start_datetime,
                                 allowance.frequency_type,
                                 datetime.now(timezone.utc),
                             )
+
+                            if next_date is None:
+                                # One-off means one attempt, including pending/failure:
+                                # automatic retries could duplicate an unsettled payment.
+                                await deactivate_allowance(allowance.id)
+                                deactivated_ids.add(allowance.id)
+                                continue
+                            allowance.next_payment_date = next_date
 
                             # Update the next payment date in database
                             await update_next_payment_date(
