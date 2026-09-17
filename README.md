@@ -1,5 +1,7 @@
 # Allowance - An [LNbits](https://github.com/lnbits/lnbits) Extension
 
+[![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/BenGWeeks/allowance?utm_source=oss&utm_medium=github&utm_campaign=BenGWeeks%2Fallowance&labelColor=171717&color=FF570A&label=CodeRabbit+Reviews)](https://coderabbit.ai)
+
 ![Allowance Extension Banner](static/image/banner_cropped.png)
 
 > **Note**: This extension was developed as a test of using Claude Code to build an LNBits extension, demonstrating AI-assisted development of Bitcoin Lightning applications.
@@ -93,13 +95,15 @@ ruff check .
 ```
 allowance/
 ├── .github/workflows/       # CI/CD pipeline configuration
-│   └── integration-tests.yml # GitHub Actions workflow
+│   └── api-unit-tests.yml # GitHub Actions workflow
 ├── docs/                    # Documentation (AsciiDoc format)
 │   ├── installation.adoc   # Installation guide
 │   ├── faqs.adoc           # Frequently asked questions
 │   ├── testing.adoc        # Testing procedures
 │   └── troubleshooting.adoc # Problem resolution
 ├── tests/                   # Comprehensive test suite
+│   ├── unit/               # Offline regression tests
+│   ├── run_unit_tests.py   # Regression runner
 │   ├── api/                # API endpoint tests (Python)
 │   │   ├── check-*.py      # Validation tests
 │   │   ├── create-*.py     # Creation tests
@@ -157,3 +161,63 @@ retains internal `1.6.1-rc2` metadata, so the declared minimum is 1.6.0.
 This remains a native Python extension, not a sandboxed WASM component. Porting
 to WASM requires replacing direct database, HTTP and payment-service access with
 permission-scoped host APIs and a migration strategy for existing allowances.
+
+### Automated pull-request checks
+
+`Allowance checks` runs on every PR, main/develop push, manual invocation, and
+weekly. It discovers real unit tests and fails if none are found. Tests run in
+the official LNbits 1.6.0, 1.6.1, and latest stable release images (deduplicated),
+with networking disabled, a read-only checkout, and disposable SQLite data.
+Payment/HTTP interactions are mocked; these checks cannot send real payments.
+The suite covers calendar recurrence, worker timing, authorization, wallet/task
+integration, and database persistence. Formatting and lint errors fail CI.
+
+Run the same suite locally:
+
+```bash
+docker run --rm --network none \
+  -e LNBITS_DATA_FOLDER=/tmp/allowance-tests \
+  -e LOGURU_LEVEL=ERROR \
+  -v "$PWD:/app/lnbits/extensions/allowance:ro" \
+  lnbits/lnbits:v1.6.1 /app/.venv/bin/python \
+  /app/lnbits/extensions/allowance/tests/run_unit_tests.py
+```
+
+The historical network/API/browser scripts remain available for manual dev
+testing. CI covers SQLite and PostgreSQL; browser tests run explicitly on dev. Configure the
+`Allowance checks passed` as the required branch-protection check. It aggregates
+all matrix, PostgreSQL and quality jobs under a stable name.
+
+The obsolete automatic Claude-review workflow was removed because its configured
+model is unavailable. CodeRabbit reviews require enabling the GitHub App for this
+repository; comments requesting a review alone do not install the app.
+
+`.coderabbit.yaml` enables review of stacked PRs targeting `fix/*` or `ci/*`,
+as well as the default branch and `develop`, once the app has repository access.
+
+### Dev browser verification
+
+The Playwright lifecycle test creates an **inactive** monthly allowance, edits its
+name, amount and memo, reloads to verify persistence and unchanged schedule dates,
+then deletes it through the UI. API assertions confirm each result; cleanup only
+removes the record created by that run. It does not test Lightning settlement.
+
+Set `TEST_LNBITS_URL`, `LNBITS_ADMIN_USERNAME`, `LNBITS_ADMIN_PASSWORD` and
+`RECEIVING_WALLET_NAME`, `PAYLINK_EMAIL`, `ALLOWANCE_TEST_CREATE_AMOUNT` and `ALLOWANCE_TEST_EDIT_AMOUNT`
+(positive integer sats) in the ignored root `.env.local` or environment. Use an initialized
+dev instance with Allowance enabled and a wallet. Use a test recipient ending in
+`.invalid` for this inactive CRUD test.
+
+```bash
+cd tests
+npm ci
+npx playwright install chromium
+# Set this explicitly to the same dev URL as TEST_LNBITS_URL:
+export ALLOWANCE_UI_TEST_CONFIRM="$(node -p 'require("./ui/auth-helper").getConfig().baseUrl')"
+npx playwright test --project=chromium
+```
+
+Screenshots and the HTML report are stored locally in ignored test output folders.
+Do not publish artifacts containing account information. Browser tests are run
+explicitly against dev; CI runs offline unit/SQLite regressions plus PostgreSQL
+regressions in disposable containers (`bash tests/run_postgres_tests.sh`).

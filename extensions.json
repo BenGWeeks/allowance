@@ -36,6 +36,18 @@
             "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/config.json",
             "archive": "https://github.com/BenGWeeks/allowance/archive/refs/tags/v1.0.4.zip",
             "hash": "983ab0ca460e7aa245e9825a0c97ad440d60e13cffef58a0067e25a7822eea10"
+        },
+        {
+            "id": "allowance",
+            "repo": "https://github.com/BenGWeeks/allowance",
+            "name": "Allowance",
+            "version": "1.0.5",
+            "min_lnbits_version": "1.6.0",
+            "short_description": "LNbits 1.6 compatibility, anchored schedules, protected wallet access and pending-payment reconciliation.",
+            "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/allowance.png",
+            "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/config.json",
+            "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.0.5/allowance-1.0.5.zip",
+            "hash": "53e052f4e24fedb85d84160413fffb3cb25b9210609ec12d82e65d274e34f763"
         }
     ]
 }

@@ -64,13 +64,15 @@ async function getAdminApiKey(page = null) {
       return null;
     }
     
-    // Return the admin key from the first wallet
-    const adminWallet = wallets[0];
+    // Return the admin key for the explicitly configured wallet
+    if (!config.walletName) throw new Error("RECEIVING_WALLET_NAME must be set");
+    const matches = wallets.filter(wallet => wallet.name === config.walletName);
+    if (matches.length !== 1) throw new Error("Expected exactly one wallet matching RECEIVING_WALLET_NAME");
+    const adminWallet = matches[0];
     const adminKey = adminWallet.adminkey;
     const walletId = adminWallet.id;
     
     console.log(`✅ Found admin wallet: ${walletId}`);
-    console.log(`✅ Admin API key: ${adminKey}`);
     
     // Only dispose if we created our own context
     if (!page && apiContext.dispose) {
