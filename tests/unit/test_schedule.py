@@ -98,7 +98,9 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
                 frequency_type="once",
             )
             with patch.object(
-                tasks, "get_all_active_allowances", AsyncMock(return_value=[allowance])
+                tasks,
+                "get_all_active_allowances",
+                AsyncMock(side_effect=[[allowance], []]),
             ), patch.object(
                 tasks,
                 "execute_lightning_address_payment",

@@ -13,6 +13,7 @@ from loguru import logger
 from starlette.exceptions import HTTPException
 
 from .crud import (
+    AllowanceConflictError,
     create_allowance,
     delete_allowance,
     get_all_active_allowances,
@@ -307,6 +308,7 @@ async def api_allowance_update(  # noqa: C901
     # Create update data
     update_data = CreateAllowanceData(
         id=allowance_id,
+        revision=data.get("revision", allowance.revision),
         wallet=allowance.wallet,  # Keep original wallet
         name=data.get("name", allowance.name),
         lightning_address=data.get("lightning_address", allowance.lightning_address),
@@ -346,6 +348,8 @@ async def api_allowance_update(  # noqa: C901
 
         return result
 
+    except AllowanceConflictError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except Exception as e:
         logger.error(f"❌ Error updating allowance: {e}")
         raise HTTPException(

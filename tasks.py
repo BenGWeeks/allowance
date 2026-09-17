@@ -127,6 +127,8 @@ async def execute_lightning_address_payment(  # noqa: C901
     current = await get_allowance(allowance.id)
     if current is None or current.next_payment_date != allowance.next_payment_date:
         return None
+    if current.revision != allowance.revision or not current.active:
+        return None
     allowance.pending_payment_hash = current.pending_payment_hash
     if allowance.pending_payment_hash:
         payment = await get_standalone_payment(
@@ -295,8 +297,6 @@ async def check_and_process_allowances():  # noqa: C901
     Background task to check and process scheduled allowance payments.
     Runs every 60 seconds (1 minute minimum frequency).
     """
-    # Keep track of already deactivated allowances to prevent repeated processing
-    deactivated_ids = set()
 
     while True:
         try:
@@ -314,14 +314,6 @@ async def check_and_process_allowances():  # noqa: C901
                         f"🔍 Checking allowance: {allowance.name} "
                         f"(ID: {allowance.id[:8]}...)"
                     )
-
-                    # Skip if we've already deactivated this in a previous run
-                    if allowance.id in deactivated_ids:
-                        logger.debug(
-                            f"⏩ Skipping already-deactivated allowance: "
-                            f"{allowance.name}"
-                        )
-                        continue
 
                     # The query already filters for active=true,
                     # so no need to check again
@@ -347,7 +339,6 @@ async def check_and_process_allowances():  # noqa: C901
                             # Deactivate the expired allowance
                             await deactivate_allowance(allowance.id)
                             # Track that we've deactivated this one
-                            deactivated_ids.add(allowance.id)
                             continue
 
                     # Check if payment is due
@@ -393,7 +384,6 @@ async def check_and_process_allowances():  # noqa: C901
                                 # One-off attempts finish only after a terminal result.
                                 # Retrying could duplicate an unsettled payment.
                                 await finish_payment_attempt(allowance, None)
-                                deactivated_ids.add(allowance.id)
                                 continue
                             await finish_payment_attempt(allowance, next_date)
                             allowance.next_payment_date = next_date
@@ -425,11 +415,6 @@ async def check_and_process_allowances():  # noqa: C901
 
         except Exception as e:
             logger.error(f"❌ Error in allowance scheduler: {e!s}")
-
-        # Clean up deactivated list periodically
-        # (keep last 100 to prevent memory growth)
-        if len(deactivated_ids) > 100:
-            deactivated_ids = set(list(deactivated_ids)[-100:])
 
         # Check every 60 seconds (1 minute minimum payment frequency)
         await asyncio.sleep(60)

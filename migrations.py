@@ -86,3 +86,11 @@ async def m004_pending_payment(db: Any) -> None:
         f"ALTER TABLE {db.references_schema}maintable "
         "ADD COLUMN pending_payment_hash TEXT"
     )
+
+
+async def m005_allowance_revision(db: Any) -> None:
+    """Detect edits that race with payments or other edits."""
+    await db.execute(
+        f"ALTER TABLE {db.references_schema}maintable "
+        "ADD COLUMN revision INTEGER NOT NULL DEFAULT 0"
+    )
