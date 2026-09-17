@@ -94,7 +94,7 @@ def parse_datetime_string(date_str: Optional[str]) -> Optional[datetime]:  # noq
     except (ValueError, TypeError):
         pass
 
-    logger.warning(f"Could not parse datetime string: {date_str}")
+    logger.warning("Allowance operation: parse_datetime_string")
     return None
 
 
@@ -127,22 +127,17 @@ async def api_allowances(  # noqa: C901
     all_wallets: bool = Query(False),
 ):
     """Get allowances for all of the user's wallets."""
-    wallet_id = get_wallet_id(wallet)
     wallet_user = get_wallet_user(wallet)
 
     try:
         # Get user to access all their wallets
         user = await get_user(wallet_user)
         if not user:
-            logger.error(f"❌ User not found for wallet {wallet_id}")
+            logger.error("Allowance operation: api_allowances")
             return []
 
         # Get all wallet IDs for this user
         user_wallet_ids = [w.id for w in user.wallets]
-        logger.info(
-            f"🔗 API called: Getting allowances for "
-            f"user's {len(user_wallet_ids)} wallets: {user_wallet_ids}"
-        )
 
         if all_wallets and not user.super_user:
             raise HTTPException(
@@ -180,19 +175,12 @@ async def api_allowances(  # noqa: C901
 
             result.append(data)
 
-        logger.info(
-            f"✅ Returning {len(result)} allowances "
-            f"(found {len(allowances)} before formatting)"
-        )
         return result
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"❌ Error getting allowances: {e}")
-        import traceback
-
-        logger.error(traceback.format_exc())
+    except Exception:
+        logger.error("Allowance operation: api_allowances")
         return []
 
 
@@ -263,7 +251,6 @@ async def api_allowance_update(  # noqa: C901
             422, "A non-negative integer revision is required; reload before saving"
         )
 
-    logger.info(f"📝 Update request for allowance {allowance_id}: {data}")
 
     # Handle datetime fields
     start_dt = (
@@ -333,7 +320,6 @@ async def api_allowance_update(  # noqa: C901
     # Update in database
     try:
         updated = await update_allowance(update_data)
-        logger.info(f"✅ Updated allowance {allowance_id}")
 
         # Format response
         result = updated.dict()
@@ -356,10 +342,10 @@ async def api_allowance_update(  # noqa: C901
     except AllowanceConflictError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"❌ Error updating allowance: {e}")
+        logger.error("Allowance operation: api_allowance_update")
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update allowance: {e!s}",
+            detail="Failed to update allowance",
         ) from e
 
 
@@ -372,7 +358,6 @@ async def api_allowance_create(  # noqa: C901
     """Create a new allowance."""
     data = await request.json()
     wallet_id = get_wallet_id(wallet)
-    logger.info(f"📝 Create request from wallet {wallet_id}: {data}")
 
     # Handle datetime fields
     start_dt = parse_datetime_string(data.get("start_datetime"))
@@ -438,7 +423,6 @@ async def api_allowance_create(  # noqa: C901
     # Create in database
     try:
         allowance = await create_allowance(create_data)
-        logger.info(f"✅ Created allowance {allowance.id}")
 
         # Format response
         result = allowance.dict()
@@ -459,10 +443,10 @@ async def api_allowance_create(  # noqa: C901
         return result
 
     except Exception as e:
-        logger.error(f"❌ Error creating allowance: {e}")
+        logger.error("Allowance operation: api_allowance_create")
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create allowance: {e!s}",
+            detail="Failed to create allowance",
         ) from e
 
 
@@ -494,14 +478,13 @@ async def api_allowance_delete(
     # Delete from database
     try:
         await delete_allowance(allowance_id)
-        logger.info(f"✅ Deleted allowance {allowance_id}")
         return {"message": f"Allowance {allowance_id} deleted successfully"}
 
     except Exception as e:
-        logger.error(f"❌ Error deleting allowance: {e}")
+        logger.error("Allowance operation: api_allowance_delete")
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete allowance: {e!s}",
+            detail="Failed to delete allowance",
         ) from e
 
 
@@ -525,7 +508,7 @@ async def api_currency_rate(
             raise ValueError("LNbits returned an unavailable fiat quote")
         return {"currency": currency.upper(), "rate": rate, "btc_price": price}
     except Exception as e:
-        logger.warning(f"Could not fetch currency rate: {e}")
+        logger.warning("Allowance operation: api_currency_rate")
         raise HTTPException(
             status_code=HTTPStatus.SERVICE_UNAVAILABLE,
             detail="Could not fetch currency rate",
@@ -559,7 +542,6 @@ async def api_allowance_trigger(
 
     # Execute the payment
     try:
-        logger.info(f"🚀 Manually triggering payment for allowance: {allowance.name}")
         success = await execute_lightning_address_payment(allowance)
 
         if success is None:
@@ -593,10 +575,10 @@ async def api_allowance_trigger(
             )
 
     except Exception as e:
-        logger.error(f"Error triggering payment: {e}")
+        logger.error("Allowance operation: api_allowance_trigger")
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f"Failed to trigger payment: {e!s}",
+            detail="Failed to trigger payment",
         ) from e
 
 
@@ -663,10 +645,10 @@ async def api_test_scheduler(
         }
 
     except Exception as e:
-        logger.error(f"Error testing scheduler: {e}")
+        logger.error("Allowance operation: api_test_scheduler")
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f"Error testing scheduler: {e!s}",
+            detail="Error testing scheduler",
         ) from e
 
 
