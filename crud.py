@@ -174,15 +174,17 @@ async def update_next_payment_date(allowance_id: str, next_payment_date) -> None
     )
 
 
-async def deactivate_allowance(allowance_id: str) -> None:
+async def deactivate_allowance(
+    allowance_id: str, revision: Optional[int] = None
+) -> None:
     """Deactivate an allowance"""
     await db.execute(
         f"""
         UPDATE {db.references_schema}maintable
         SET active = false, revision = revision + 1
-        WHERE id = :id
+        WHERE id = :id AND (:revision IS NULL OR revision = :revision)
         """,
-        {"id": allowance_id},
+        {"id": allowance_id, "revision": revision},
     )
 
 

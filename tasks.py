@@ -337,7 +337,9 @@ async def check_and_process_allowances():  # noqa: C901
                         if current_time > end_datetime:
                             logger.info(f"⏰ Allowance {allowance.name} has expired")
                             # Deactivate the expired allowance
-                            await deactivate_allowance(allowance.id)
+                            await deactivate_allowance(
+                                allowance.id, revision=allowance.revision
+                            )
                             # Track that we've deactivated this one
                             continue
 
