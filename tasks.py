@@ -374,7 +374,7 @@ async def check_and_process_allowances():  # noqa: C901
 
                             if next_date is None:
                                 # One-off means one attempt, including pending/failure:
-                                # automatic retries could duplicate an unsettled payment.
+                                # Retrying could duplicate an unsettled payment.
                                 await deactivate_allowance(allowance.id)
                                 deactivated_ids.add(allowance.id)
                                 continue
