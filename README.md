@@ -146,3 +146,14 @@ After downtime or reactivation, an overdue allowance gets one attempt; missed
 periods are skipped. Failed attempts also advance to the next scheduled period,
 as before. Editing metadata does not reset the schedule. Existing drifted dates
 are realigned after the next due attempt; this change does not replay old payments.
+
+### LNbits compatibility
+
+The Python extension targets LNbits 1.6.x (tested on 1.6.0 and the official
+1.6.1 Docker image), with Python 3.10–3.12. It uses LNbits' task manager, wallet
+authentication wrapper, and configured fiat-rate providers. The 1.6.1 release
+retains internal `1.6.1-rc2` metadata, so the declared minimum is 1.6.0.
+
+This remains a native Python extension, not a sandboxed WASM component. Porting
+to WASM requires replacing direct database, HTTP and payment-service access with
+permission-scoped host APIs and a migration strategy for existing allowances.

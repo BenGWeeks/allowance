@@ -1,56 +1,6 @@
-import asyncio
-
 from fastapi import APIRouter
+from lnbits.task_manager import task_manager
 from loguru import logger
-
-# Monkey-patch WalletTypeInfo to add missing attributes
-try:
-    from lnbits.core.models.wallets import WalletTypeInfo
-
-    # Add properties that delegate to the wrapped wallet
-    def make_property(attr_name):
-        def getter(self):
-            return (
-                getattr(self.wallet, attr_name, None)
-                if hasattr(self, "wallet")
-                else None
-            )
-
-        return property(getter)
-
-    # Add all common wallet attributes
-    for attr in ["id", "name", "adminkey", "inkey", "user", "balance_msat"]:
-        if not hasattr(WalletTypeInfo, attr):
-            setattr(WalletTypeInfo, attr, make_property(attr))
-
-    logger.info("✅ Added wallet properties to WalletTypeInfo")
-
-except ImportError:
-    try:
-        # Try alternative import path
-        from lnbits.core.models import WalletTypeInfo
-
-        # Add properties that delegate to the wrapped wallet
-        def make_property(attr_name):
-            def getter(self):
-                return (
-                    getattr(self.wallet, attr_name, None)
-                    if hasattr(self, "wallet")
-                    else None
-                )
-
-            return property(getter)
-
-        # Add all common wallet attributes
-        for attr in ["id", "name", "adminkey", "inkey", "user", "balance_msat"]:
-            if not hasattr(WalletTypeInfo, attr):
-                setattr(WalletTypeInfo, attr, make_property(attr))
-
-        logger.info("✅ Added wallet properties to WalletTypeInfo")
-    except ImportError:
-        logger.info("WalletTypeInfo not found, skipping patch")
-except Exception as e:
-    logger.warning(f"Could not patch WalletTypeInfo: {e}")
 
 from .crud import db
 from .tasks import check_and_process_allowances
@@ -77,26 +27,21 @@ allowance_static_files = [
     }
 ]
 
-scheduled_tasks: list[asyncio.Task] = []
+SCHEDULER_TASK_NAME = "ext_allowance_scheduler"
 
 
 def allowance_stop():
-    for task in scheduled_tasks:
-        try:
-            task.cancel()
-        except Exception as ex:
-            logger.warning(ex)
+    task = task_manager.get_task(SCHEDULER_TASK_NAME)
+    if task:
+        task_manager.cancel_task(task)
 
 
 def allowance_start():
-    from lnbits.tasks import create_permanent_unique_task
-
-    # Start the allowance payment scheduler
-    scheduler_task = create_permanent_unique_task(
-        "ext_allowance_scheduler", check_and_process_allowances
+    # Extension reloads replace the named task through LNbits' task manager.
+    task_manager.create_permanent_task(
+        check_and_process_allowances, name=SCHEDULER_TASK_NAME
     )
-    scheduled_tasks.append(scheduler_task)
-    logger.info("🚀 Started allowance payment scheduler")
+    logger.info("Started allowance payment scheduler")
 
 
 __all__ = [

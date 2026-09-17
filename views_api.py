@@ -4,7 +4,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from lnbits.core.crud import get_user
-from lnbits.core.models import Wallet
+from lnbits.core.models import Wallet, WalletTypeInfo
 from lnbits.decorators import (
     require_admin_key,
     require_invoice_key,
@@ -30,24 +30,13 @@ allowance_api_router = APIRouter()
 #######################################
 
 
-def get_wallet_id(wallet) -> str:
-    """Helper to get wallet ID from either Wallet or WalletTypeInfo object."""
-    if hasattr(wallet, "id"):
-        return wallet.id
-    elif hasattr(wallet, "wallet") and hasattr(wallet.wallet, "id"):
-        return wallet.wallet.id
-    else:
-        raise ValueError("Cannot extract wallet ID from provided object")
+def get_wallet_id(wallet: Wallet | WalletTypeInfo) -> str:
+    """Authentication dependencies return WalletTypeInfo, wrapping the wallet."""
+    return wallet.wallet.id if isinstance(wallet, WalletTypeInfo) else wallet.id
 
 
-def get_wallet_user(wallet) -> str:
-    """Helper to get wallet user from either Wallet or WalletTypeInfo object."""
-    if hasattr(wallet, "user"):
-        return wallet.user
-    elif hasattr(wallet, "wallet") and hasattr(wallet.wallet, "user"):
-        return wallet.wallet.user
-    else:
-        raise ValueError("Cannot extract wallet user from provided object")
+def get_wallet_user(wallet: Wallet | WalletTypeInfo) -> str:
+    return wallet.wallet.user if isinstance(wallet, WalletTypeInfo) else wallet.user
 
 
 def parse_datetime_string(date_str: Optional[str]) -> Optional[datetime]:  # noqa: C901
@@ -111,7 +100,7 @@ def parse_datetime_string(date_str: Optional[str]) -> Optional[datetime]:  # noq
 ## Get wallet info for current user
 @allowance_api_router.get("/api/v1/wallet-info", status_code=HTTPStatus.OK)
 async def api_wallet_info(
-    wallet: Wallet = Depends(require_invoice_key),
+    wallet: WalletTypeInfo = Depends(require_invoice_key),
 ):
     """Get basic wallet info for the current user."""
     wallet_id = get_wallet_id(wallet)
@@ -133,7 +122,7 @@ async def api_wallet_info(
 ## Get all the records belonging to the user
 @allowance_api_router.get("/api/v1/allowance", status_code=HTTPStatus.OK)
 async def api_allowances(  # noqa: C901
-    wallet: Wallet = Depends(require_admin_key),
+    wallet: WalletTypeInfo = Depends(require_admin_key),
     all_wallets: bool = Query(False),
 ):
     """Get allowances for all of the user's wallets."""
@@ -210,7 +199,7 @@ async def api_allowances(  # noqa: C901
 @allowance_api_router.get("/api/v1/allowance/{allowance_id}", status_code=HTTPStatus.OK)
 async def api_allowance(
     allowance_id: str,
-    wallet: Wallet = Depends(require_invoice_key),
+    wallet: WalletTypeInfo = Depends(require_invoice_key),
 ):
     """Get a specific allowance by ID."""
     allowance = await get_allowance(allowance_id)
@@ -247,7 +236,7 @@ async def api_allowance(
 async def api_allowance_update(  # noqa: C901
     allowance_id: str,
     request: Request,
-    wallet: Wallet = Depends(require_admin_key),
+    wallet: WalletTypeInfo = Depends(require_admin_key),
 ):
     """Update an existing allowance."""
     # Get existing allowance
@@ -369,7 +358,7 @@ async def api_allowance_update(  # noqa: C901
 @allowance_api_router.post("/api/v1/allowance", status_code=HTTPStatus.CREATED)
 async def api_allowance_create(  # noqa: C901
     request: Request,
-    wallet: Wallet = Depends(require_admin_key),
+    wallet: WalletTypeInfo = Depends(require_admin_key),
 ):
     """Create a new allowance."""
     data = await request.json()
@@ -474,7 +463,7 @@ async def api_allowance_create(  # noqa: C901
 )
 async def api_allowance_delete(
     allowance_id: str,
-    wallet: Wallet = Depends(require_admin_key),
+    wallet: WalletTypeInfo = Depends(require_admin_key),
 ):
     """Delete an allowance."""
     # Get existing allowance
@@ -511,49 +500,26 @@ async def api_allowance_delete(
 @allowance_api_router.get("/api/v1/rate/{currency}", status_code=HTTPStatus.OK)
 async def api_currency_rate(
     currency: str,
-    wallet: Wallet = Depends(require_invoice_key),
+    wallet: WalletTypeInfo = Depends(require_invoice_key),
 ):
     """Get currency conversion rate to sats."""
-    import httpx
+    from lnbits.utils.exchange_rates import (
+        allowed_currencies,
+        get_fiat_rate_and_price_satoshis,
+    )
 
+    if currency.upper() not in allowed_currencies():
+        raise HTTPException(status_code=400, detail="Unsupported currency")
     try:
-        # Use CoinGecko API for conversion rates
-        async with httpx.AsyncClient() as client:
-            # Get Bitcoin price in the requested currency
-            response = await client.get(
-                "https://api.coingecko.com/api/v3/simple/price",
-                params={"ids": "bitcoin", "vs_currencies": currency.lower()},
-            )
-            response.raise_for_status()
-            data = response.json()
-
-            if "bitcoin" not in data or currency.lower() not in data["bitcoin"]:
-                raise HTTPException(
-                    status_code=HTTPStatus.BAD_REQUEST,
-                    detail=f"Currency {currency} not supported",
-                )
-
-            # Calculate sats per unit of currency
-            btc_price = data["bitcoin"][currency.lower()]
-            sats_per_unit = 100_000_000 / btc_price  # 100M sats per BTC
-
-            return {
-                "currency": currency.upper(),
-                "rate": sats_per_unit,
-                "btc_price": btc_price,
-            }
-
-    except httpx.HTTPError as e:
-        logger.error(f"Error fetching currency rate: {e}")
+        rate, price = await get_fiat_rate_and_price_satoshis(currency.upper())
+        if not (rate > 0 and price > 0):
+            raise ValueError("LNbits returned an unavailable fiat quote")
+        return {"currency": currency.upper(), "rate": rate, "btc_price": price}
+    except Exception as e:
+        logger.warning(f"Could not fetch currency rate: {e}")
         raise HTTPException(
             status_code=HTTPStatus.SERVICE_UNAVAILABLE,
             detail="Could not fetch currency rate",
-        ) from e
-    except Exception as e:
-        logger.error(f"Error processing currency rate: {e}")
-        raise HTTPException(
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=f"Error processing currency rate: {e!s}",
         ) from e
 
 
@@ -563,7 +529,7 @@ async def api_currency_rate(
 )
 async def api_allowance_trigger(
     allowance_id: str,
-    wallet: Wallet = Depends(require_admin_key),
+    wallet: WalletTypeInfo = Depends(require_admin_key),
 ):
     """Manually trigger a payment for an allowance (for testing)."""
     # Get the allowance
@@ -587,6 +553,23 @@ async def api_allowance_trigger(
         logger.info(f"🚀 Manually triggering payment for allowance: {allowance.name}")
         success = await execute_lightning_address_payment(allowance)
 
+        if success is None:
+            return {
+                "success": False,
+                "pending": True,
+                "message": "Payment outcome unresolved; no new invoice sent",
+            }
+        from .crud import finish_payment_attempt
+        from .schedule import next_occurrence
+
+        await finish_payment_attempt(
+            allowance,
+            next_occurrence(
+                allowance.start_datetime,
+                allowance.frequency_type,
+                datetime.now(timezone.utc),
+            ),
+        )
         if success:
             return {
                 "success": True,
@@ -613,7 +596,7 @@ async def api_allowance_trigger(
     "/api/v1/allowance/test-scheduler", status_code=HTTPStatus.OK
 )
 async def api_test_scheduler(
-    wallet: Wallet = Depends(require_admin_key),
+    wallet: WalletTypeInfo = Depends(require_admin_key),
 ):
     """Test that the scheduler is running and can see allowances."""
     try:

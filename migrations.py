@@ -33,3 +33,56 @@ async def m001_initial(db: Any) -> None:
         );
     """
     )
+
+
+async def m002_namespace_postgres_table(db: Any) -> None:
+    """Move a legacy unqualified table into the extension's PostgreSQL schema."""
+    from lnbits.db import POSTGRES
+
+    if db.type != POSTGRES:
+        return
+    existing = await db.fetchone(
+        "SELECT table_name FROM information_schema.tables "
+        "WHERE table_schema = :schema AND table_name = 'maintable'",
+        {"schema": db.schema},
+    )
+    if existing:
+        return
+    columns = await db.fetchall(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_schema = 'public' AND table_name = 'maintable'"
+    )
+    required = {
+        "wallet",
+        "lightning_address",
+        "start_datetime",
+        "frequency_type",
+        "next_payment_date",
+        "amount",
+    }
+    if not required.issubset({row["column_name"] for row in columns}):
+        raise RuntimeError("Cannot identify the legacy Allowance table for migration")
+    await db.execute(f"ALTER TABLE public.maintable SET SCHEMA {db.schema}")
+
+
+async def m003_namespace_cockroach_table(db: Any) -> None:
+    """Move historical CockroachDB tables into the extension schema."""
+    from lnbits.db import COCKROACH
+
+    if db.type != COCKROACH:
+        return
+    existing = await db.fetchone(
+        "SELECT table_name FROM information_schema.tables "
+        "WHERE table_schema = :schema AND table_name = 'maintable'",
+        {"schema": db.schema},
+    )
+    if not existing:
+        await db.execute(f"ALTER TABLE public.maintable SET SCHEMA {db.schema}")
+
+
+async def m004_pending_payment(db: Any) -> None:
+    """Retain an outgoing invoice identity until its result is reconciled."""
+    await db.execute(
+        f"ALTER TABLE {db.references_schema}maintable "
+        "ADD COLUMN pending_payment_hash TEXT"
+    )

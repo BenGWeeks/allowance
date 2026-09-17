@@ -103,6 +103,7 @@ window.app = Vue.createApp({
       const fiveMinutesFromNow = new Date(Date.now() + 5 * 60 * 1000)
       const defaultStart = this.toQuasarDatetimeString(fiveMinutesFromNow)
       this.formDialog.data = {
+        memo: '',
         wallet: this.g.user.wallets[0].id,
         currency: 'sats',
         frequency_type: 'weekly', // Default to weekly to help with testing
@@ -222,7 +223,7 @@ window.app = Vue.createApp({
       const backendData = {
         id: data.id,
         name: data.name,  // Keep name field as expected by backend
-        memo: data.name,  // Also include memo field
+        memo: data.memo,
         wallet: data.wallet,
         lightning_address: data.lightning_address,
         amount: amount,  // Store the original amount (0.02 for GBP, 10 for sats)

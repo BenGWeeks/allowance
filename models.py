@@ -1,6 +1,6 @@
 # Data models for your extension
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from pydantic import BaseModel, validator
@@ -22,6 +22,13 @@ class CreateAllowanceData(BaseModel):
     lnurlpay: Optional[str] = None  # LNURL pay string for compatibility
     total: float = 0  # Total amount processed
     created_at: Optional[datetime] = None  # Auto-set by database
+
+    @validator("start_datetime", "next_payment_date", "end_datetime", "created_at")
+    def timestamps_are_utc(cls, value):  # noqa: N805
+        # PostgreSQL TIMESTAMP columns return naive datetimes representing UTC.
+        if value is not None and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
 
     @validator("amount")
     def amount_must_be_positive(cls, v):  # noqa: N805
@@ -46,11 +53,25 @@ class Allowance(BaseModel):
     lnurlpay: Optional[str] = None  # LNURL pay string for compatibility
     total: Optional[float] = 0  # Total amount processed
     created_at: Optional[datetime] = None  # When the allowance was created
+    pending_payment_hash: Optional[str] = None
     last_error: Optional[str] = None  # Last error message
     last_error_time: Optional[datetime] = None  # When the last error occurred
     last_success_time: Optional[datetime] = (
         None  # When the last successful payment was made
     )
+
+    @validator(
+        "start_datetime",
+        "next_payment_date",
+        "end_datetime",
+        "created_at",
+        "last_error_time",
+        "last_success_time",
+    )
+    def timestamps_are_utc(cls, value):  # noqa: N805
+        if value is not None and value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value
 
     @validator("amount")
     def amount_must_be_positive(cls, v):  # noqa: N805
