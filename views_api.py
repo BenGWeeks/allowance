@@ -507,6 +507,8 @@ async def api_currency_rate(
 
     try:
         rate, price = await get_fiat_rate_and_price_satoshis(currency.upper())
+        if not (rate > 0 and price > 0):
+            raise ValueError("LNbits returned an unavailable fiat quote")
         return {"currency": currency.upper(), "rate": rate, "btc_price": price}
     except Exception as e:
         logger.warning(f"Could not fetch currency rate: {e}")

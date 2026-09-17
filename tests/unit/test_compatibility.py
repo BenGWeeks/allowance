@@ -96,3 +96,26 @@ class CompatibilityTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(pay.await_args.kwargs["max_sat"], 2000)
                     self.assertEqual(record.await_count, int(success))
                     self.assertEqual(error.await_count, int(not success))
+
+    async def test_currency_quote_unavailable(self):
+        from fastapi import HTTPException
+        from lnbits.utils import exchange_rates
+
+        for quote in [(0, 0), (0, 100), (100, 0)]:
+            with patch.object(
+                exchange_rates,
+                "get_fiat_rate_and_price_satoshis",
+                AsyncMock(return_value=quote),
+            ):
+                with self.assertRaises(HTTPException) as error:
+                    await views_api.api_currency_rate("GBP", None)
+                self.assertEqual(error.exception.status_code, 503)
+        with patch.object(
+            exchange_rates,
+            "get_fiat_rate_and_price_satoshis",
+            AsyncMock(return_value=(100, 1000000)),
+        ):
+            self.assertEqual(
+                await views_api.api_currency_rate("gbp", None),
+                {"currency": "GBP", "rate": 100, "btc_price": 1000000},
+            )
