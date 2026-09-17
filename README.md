@@ -133,3 +133,16 @@ allowance/
 └── CLAUDE.md              # Development notes
 ```
 
+
+### Recurrence timing
+
+Schedules keep the UTC time and original day from `start_datetime`. Monthly dates
+clamp in shorter months (January 31 → February 28/29 → March 31); yearly February
+29 schedules return to February 29 in leap years. Local display times can change
+with daylight saving time. The worker polls every 60 seconds, so execution may be
+late, but that delay no longer shifts future occurrences.
+
+After downtime or reactivation, an overdue allowance gets one attempt; missed
+periods are skipped. Failed attempts also advance to the next scheduled period,
+as before. Editing metadata does not reset the schedule. Existing drifted dates
+are realigned after the next due attempt; this change does not replay old payments.
