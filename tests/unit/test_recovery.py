@@ -95,3 +95,18 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                 result = await client.post("/api/v1/allowance/test/reconcile")
             self.assertEqual(result.status_code, 403)
             reconcile.assert_not_awaited()
+
+    async def test_stale_reconciliation_does_not_report_a_terminal_result(self):
+        allowance = self.allowance()
+        allowance.pending_payment_hash = "old-hash"
+        for success in (True, False):
+            with patch.object(
+                tasks,
+                "get_standalone_payment",
+                AsyncMock(return_value=SimpleNamespace(pending=False, success=success)),
+            ), patch.object(
+                tasks, "update_allowance_success", AsyncMock(return_value=False)
+            ), patch.object(
+                tasks, "update_allowance_error", AsyncMock(return_value=False)
+            ):
+                self.assertIsNone(await tasks.reconcile_payment(allowance))
