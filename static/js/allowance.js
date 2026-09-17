@@ -5,7 +5,6 @@ window.app = Vue.createApp({
   mixins: [window.windowMixin],
   data() {
     return {
-      // Detect user's locale for date formatting
       userLocale: navigator.language || 'en-GB',
       allowances: [],
       healthWarning: '',
@@ -38,7 +37,6 @@ window.app = Vue.createApp({
             sort: (a, b) => (Date.parse(a) || 0) - (Date.parse(b) || 0)},
           {name: 'last_success_time', align: 'left', label: 'Last Success', field: 'last_success_time', sortable: true},
           {name: 'status', align: 'center', label: 'Status', field: 'active', sortable: true, sort: (a, b, rowA, rowB) => {
-            // Sort by: Error (2), Active (1), Inactive (0)
             const getStatusValue = (row) => {
               if (row.last_error) return 2
               if (row.active) return 1
@@ -103,7 +101,6 @@ window.app = Vue.createApp({
 
       this.allowanceTable.loading = true
       
-      // Use the first available wallet for admin operations
       const wallet = this.g.user.wallets[0]
       if (!wallet) {
 
@@ -150,18 +147,15 @@ window.app = Vue.createApp({
 
     },
     saveAllowance(event) {
-      // Prevent default form submission like LNURLP pattern
       if (event) {
         event.preventDefault()
       }
 
-      // Don't proceed if dialog is not shown
       if (!this.formDialog.show) {
 
         return
       }
       
-      // Validate required fields
       const errors = []
       if (!this.formDialog.data.name) errors.push('Description is required')
       if (!this.formDialog.data.wallet) errors.push('Wallet is required')
@@ -170,7 +164,6 @@ window.app = Vue.createApp({
       if (!this.formDialog.data.frequency_type) errors.push('Frequency is required')
       if (!this.formDialog.data.start_datetime) errors.push('Start date & time is required')
 
-      // Validate: start_datetime must be at least 1 minute in the future (only for new allowances)
       if (!this.formDialog.data.id && this.formDialog.data.start_datetime) {
         const startDate = new Date(this.formDialog.data.start_datetime)
         const now = new Date()
@@ -180,7 +173,6 @@ window.app = Vue.createApp({
         }
       }
 
-      // Validate: end_datetime must be after start_datetime
       if (this.formDialog.data.end_datetime && this.formDialog.data.start_datetime) {
         const startDate = new Date(this.formDialog.data.start_datetime)
         const endDate = new Date(this.formDialog.data.end_datetime)
@@ -189,7 +181,6 @@ window.app = Vue.createApp({
         }
       }
 
-      // Validate: cannot activate if end_datetime is in the past
       if (this.formDialog.data.active && this.formDialog.data.end_datetime) {
         const endDate = new Date(this.formDialog.data.end_datetime)
         const now = new Date()
@@ -221,16 +212,13 @@ window.app = Vue.createApp({
 
       const data = _.clone(this.formDialog.data)
       
-      // Transform data to match backend model
 
       // Don't convert currency amounts here - conversion happens at payment time
       let amount = parseFloat(data.amount) || 0
 
-      // For sats, ensure integer
       if (!data.currency || data.currency === 'sats' || data.currency === 'satoshis') {
         amount = Math.round(amount)
       }
-      // For fiat currencies, keep the decimal amount as-is (e.g., 0.02 for GBP)
 
       const backendData = {
         id: data.id,
@@ -321,13 +309,10 @@ window.app = Vue.createApp({
     },
     openUpdateDialog(row) {
 
-      // Reset form dialog first
       this.formDialog.data = {}
 
-      // Deep clone the row data to avoid reference issues
       const clonedData = JSON.parse(JSON.stringify(row))
 
-      // Set data piece by piece to ensure reactivity
       this.formDialog.data = {
         id: clonedData.id,
         revision: clonedData.revision,
@@ -344,7 +329,6 @@ window.app = Vue.createApp({
       }
 
       // Convert datetime fields from UTC (API) to local time (for Quasar)
-      // API returns ISO strings like "2025-09-28T07:49:00+00:00" in UTC
       // Quasar QDate/QTime needs "YYYY-MM-DD HH:mm" format in local time
       if (this.formDialog.data.start_datetime) {
         if (typeof this.formDialog.data.start_datetime === 'string') {
@@ -362,10 +346,8 @@ window.app = Vue.createApp({
         }
       }
       
-      // Set active field separately to ensure proper reactivity
       const originalActive = row.active
 
-      // Convert active field to boolean value
       let activeValue = false  // Default to false if not set
 
       if (originalActive !== null && originalActive !== undefined) {
@@ -380,15 +362,12 @@ window.app = Vue.createApp({
         }
       }
       
-      // Set active with Vue.set to ensure reactivity (Vue 3 compatibility)
       this.$set ? this.$set(this.formDialog.data, 'active', activeValue) : (this.formDialog.data.active = activeValue)
 
       this.formDialog.show = true
       
-      // Force Vue to update and ensure toggle reflects the active state
       this.$nextTick(() => {
 
-        // Force reactivity update for the active field
         this.$forceUpdate()
       })
     },
@@ -453,12 +432,9 @@ window.app = Vue.createApp({
 
       let date
 
-      // Handle different timestamp formats
       if (typeof timestamp === 'string') {
-        // Try parsing as ISO datetime string first
         date = new Date(timestamp)
 
-        // If that fails, try as Unix timestamp (seconds)
         if (isNaN(date.getTime())) {
           const ts = parseInt(timestamp)
           if (!isNaN(ts) && ts > 0) {
@@ -466,19 +442,16 @@ window.app = Vue.createApp({
           }
         }
       } else if (typeof timestamp === 'number') {
-        // Unix timestamp (seconds)
         date = new Date(timestamp * 1000)
       } else {
         return 'Invalid datetime'
       }
 
-      // Check if date is valid
       if (!date || isNaN(date.getTime())) return 'Invalid datetime'
 
       const now = new Date()
       const diff = now - date
 
-      // Show relative time for recent errors
       const minutes = Math.floor(diff / 60000)
       const hours = Math.floor(diff / 3600000)
       const days = Math.floor(diff / 86400000)
@@ -488,7 +461,6 @@ window.app = Vue.createApp({
       if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`
       if (days < 7) return `${days} day${days !== 1 ? 's' : ''} ago`
 
-      // Show full date for older errors
       return date.toLocaleString(this.userLocale, {
         year: 'numeric',
         month: 'short',
@@ -505,15 +477,12 @@ window.app = Vue.createApp({
       return localDate.toISOString().slice(0, 16) // "YYYY-MM-DDTHH:mm"
     },
     toQuasarDatetimeString(date) {
-      // Convert a Date object to "YYYY-MM-DD HH:mm" format for Quasar QDate/QTime
       const offset = date.getTimezoneOffset() * 60000 // offset in milliseconds
       const localDate = new Date(date.getTime() - offset)
       const isoString = localDate.toISOString() // "YYYY-MM-DDTHH:mm:ss.sssZ"
-      // Replace T with space and remove seconds: "YYYY-MM-DD HH:mm"
       return isoString.slice(0, 16).replace('T', ' ')
     },
     formatDatetime(timestamp) {
-      // Format a datetime for display in tooltips
       if (!timestamp) return ''
 
       const date = new Date(timestamp)
@@ -528,14 +497,11 @@ window.app = Vue.createApp({
       })
     },
     formatDatetimeForDisplay(datetimeString) {
-      // Format datetime from "YYYY-MM-DD HH:mm" to locale-aware display string
       if (!datetimeString) return ''
 
-      // Parse the datetime string (in format "YYYY-MM-DD HH:mm")
       const date = new Date(datetimeString.replace(' ', 'T'))
       if (!date || isNaN(date.getTime())) return ''
 
-      // Use locale-aware formatting for display
       return date.toLocaleString(this.userLocale, {
         year: 'numeric',
         month: '2-digit',
@@ -572,7 +538,6 @@ window.app = Vue.createApp({
     },
     loadCurrencies() {
 
-      // Try without authentication first (public endpoint)
       LNbits.api
         .request('GET', '/api/v1/currencies')
         .then(response => {
@@ -581,7 +546,6 @@ window.app = Vue.createApp({
         })
         .catch(err => {
 
-          // Try with authentication as fallback
           if (this.g?.user?.wallets?.[0]?.inkey) {
             LNbits.api
               .request('GET', '/api/v1/currencies', this.g.user.wallets[0].inkey)
@@ -599,7 +563,6 @@ window.app = Vue.createApp({
           }
         })
     },
-    // Date validation functions for QDate pickers
     isDateInFuture(date) {
       // date format: "YYYY/MM/DD" (QDate format)
       const selectedDate = new Date(date)
@@ -609,7 +572,6 @@ window.app = Vue.createApp({
       return selectedDate >= today
     },
     getTodayDateString() {
-      // Returns "YYYY/MM/DD" format for today (QDate format)
       const today = new Date()
       const year = today.getFullYear()
       const month = String(today.getMonth() + 1).padStart(2, '0')
@@ -642,7 +604,6 @@ window.app = Vue.createApp({
       }
     },
     'formDialog.data.end_datetime': function(newVal) {
-      // Automatically deactivate if end_datetime is in the past
       if (newVal && newVal.trim() !== '') {
         const endDate = new Date(newVal)
         const now = new Date()
@@ -651,7 +612,6 @@ window.app = Vue.createApp({
           this.formDialog.data.active = false
         }
       }
-      // If end_datetime is cleared or in the future, user can freely toggle active
     }
   },
   beforeUnmount() {
@@ -663,7 +623,6 @@ window.app = Vue.createApp({
       this.getAllowances()
       this.loadCurrencies()
     } else {
-      // If user data not loaded yet, retry after a short delay
       setTimeout(() => {
         if (this.g?.user?.wallets?.length) {
           this.getAllowances()

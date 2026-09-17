@@ -81,7 +81,7 @@ async def execute_lightning_address_payment(  # noqa: C901
     Execute payment to Lightning address
     Return True for success, False for terminal failure, None while unresolved.
     """
-    # Refresh persisted state: another worker/manual request may already own it.
+
     current = await get_allowance(allowance.id)
     if current is None or current.next_payment_date != allowance.next_payment_date:
         return None
@@ -92,33 +92,25 @@ async def execute_lightning_address_payment(  # noqa: C901
         return None
 
     try:
-        # Convert amount to sats if using fiat currency
         amount_sats = allowance.amount
 
         if allowance.currency and allowance.currency not in ["sats", "satoshis"]:
-            # Need to convert fiat to sats
 
             amount_sats = await fiat_amount_as_satoshis(
                 allowance.amount, allowance.currency.upper()
             )
         else:
-            # Already in sats, ensure integer
             amount_sats = int(amount_sats)
 
-        # Convert sats to millisatoshis (ensure integer)
         amount_msats = int(amount_sats * 1000)
 
-        # Step 1: Resolve Lightning address to LNURL-pay endpoint
         callback_url, lnurl_data = await resolve_lightning_address(
             allowance.lightning_address
         )
 
-        # Step 2: Validate amount limits and comment capability
-        min_sendable = lnurl_data.get("minSendable", 1000)  # Default 1 sat minimum
-        max_sendable = lnurl_data.get(
-            "maxSendable", 100000000000
-        )  # Default 100k sats max
-        comment_allowed = lnurl_data.get("commentAllowed", 0)  # Max comment length
+        min_sendable = lnurl_data.get("minSendable", 1000)
+        max_sendable = lnurl_data.get("maxSendable", 100000000000)
+        comment_allowed = lnurl_data.get("commentAllowed", 0)
 
         if amount_msats < min_sendable:
             currency_display = (
@@ -141,20 +133,16 @@ async def execute_lightning_address_payment(  # noqa: C901
                 f"{max_sendable // 1000} sats"
             )
 
-        # Step 3: Get invoice from LNURL-pay endpoint with appropriate memo
-        # Prepare memo based on comment allowance
         memo = ""
         if comment_allowed > 0:
             desired_memo = allowance.memo or f"#allowance: {allowance.name}"
-            memo = desired_memo[:comment_allowed]  # Truncate to allowed length
+            memo = desired_memo[:comment_allowed]
 
         payment_request = await get_invoice_from_lnurl(
             callback_url,
             amount_msats,
             memo,
         )
-
-        # Step 4: Execute payment using LNBits pay_invoice
 
         invoice = decode_invoice(payment_request)
         if invoice.amount_msat != amount_msats:
@@ -179,7 +167,6 @@ async def execute_lightning_address_payment(  # noqa: C901
         )
 
         if payment_result.success:
-            # Clear any previous errors and record success
             await update_allowance_success(
                 allowance.id, int(datetime.now(timezone.utc).timestamp())
             )
@@ -197,8 +184,7 @@ async def execute_lightning_address_payment(  # noqa: C901
             return None if payment_result.pending else False
 
     except PaymentError as e:
-        # LNbits explicitly marks preflight rejection and terminal funding-source
-        # failure as failed. Unknown outcomes retain the persisted claim.
+
         await update_allowance_error(
             allowance.id,
             (
@@ -212,7 +198,6 @@ async def execute_lightning_address_payment(  # noqa: C901
     except Exception:
         error_msg = "Payment processing failed; check payment status before retrying"
         logger.error("Allowance operation: execute_lightning_address_payment")
-        # Store error information
         await update_allowance_error(
             allowance.id, error_msg, int(datetime.now(timezone.utc).timestamp())
         )
@@ -261,18 +246,12 @@ async def check_and_process_allowances():  # noqa: C901
         try:
             await record_scheduler_heartbeat("running")
 
-            # Get all active allowances
             allowances = await get_all_active_allowances()
             current_time = datetime.now(timezone.utc)
 
-            # Process each allowance
             for allowance in allowances:
                 try:
 
-                    # The query already filters for active=true,
-                    # so no need to check again
-
-                    # Check if start_datetime hasn't been reached yet
                     if (
                         hasattr(allowance, "start_datetime")
                         and allowance.start_datetime
@@ -281,16 +260,12 @@ async def check_and_process_allowances():  # noqa: C901
                         if current_time < start_datetime:
                             continue
 
-                    # Check if end_datetime has passed
                     if hasattr(allowance, "end_datetime") and allowance.end_datetime:
                         end_datetime = ensure_timezone_aware(allowance.end_datetime)
                         if current_time > end_datetime:
-                            # Deactivate the expired allowance
                             await deactivate_allowance(allowance.id)
-                            # Track that we've deactivated this one
                             continue
 
-                    # Check if payment is due
                     next_payment_date = ensure_timezone_aware(
                         allowance.next_payment_date
                     )
@@ -298,22 +273,18 @@ async def check_and_process_allowances():  # noqa: C901
                     if current_time >= next_payment_date:
 
                         try:
-                            # Validate recurrence before attempting a payment.
+
                             next_occurrence(
                                 allowance.start_datetime,
                                 allowance.frequency_type,
                                 current_time,
                             )
-                            # Execute Lightning address payment
                             success = await execute_lightning_address_payment(allowance)
 
                             if success is None:
-                                # Reconcile pending payments before advancing.
+
                                 continue
 
-                            # Keep the original cadence after every attempt.
-                            # Use completion time so a slow attempt cannot leave the
-                            # next occurrence in the past and trigger a catch-up burst.
                             next_date = next_occurrence(
                                 allowance.start_datetime,
                                 allowance.frequency_type,
@@ -321,8 +292,7 @@ async def check_and_process_allowances():  # noqa: C901
                             )
 
                             if next_date is None:
-                                # One-off attempts finish only after a terminal result.
-                                # Retrying could duplicate an unsettled payment.
+
                                 await finish_payment_attempt(allowance, None, success)
                                 continue
                             await finish_payment_attempt(allowance, next_date, success)
@@ -352,8 +322,4 @@ async def check_and_process_allowances():  # noqa: C901
         except Exception:
             logger.error("Could not record allowance scheduler heartbeat")
 
-        # Check every 60 seconds (1 minute minimum payment frequency)
         await asyncio.sleep(60)
-
-
-# This will be started by __init__.py when the extension loads

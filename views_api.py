@@ -25,10 +25,6 @@ from .tasks import execute_lightning_address_payment
 
 allowance_api_router = APIRouter()
 
-#######################################
-##### API ENDPOINTS #####
-#######################################
-
 
 def get_wallet_id(wallet: Wallet | WalletTypeInfo) -> str:
     """Authentication dependencies return WalletTypeInfo, wrapping the wallet."""
@@ -39,7 +35,6 @@ def get_wallet_user(wallet: Wallet | WalletTypeInfo) -> str:
     return wallet.wallet.user if isinstance(wallet, WalletTypeInfo) else wallet.user
 
 
-## Get wallet info for current user
 @allowance_api_router.get("/api/v1/wallet-info", status_code=HTTPStatus.OK)
 async def api_wallet_info(
     wallet: WalletTypeInfo = Depends(require_invoice_key),
@@ -61,7 +56,6 @@ async def api_wallet_info(
     }
 
 
-## Get all the records belonging to the user
 @allowance_api_router.get("/api/v1/allowance", status_code=HTTPStatus.OK)
 async def api_allowances(  # noqa: C901
     wallet: WalletTypeInfo = Depends(require_admin_key),
@@ -71,13 +65,11 @@ async def api_allowances(  # noqa: C901
     wallet_user = get_wallet_user(wallet)
 
     try:
-        # Get user to access all their wallets
         user = await get_user(wallet_user)
         if not user:
             logger.error("Allowance operation: api_allowances")
             return []
 
-        # Get all wallet IDs for this user
         user_wallet_ids = [w.id for w in user.wallets]
 
         if all_wallets and not user.super_user:
@@ -87,18 +79,14 @@ async def api_allowances(  # noqa: C901
             )
 
         if all_wallets:
-            # For admin viewing all wallets, get all active allowances
             allowances = await get_all_active_allowances()
         else:
-            # Get allowances for all of the user's wallets
             allowances = await get_allowances(user_wallet_ids)
 
-        # Convert to list of dicts with proper datetime formatting
         result = []
         for allowance in allowances:
             data = allowance.dict()
 
-            # Format datetime fields for API response
             for field in [
                 "start_datetime",
                 "end_datetime",
@@ -109,7 +97,6 @@ async def api_allowances(  # noqa: C901
                     if isinstance(data[field], datetime):
                         data[field] = data[field].isoformat()
                     elif isinstance(data[field], (int, float)):
-                        # Convert timestamp to ISO format
                         data[field] = datetime.fromtimestamp(
                             data[field], tz=timezone.utc
                         ).isoformat()
@@ -125,7 +112,6 @@ async def api_allowances(  # noqa: C901
         raise HTTPException(503, "Could not load allowances") from None
 
 
-## Get a specific record by ID
 @allowance_api_router.get("/api/v1/allowance/{allowance_id}", status_code=HTTPStatus.OK)
 async def api_allowance(
     allowance_id: str,
@@ -139,7 +125,6 @@ async def api_allowance(
             status_code=HTTPStatus.NOT_FOUND, detail="Allowance not found"
         )
 
-    # Check ownership
     if allowance.wallet != get_wallet_id(wallet):
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
@@ -148,7 +133,6 @@ async def api_allowance(
 
     data = allowance.dict()
 
-    # Format datetime fields
     for field in ["start_datetime", "end_datetime", "next_payment_date", "created_at"]:
         if data.get(field):
             if isinstance(data[field], datetime):
@@ -237,7 +221,6 @@ async def api_allowance_create(
     return allowance.dict()
 
 
-## Delete a record
 @allowance_api_router.delete(
     "/api/v1/allowance/{allowance_id}", status_code=HTTPStatus.OK
 )
@@ -246,14 +229,12 @@ async def api_allowance_delete(
     wallet: WalletTypeInfo = Depends(require_admin_key),
 ):
     """Delete an allowance."""
-    # Get existing allowance
     allowance = await get_allowance(allowance_id)
     if not allowance:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="Allowance not found"
         )
 
-    # Check ownership
     if allowance.wallet != get_wallet_id(wallet):
         user = await get_user(get_wallet_user(wallet))
         if not user or not user.super_user:
@@ -262,7 +243,6 @@ async def api_allowance_delete(
                 detail="Not authorized to delete this allowance",
             )
 
-    # Delete from database
     try:
         await delete_allowance(allowance_id)
         return {"message": f"Allowance {allowance_id} deleted successfully"}
@@ -275,7 +255,6 @@ async def api_allowance_delete(
         ) from e
 
 
-## Get currency conversion rate
 @allowance_api_router.get("/api/v1/rate/{currency}", status_code=HTTPStatus.OK)
 async def api_currency_rate(
     currency: str,
@@ -302,7 +281,6 @@ async def api_currency_rate(
         ) from e
 
 
-## Manual trigger for testing scheduled payments
 @allowance_api_router.post(
     "/api/v1/allowance/{allowance_id}/trigger", status_code=HTTPStatus.OK
 )
@@ -311,14 +289,12 @@ async def api_allowance_trigger(
     wallet: WalletTypeInfo = Depends(require_admin_key),
 ):
     """Manually trigger a payment for an allowance (for testing)."""
-    # Get the allowance
     allowance = await get_allowance(allowance_id)
     if not allowance:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND, detail="Allowance not found"
         )
 
-    # Check ownership
     if allowance.wallet != get_wallet_id(wallet):
         user = await get_user(get_wallet_user(wallet))
         if not user or not user.super_user:
@@ -327,7 +303,6 @@ async def api_allowance_trigger(
                 detail="Not authorized to trigger this allowance",
             )
 
-    # Execute the payment
     try:
         success = await execute_lightning_address_payment(allowance)
 
@@ -370,7 +345,6 @@ async def api_allowance_trigger(
         ) from e
 
 
-## Verify scheduled payments are working
 @allowance_api_router.post(
     "/api/v1/allowance/test-scheduler", status_code=HTTPStatus.OK
 )
@@ -379,19 +353,15 @@ async def api_test_scheduler(
 ):
     """Test that the scheduler is running and can see allowances."""
     try:
-        # Get all active allowances
         allowances = await get_all_active_allowances()
 
-        # Filter to user's allowances
         user_allowances = [a for a in allowances if a.wallet == get_wallet_id(wallet)]
 
-        # Check which are due
         now = datetime.now(timezone.utc)
         due_allowances = []
         upcoming_allowances = []
 
         for allowance in user_allowances:
-            # Handle next_payment_date as either datetime or timestamp
             next_payment = allowance.next_payment_date
             if isinstance(next_payment, (int, float)):
                 next_payment = datetime.fromtimestamp(next_payment, tz=timezone.utc)
