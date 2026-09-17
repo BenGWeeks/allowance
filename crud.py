@@ -182,7 +182,7 @@ async def deactivate_allowance(
         f"""
         UPDATE {db.references_schema}maintable
         SET active = false, revision = revision + 1
-        WHERE id = :id AND (:revision IS NULL OR revision = :revision)
+        WHERE id = :id AND (CAST(:revision AS INTEGER) IS NULL OR revision = :revision)
         """,
         {"id": allowance_id, "revision": revision},
     )
