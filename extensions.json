@@ -48,6 +48,18 @@
             "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/config.json",
             "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.0.5/allowance-1.0.5.zip",
             "hash": "53e052f4e24fedb85d84160413fffb3cb25b9210609ec12d82e65d274e34f763"
+        },
+        {
+            "id": "allowance",
+            "repo": "https://github.com/BenGWeeks/allowance",
+            "name": "Allowance",
+            "version": "1.0.6",
+            "min_lnbits_version": "1.6.0",
+            "short_description": "Show the next payment date and time in a sortable allowance table column.",
+            "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/allowance.png",
+            "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/config.json",
+            "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.0.6/allowance-1.0.6.zip",
+            "hash": "538620a14642d6200a8ddc000a5fa8557e9453bda6728c612b452a4d721fe4ce"
         }
     ]
 }
