@@ -37,7 +37,10 @@ pinned SHA256. It then uses LNbits' native installer, core migration runner and
 extension version tracking in disposable containers for fresh installation,
 upgrade and reinstallation on both SQLite and PostgreSQL. Upgrade fixtures are
 inactive, synthetic records, including a pending payment identity; the check
-verifies that their data and schedule survive. Containers use FakeWallet and have
+verifies that their data and schedule survive. The baseline and upgrade phases
+use separate Python processes; this covers a restart-based upgrade, not a hot
+upgrade of an already loaded extension. Restart LNbits when deploying this release
+so the new Python modules and migrations are loaded. Containers use FakeWallet and have
 no external network access (PostgreSQL uses an internal Docker network).
 
 These checks cover archive loading and schema upgrades, not real Lightning

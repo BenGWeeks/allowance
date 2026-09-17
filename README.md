@@ -266,3 +266,8 @@ Exit code 0 means healthy; 2 means attention is required, including 404, authent
 failure, stale heartbeat or an unreachable server. Configure your monitor to alert
 on nonzero exits. The script performs no writes or payments and never prints the key.
 HTTPS is required except for loopback development URLs; redirects are rejected.
+
+### Preparing releases
+
+See the [release guide](docs/releasing.md) for archive validation, draft releases,
+restart-based upgrade checks and submitting to the LNbits extension registry.
