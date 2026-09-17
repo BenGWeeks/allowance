@@ -107,9 +107,14 @@ async def get_allowance(allowance_id: str) -> Optional[Allowance]:
 async def get_allowances(wallet_ids: Union[str, list[str]]) -> list[Allowance]:
     if isinstance(wallet_ids, str):
         wallet_ids = [wallet_ids]
-    q = ",".join([f"'{w}'" for w in wallet_ids])
+    if not wallet_ids:
+        return []
+    values = {f"wallet_{i}": wallet for i, wallet in enumerate(wallet_ids)}
+    placeholders = ", ".join(f":{key}" for key in values)
     return await db.fetchall(
-        f"SELECT * FROM maintable WHERE wallet IN ({q}) ORDER BY created_at DESC",
+        f"SELECT * FROM maintable WHERE wallet IN ({placeholders}) "
+        "ORDER BY created_at DESC",
+        values,
         model=Allowance,
     )
 
@@ -196,14 +201,14 @@ async def update_next_payment_date(allowance_id: str, next_payment_date) -> None
     else:
         next_payment_ts = next_payment_date
 
-    # Use raw SQL without parameter substitution to bypass rewrite_values
+    # Bind the timestamp as data, just like the allowance ID.
     await db.execute(
-        f"""
+        """
         UPDATE maintable
-        SET next_payment_date = ({next_payment_ts})
+        SET next_payment_date = :next_payment_ts
         WHERE id = :id
         """,
-        {"id": allowance_id},
+        {"id": allowance_id, "next_payment_ts": next_payment_ts},
     )
 
 

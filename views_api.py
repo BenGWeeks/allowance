@@ -127,28 +127,12 @@ async def api_wallet_info(
                 else "Wallet"
             )
         ),
-        "adminkey": (
-            getattr(wallet, "adminkey", "")
-            if hasattr(wallet, "adminkey")
-            else (
-                getattr(wallet.wallet, "adminkey", "")
-                if hasattr(wallet, "wallet")
-                else ""
-            )
-        ),
-        "inkey": (
-            getattr(wallet, "inkey", "")
-            if hasattr(wallet, "inkey")
-            else (
-                getattr(wallet.wallet, "inkey", "") if hasattr(wallet, "wallet") else ""
-            )
-        ),
     }
 
 
 ## Get all the records belonging to the user
 @allowance_api_router.get("/api/v1/allowance", status_code=HTTPStatus.OK)
-async def api_allowances(
+async def api_allowances(  # noqa: C901
     wallet: Wallet = Depends(require_admin_key),
     all_wallets: bool = Query(False),
 ):
@@ -169,6 +153,12 @@ async def api_allowances(
             f"🔗 API called: Getting allowances for "
             f"user's {len(user_wallet_ids)} wallets: {user_wallet_ids}"
         )
+
+        if all_wallets and not user.super_user:
+            raise HTTPException(
+                status_code=HTTPStatus.FORBIDDEN,
+                detail="Only the superuser can view all users' allowances",
+            )
 
         if all_wallets:
             # For admin viewing all wallets, get all active allowances
@@ -206,6 +196,8 @@ async def api_allowances(
         )
         return result
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"❌ Error getting allowances: {e}")
         import traceback
@@ -671,7 +663,7 @@ async def api_test_scheduler(
 
         return {
             "scheduler_status": "running",
-            "total_active_allowances": len(allowances),
+            "total_active_allowances": len(user_allowances),
             "user_active_allowances": len(user_allowances),
             "due_for_payment": due_allowances,
             "upcoming_payments": upcoming_allowances,
