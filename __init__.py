@@ -7,7 +7,6 @@ from .tasks import check_and_process_allowances
 from .views import allowance_generic_router
 from .views_api import allowance_api_router
 
-
 allowance_ext: APIRouter = APIRouter(prefix="/allowance", tags=["Allowance"])
 allowance_ext.include_router(allowance_generic_router)
 allowance_ext.include_router(allowance_api_router)
