@@ -1,11 +1,9 @@
 {
-  "name": "Allowance",
-  "short_description": "Setup recurring transfers between wallets",
-  "tile": "allowance.png",
-  "contributors": [
-    "BenGWeeks"
-  ],
-  "hidden": false,
-  "min_lnbits_version": "1.6.0",
-  "version": "1.0.6"
+  "repos": [
+    {
+      "id": "allowance",
+      "organisation": "BenGWeeks",
+      "repository": "allowance"
+    }
+  ]
 }
