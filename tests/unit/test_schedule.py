@@ -183,7 +183,9 @@ class ScheduleEditTests(unittest.IsolatedAsyncioTestCase):
                     active=active,
                 )
                 request = SimpleNamespace(
-                    json=AsyncMock(return_value={"name": "Renamed", "active": True})
+                    json=AsyncMock(
+                        return_value={"name": "Renamed", "active": True, "revision": 0}
+                    )
                 )
                 wallet = SimpleNamespace(id="wallet", user="owner")
 

@@ -258,6 +258,11 @@ async def api_allowance_update(  # noqa: C901
 
     # Parse request data
     data = await request.json()
+    if type(data.get("revision")) is not int or data["revision"] < 0:
+        raise HTTPException(
+            422, "A non-negative integer revision is required; reload before saving"
+        )
+
     logger.info(f"📝 Update request for allowance {allowance_id}: {data}")
 
     # Handle datetime fields
@@ -308,7 +313,7 @@ async def api_allowance_update(  # noqa: C901
     # Create update data
     update_data = CreateAllowanceData(
         id=allowance_id,
-        revision=data.get("revision", allowance.revision),
+        revision=data["revision"],
         wallet=allowance.wallet,  # Keep original wallet
         name=data.get("name", allowance.name),
         lightning_address=data.get("lightning_address", allowance.lightning_address),
