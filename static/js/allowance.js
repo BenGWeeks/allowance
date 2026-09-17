@@ -309,7 +309,7 @@ window.app = Vue.createApp({
       if (!wallet) return
       LNbits.api.request('POST', `/allowance/api/v1/allowance/${row.id}/reconcile`, wallet.adminkey)
         .then(response => {
-          Quasar.Notify.create({type: response.data.pending ? 'warning' : 'positive', message: response.data.message})
+          Quasar.Notify.create({type: response.data.pending ? 'warning' : response.data.success === false ? 'negative' : 'positive', message: response.data.message})
           this.getAllowances()
         })
         .catch(LNbits.utils.notifyApiError)
