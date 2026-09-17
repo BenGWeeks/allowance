@@ -33,26 +33,27 @@ async def create_allowance(data: CreateAllowanceData) -> Allowance:
     # Use direct SQL to avoid field name mapping issues
     # Build the SQL based on whether end_datetime is NULL
     if end_ts is None:
-        sql = """
-        INSERT INTO maintable
+        sql = f"""
+        INSERT INTO {db.references_schema}maintable
         (id, name, wallet, lightning_address, amount, currency,
          start_datetime, frequency_type, next_payment_date, memo,
          active, end_datetime, created_at)
         VALUES (:id, :name, :wallet, :lightning_address, :amount, :currency,
-         (:start_datetime), :frequency_type,
-         (:next_payment_date), :memo,
-         :active, NULL, (:created_at))
+         {db.timestamp_placeholder("start_datetime")}, :frequency_type,
+         {db.timestamp_placeholder("next_payment_date")}, :memo,
+         :active, NULL, {db.timestamp_placeholder("created_at")})
         """
     else:
-        sql = """
-        INSERT INTO maintable
+        sql = f"""
+        INSERT INTO {db.references_schema}maintable
         (id, name, wallet, lightning_address, amount, currency,
          start_datetime, frequency_type, next_payment_date, memo,
          active, end_datetime, created_at)
         VALUES (:id, :name, :wallet, :lightning_address, :amount, :currency,
-         (:start_datetime), :frequency_type,
-         (:next_payment_date), :memo,
-         :active, (:end_datetime), (:created_at))
+         {db.timestamp_placeholder("start_datetime")}, :frequency_type,
+         {db.timestamp_placeholder("next_payment_date")}, :memo,
+         :active, {db.timestamp_placeholder("end_datetime")},
+         {db.timestamp_placeholder("created_at")})
         """
 
     await db.execute(
@@ -75,30 +76,10 @@ async def create_allowance(data: CreateAllowanceData) -> Allowance:
     )
     return Allowance(**data.dict())
 
-    # this is how we used to do it
-
-    # allowance_id = urlsafe_short_hash()
-    # await db.execute(
-    #     """
-    #     INSERT INTO maintable
-    #     (id, wallet, name, lnurlpayamount, lnurlwithdrawamount)
-    #     VALUES (?, ?, ?, ?, ?)
-    #     """,
-    #     (
-    #         allowance_id,
-    #         wallet_id,
-    #         data.name,
-    #         data.lnurlpayamount,
-    #         data.lnurlwithdrawamount,
-    #     ),
-    # )
-    # allowance = await get_allowance(allowance_id)
-    # assert allowance, "Newly created table couldn't be retrieved"
-
 
 async def get_allowance(allowance_id: str) -> Optional[Allowance]:
     return await db.fetchone(
-        "SELECT * FROM maintable WHERE id = :id",
+        f"SELECT * FROM {db.references_schema}maintable WHERE id = :id",
         {"id": allowance_id},
         Allowance,
     )
@@ -112,7 +93,8 @@ async def get_allowances(wallet_ids: Union[str, list[str]]) -> list[Allowance]:
     values = {f"wallet_{i}": wallet for i, wallet in enumerate(wallet_ids)}
     placeholders = ", ".join(f":{key}" for key in values)
     return await db.fetchall(
-        f"SELECT * FROM maintable WHERE wallet IN ({placeholders}) "
+        f"SELECT * FROM {db.references_schema}maintable "
+        f"WHERE wallet IN ({placeholders}) "
         "ORDER BY created_at DESC",
         values,
         model=Allowance,
@@ -138,25 +120,27 @@ async def update_allowance(data: CreateAllowanceData) -> Allowance:
 
     # Build the SQL based on whether end_datetime is NULL
     if end_ts is None:
-        sql = """
-        UPDATE maintable
+        sql = f"""
+        UPDATE {db.references_schema}maintable
         SET name = :name, wallet = :wallet, lightning_address = :lightning_address,
             amount = :amount, currency = :currency,
-            start_datetime = (:start_datetime),
+            start_datetime = {db.timestamp_placeholder("start_datetime")},
             frequency_type = :frequency_type,
-            next_payment_date = (:next_payment_date), memo = :memo,
+            next_payment_date = {db.timestamp_placeholder("next_payment_date")},
+            memo = :memo,
             active = :active, end_datetime = NULL
         WHERE id = :id
         """
     else:
-        sql = """
-        UPDATE maintable
+        sql = f"""
+        UPDATE {db.references_schema}maintable
         SET name = :name, wallet = :wallet, lightning_address = :lightning_address,
             amount = :amount, currency = :currency,
-            start_datetime = (:start_datetime),
+            start_datetime = {db.timestamp_placeholder("start_datetime")},
             frequency_type = :frequency_type,
-            next_payment_date = (:next_payment_date), memo = :memo,
-            active = :active, end_datetime = (:end_datetime)
+            next_payment_date = {db.timestamp_placeholder("next_payment_date")},
+            memo = :memo,
+            active = :active, end_datetime = {db.timestamp_placeholder("end_datetime")}
         WHERE id = :id
         """
 
@@ -178,17 +162,13 @@ async def update_allowance(data: CreateAllowanceData) -> Allowance:
         },
     )
     return Allowance(**data.dict())
-    # this is how we used to do it
-
-    # q = ", ".join([f"{field[0]} = ?" for field in kwargs.items()])
-    # await db.execute(
-    #     f"UPDATE maintable SET {q} WHERE id = ?",
-    #     (*kwargs.values(), allowance_id),
-    # )
 
 
 async def delete_allowance(allowance_id: str) -> None:
-    await db.execute("DELETE FROM maintable WHERE id = :id", {"id": allowance_id})
+    await db.execute(
+        f"DELETE FROM {db.references_schema}maintable WHERE id = :id",
+        {"id": allowance_id},
+    )
 
 
 async def update_next_payment_date(allowance_id: str, next_payment_date) -> None:
@@ -203,9 +183,9 @@ async def update_next_payment_date(allowance_id: str, next_payment_date) -> None
 
     # Bind the timestamp as data, just like the allowance ID.
     await db.execute(
-        """
-        UPDATE maintable
-        SET next_payment_date = :next_payment_ts
+        f"""
+        UPDATE {db.references_schema}maintable
+        SET next_payment_date = {db.timestamp_placeholder("next_payment_ts")}
         WHERE id = :id
         """,
         {"id": allowance_id, "next_payment_ts": next_payment_ts},
@@ -215,8 +195,8 @@ async def update_next_payment_date(allowance_id: str, next_payment_date) -> None
 async def deactivate_allowance(allowance_id: str) -> None:
     """Deactivate an allowance"""
     await db.execute(
-        """
-        UPDATE maintable
+        f"""
+        UPDATE {db.references_schema}maintable
         SET active = false
         WHERE id = :id
         """,
@@ -227,7 +207,8 @@ async def deactivate_allowance(allowance_id: str) -> None:
 async def get_all_active_allowances() -> list[Allowance]:
     """Get all active allowances for scheduled processing"""
     return await db.fetchall(
-        "SELECT * FROM maintable WHERE active = true " "ORDER BY next_payment_date",
+        f"SELECT * FROM {db.references_schema}maintable WHERE active = true "
+        "ORDER BY next_payment_date",
         model=Allowance,
     )
 
@@ -237,10 +218,10 @@ async def update_allowance_error(
 ) -> None:
     """Store error information for an allowance"""
     await db.execute(
-        """
-        UPDATE maintable
+        f"""
+        UPDATE {db.references_schema}maintable
         SET last_error = :error_message,
-            last_error_time = :error_time
+            last_error_time = {db.timestamp_placeholder("error_time")}
         WHERE id = :allowance_id
         """,
         {
@@ -254,11 +235,11 @@ async def update_allowance_error(
 async def update_allowance_success(allowance_id: str, success_time: int) -> None:
     """Clear error and store success time for an allowance"""
     await db.execute(
-        """
-        UPDATE maintable
+        f"""
+        UPDATE {db.references_schema}maintable
         SET last_error = NULL,
             last_error_time = NULL,
-            last_success_time = :success_time
+            last_success_time = {db.timestamp_placeholder("success_time")}
         WHERE id = :allowance_id
         """,
         {"success_time": success_time, "allowance_id": allowance_id},
@@ -268,8 +249,8 @@ async def update_allowance_success(allowance_id: str, success_time: int) -> None
 async def clear_allowance_error(allowance_id: str) -> None:
     """Manually clear error information for an allowance"""
     await db.execute(
-        """
-        UPDATE maintable
+        f"""
+        UPDATE {db.references_schema}maintable
         SET last_error = NULL,
             last_error_time = NULL
         WHERE id = :allowance_id
