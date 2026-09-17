@@ -18,6 +18,7 @@ from .crud import (
     finish_payment_attempt,
     get_all_active_allowances,
     get_allowance,
+    record_scheduler_heartbeat,
     update_allowance_error,
     update_allowance_success,
 )
@@ -256,7 +257,9 @@ async def check_and_process_allowances():  # noqa: C901
     """
 
     while True:
+        cycle_failed = False
         try:
+            await record_scheduler_heartbeat("running")
 
             # Get all active allowances
             allowances = await get_all_active_allowances()
@@ -320,9 +323,9 @@ async def check_and_process_allowances():  # noqa: C901
                             if next_date is None:
                                 # One-off attempts finish only after a terminal result.
                                 # Retrying could duplicate an unsettled payment.
-                                await finish_payment_attempt(allowance, None)
+                                await finish_payment_attempt(allowance, None, success)
                                 continue
-                            await finish_payment_attempt(allowance, next_date)
+                            await finish_payment_attempt(allowance, next_date, success)
                             allowance.next_payment_date = next_date
 
                             if not success:
@@ -331,15 +334,23 @@ async def check_and_process_allowances():  # noqa: C901
                                 )
 
                         except Exception:
+                            cycle_failed = True
                             logger.error(
                                 "Allowance operation: check_and_process_allowances"
                             )
 
                 except Exception:
+                    cycle_failed = True
                     logger.error("Allowance operation: check_and_process_allowances")
 
         except Exception:
+            cycle_failed = True
             logger.error("Allowance operation: check_and_process_allowances")
+
+        try:
+            await record_scheduler_heartbeat("error" if cycle_failed else "healthy")
+        except Exception:
+            logger.error("Could not record allowance scheduler heartbeat")
 
         # Check every 60 seconds (1 minute minimum payment frequency)
         await asyncio.sleep(60)

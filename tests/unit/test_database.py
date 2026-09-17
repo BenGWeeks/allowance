@@ -46,6 +46,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         await migrations.m003_namespace_cockroach_table(self.database)
         await migrations.m004_pending_payment(self.database)
         await migrations.m005_allowance_revision(self.database)
+        await migrations.m006_operational_history(self.database)
 
     async def asyncTearDown(self):
         if self.database.type == POSTGRES:
@@ -142,3 +143,38 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         paused = await crud.get_allowance(created.id)
         self.assertFalse(await crud.claim_payment(paused, "paused"))
         self.assertFalse(await crud.claim_payment(updated, "stale-active"))
+
+    async def test_history_commits_once_with_schedule_and_is_deleted_with_parent(self):
+        start = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        allowance = await crud.create_allowance(
+            CreateAllowanceData(
+                name="History",
+                wallet="wallet",
+                lightning_address="test@example.invalid",
+                amount=1,
+                start_datetime=start,
+                next_payment_date=start,
+                frequency_type="weekly",
+                memo="",
+            )
+        )
+        self.assertTrue(await crud.claim_payment(allowance, "history-hash"))
+        allowance.pending_payment_hash = "history-hash"
+        next_date = datetime(2090, 1, 1, tzinfo=timezone.utc)
+        await crud.finish_payment_attempt(allowance, next_date, True)
+        await crud.finish_payment_attempt(allowance, next_date, True)
+        history = await crud.get_payment_history(allowance.id)
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["outcome"], "succeeded")
+        self.assertEqual(history[0]["payment_hash"], "history-hash")
+        self.assertEqual(history[0]["scheduled_at"], int(start.timestamp()))
+        await crud.delete_allowance(allowance.id)
+        self.assertEqual(await crud.get_payment_history(allowance.id), [])
+
+    async def test_heartbeat_persists(self):
+        self.assertEqual((await crud.get_scheduler_health())["state"], "starting")
+        await crud.record_scheduler_heartbeat("running")
+        await crud.record_scheduler_heartbeat("healthy")
+        health = await crud.get_scheduler_health()
+        self.assertEqual(health["state"], "healthy")
+        self.assertGreater(health["last_completed"], 0)

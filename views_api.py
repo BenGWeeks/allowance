@@ -347,6 +347,7 @@ async def api_allowance_trigger(
                 allowance.frequency_type,
                 datetime.now(timezone.utc),
             ),
+            success,
         )
         if success:
             return {
@@ -470,9 +471,49 @@ async def api_allowance_reconcile(
             allowance.frequency_type,
             datetime.now(timezone.utc),
         ),
+        result,
     )
     return {
         "pending": False,
         "success": result,
         "message": "Payment status confirmed; schedule updated",
+    }
+
+
+@allowance_api_router.get("/api/v1/allowance/{allowance_id}/history")
+async def api_allowance_history(
+    allowance_id: str,
+    wallet: WalletTypeInfo = Depends(require_invoice_key),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    from .crud import get_payment_history
+
+    allowance = await get_allowance(allowance_id)
+    if not allowance:
+        raise HTTPException(404, "Allowance not found")
+    if allowance.wallet != get_wallet_id(wallet):
+        raise HTTPException(403, "Not authorized to view this history")
+    return await get_payment_history(allowance_id, limit, offset)
+
+
+@allowance_api_router.get("/api/v1/health")
+async def api_allowance_health(wallet: WalletTypeInfo = Depends(require_invoice_key)):
+    from .crud import get_scheduler_health
+
+    heartbeat = await get_scheduler_health()
+    now = int(datetime.now(timezone.utc).timestamp())
+    last = heartbeat.get("last_completed") or heartbeat.get("last_started") or 0
+    scheduler_ok = now - last <= 180 and heartbeat.get("state") != "error"
+    allowances = await get_allowances(get_wallet_id(wallet))
+    overdue = sum(
+        a.active and a.next_payment_date.timestamp() < now - 180 for a in allowances
+    )
+    pending = sum(bool(a.pending_payment_hash) for a in allowances)
+    return {
+        "healthy": scheduler_ok and not overdue and not pending,
+        "scheduler_ok": scheduler_ok,
+        "last_completed": heartbeat.get("last_completed"),
+        "overdue": overdue,
+        "pending": pending,
     }

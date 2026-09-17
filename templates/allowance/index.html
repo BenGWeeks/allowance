@@ -4,6 +4,20 @@
 {% block page %}
 <div class="row q-col-gutter-md" id="vue" data-cy="allowance-extension">
   <div class="col-12 col-md-7 q-gutter-y-md">
+    <q-banner v-if="healthWarning" class="bg-warning text-black" role="alert">
+      <span v-text="healthWarning"></span>
+      <template v-slot:action><q-btn flat label="Refresh status" @click="getAllowances" /></template>
+    </q-banner>
+    <q-dialog v-model="historyDialog.show">
+      <q-card style="min-width: 320px; max-width: 95vw">
+        <q-card-section class="text-h6">Payment history</q-card-section>
+        <q-card-section>
+          <q-table :rows="historyDialog.rows" :columns="historyColumns" :loading="historyDialog.loading" row-key="id" no-data-label="No recorded payments yet" />
+          <div class="text-caption q-mt-sm">Latest 50 completed attempts since history was enabled. Earlier payments remain in the LNbits wallet history.</div>
+        </q-card-section>
+        <q-card-actions align="right"><q-btn flat label="Close" v-close-popup /></q-card-actions>
+      </q-card>
+    </q-dialog>
     <q-card>
       <q-card-section>
         <q-btn unelevated color="primary" @click="openCreateDialog" icon="add" data-cy="new-allowance-btn"
@@ -70,7 +84,7 @@
                     (every 10 seconds, 6 payments total)
                   </span>
                 </span>
-                <span v-else-if="col.name == 'next_payment_date'"
+                <span v-else-if="col.name == 'next_payment_date' || col.name == 'last_success_time'"
                   v-text="!col.value || isNaN(new Date(col.value).getTime()) ? '—' : formatDatetime(col.value)"
                 ></span>
                 <span v-else-if="col.name == 'status'">
@@ -122,6 +136,7 @@
                 <span v-else v-text="col.value"></span>
               </q-td>
               <q-td auto-width>
+                <q-btn flat dense icon="history" aria-label="Payment history" @click="showHistory(props.row)"><q-tooltip>Payment history</q-tooltip></q-btn>
                 <q-btn v-if="props.row.pending_payment_hash" flat dense icon="sync" aria-label="Check payment status" @click="reconcileAllowance(props.row)"><q-tooltip>Check payment status</q-tooltip></q-btn>
                 <q-btn
                   flat

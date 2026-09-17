@@ -85,6 +85,11 @@ class RecurrenceTests(unittest.TestCase):
 
 
 class WorkerTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        heartbeat = patch.object(tasks, "record_scheduler_heartbeat", AsyncMock())
+        heartbeat.start()
+        self.addCleanup(heartbeat.stop)
+
     async def test_once_attempt_is_terminal(self):
         for success in [True, False]:
             allowance = Allowance(
@@ -117,7 +122,7 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(tasks.asyncio.CancelledError):
                     await tasks.check_and_process_allowances()
                 pay.assert_awaited_once()
-                stop.assert_awaited_once_with(allowance, None)
+                stop.assert_awaited_once_with(allowance, None, success)
                 advance.assert_not_awaited()
 
     async def test_success_and_failure_advance_from_original_anchor(self):
@@ -156,7 +161,9 @@ class WorkerTests(unittest.IsolatedAsyncioTestCase):
                     with self.assertRaises(tasks.asyncio.CancelledError):
                         await tasks.check_and_process_allowances()
                     pay.assert_awaited_once()
-                    save.assert_awaited_once_with(allowance, dt("2026-04-30T09:00:00"))
+                    save.assert_awaited_once_with(
+                        allowance, dt("2026-04-30T09:00:00"), success
+                    )
 
 
 class ScheduleEditTests(unittest.IsolatedAsyncioTestCase):
@@ -203,6 +210,11 @@ class ScheduleEditTests(unittest.IsolatedAsyncioTestCase):
 
 
 class PendingWorkerTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        heartbeat = patch.object(tasks, "record_scheduler_heartbeat", AsyncMock())
+        heartbeat.start()
+        self.addCleanup(heartbeat.stop)
+
     async def test_pending_does_not_advance_or_deactivate(self):
         allowance = Allowance(
             id="pending",

@@ -94,3 +94,33 @@ async def m005_allowance_revision(db: Any) -> None:
         f"ALTER TABLE {db.references_schema}maintable "
         "ADD COLUMN revision INTEGER NOT NULL DEFAULT 0"
     )
+
+
+async def m006_operational_history(db):
+    await db.execute(
+        f"""
+        CREATE TABLE {db.references_schema}payment_history (
+            id TEXT PRIMARY KEY, allowance_id TEXT NOT NULL,
+            scheduled_at BIGINT NOT NULL, completed_at BIGINT NOT NULL,
+            outcome TEXT NOT NULL, payment_hash TEXT
+        )
+    """
+    )
+    await db.execute(
+        f"""
+        CREATE INDEX allowance_history_lookup
+        ON {db.references_schema}payment_history (allowance_id, completed_at)
+    """
+    )
+    await db.execute(
+        f"""
+        CREATE TABLE {db.references_schema}scheduler_health (
+            id TEXT PRIMARY KEY, last_started BIGINT, last_completed BIGINT,
+            state TEXT NOT NULL
+        )
+    """
+    )
+    await db.execute(
+        f"INSERT INTO {db.references_schema}scheduler_health "
+        "(id, state) VALUES ('worker', 'starting')"
+    )
