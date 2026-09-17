@@ -29,10 +29,12 @@ test('create, edit, reload and delete a monthly allowance through the UI', async
     if (await notice.isVisible()) await notice.click();
     await page.getByRole('button', {name: /New Allowance/i}).click();
     const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Wallet to send funds from *', {exact: true}).click();
+    await page.getByRole('option', {name: config.walletName, exact: true}).click();
     await dialog.getByLabel('Allowance description *', {exact: true}).fill(name);
     await dialog.getByLabel('Recipient lightning address *', {exact: true}).fill(config.payLinkEmail);
     await dialog.getByLabel('Amount *', {exact: true}).fill(config.createAmount);
-    await dialog.getByLabel('Message (optional)', {exact: true}).fill('Playwright create');
+    // Leave the optional message blank to exercise the create defaults.
     await dialog.getByLabel('Frequency *', {exact: true}).click();
     await page.getByRole('option', {name: 'Monthly', exact: true}).click();
     // Leave the default future start; inactive allowances cannot send payments.
@@ -43,8 +45,9 @@ test('create, edit, reload and delete a monthly allowance through the UI', async
     expect(created.status(), await created.text()).toBe(201);
     const original = await created.json();
     createdId = original.id;
+    expect(created.request().postDataJSON().memo).toBe('');
     expect(original.active).toBe(false);
-    expect(original.memo).toBe('Playwright create');
+    expect(original.memo).toBe('');
     expect(original.frequency_type).toBe('monthly');
     await expect(page.getByRole('row').filter({hasText: name})).toBeVisible();
     await page.screenshot({path: testInfo.outputPath('created.png'), fullPage: true});

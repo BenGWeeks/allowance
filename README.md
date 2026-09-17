@@ -95,13 +95,15 @@ ruff check .
 ```
 allowance/
 ├── .github/workflows/       # CI/CD pipeline configuration
-│   └── integration-tests.yml # GitHub Actions workflow
+│   └── api-unit-tests.yml # GitHub Actions workflow
 ├── docs/                    # Documentation (AsciiDoc format)
 │   ├── installation.adoc   # Installation guide
 │   ├── faqs.adoc           # Frequently asked questions
 │   ├── testing.adoc        # Testing procedures
 │   └── troubleshooting.adoc # Problem resolution
 ├── tests/                   # Comprehensive test suite
+│   ├── unit/               # Offline regression tests
+│   ├── run_unit_tests.py   # Regression runner
 │   ├── api/                # API endpoint tests (Python)
 │   │   ├── check-*.py      # Validation tests
 │   │   ├── create-*.py     # Creation tests
@@ -182,7 +184,7 @@ docker run --rm --network none \
 ```
 
 The historical network/API/browser scripts remain available for manual dev
-testing. CI does not claim browser or PostgreSQL coverage. Configure the
+testing. CI covers SQLite and PostgreSQL; browser tests run explicitly on dev. Configure the
 `Allowance checks passed` as the required branch-protection check. It aggregates
 all matrix, PostgreSQL and quality jobs under a stable name.
 
@@ -201,7 +203,7 @@ then deletes it through the UI. API assertions confirm each result; cleanup only
 removes the record created by that run. It does not test Lightning settlement.
 
 Set `TEST_LNBITS_URL`, `LNBITS_ADMIN_USERNAME`, `LNBITS_ADMIN_PASSWORD` and
-`PAYLINK_EMAIL`, `ALLOWANCE_TEST_CREATE_AMOUNT` and `ALLOWANCE_TEST_EDIT_AMOUNT`
+`RECEIVING_WALLET_NAME`, `PAYLINK_EMAIL`, `ALLOWANCE_TEST_CREATE_AMOUNT` and `ALLOWANCE_TEST_EDIT_AMOUNT`
 (positive integer sats) in the ignored root `.env.local` or environment. Use an initialized
 dev instance with Allowance enabled and a wallet. Use a test recipient ending in
 `.invalid` for this inactive CRUD test.
@@ -211,7 +213,7 @@ cd tests
 npm ci
 npx playwright install chromium
 # Set this explicitly to the same dev URL as TEST_LNBITS_URL:
-export ALLOWANCE_UI_TEST_CONFIRM=http://127.0.0.1:5004
+export ALLOWANCE_UI_TEST_CONFIRM="$(node -p 'require("./ui/auth-helper").getConfig().baseUrl')"
 npx playwright test --project=chromium
 ```
 

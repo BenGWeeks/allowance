@@ -44,6 +44,8 @@ jobs:
         version: ${{ fromJSON(needs.versions.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Pull official LNbits runtime
         env:
           LNBITS_VERSION: ${{ matrix.version }}
@@ -66,6 +68,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Pull test runtimes
         run: |
           docker pull postgres:15
@@ -78,6 +82,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

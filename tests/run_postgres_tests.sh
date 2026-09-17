@@ -13,7 +13,7 @@ docker network create --internal "$network" >/dev/null
 docker run -d --name "$container" --network "$network" \
   --network-alias allowance-postgres-test \
   -e POSTGRES_USER=allowance_tests -e POSTGRES_DB=allowance_tests \
-  -e POSTGRES_HOST_AUTH_METHOD=trust postgres:15 >/dev/null
+  -e POSTGRES_HOST_AUTH_METHOD=trust postgres:15 -c timezone=America/New_York >/dev/null
 for attempt in {1..30}; do
   if docker exec "$container" pg_isready -U allowance_tests >/dev/null; then break; fi
   sleep 1
