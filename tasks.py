@@ -3,17 +3,21 @@ from datetime import datetime, timezone
 from typing import Any
 
 import httpx
+from lnbits.bolt11 import decode as decode_invoice
+from lnbits.core.crud import get_standalone_payment
 from lnbits.core.services import pay_invoice
 from lnbits.utils.exchange_rates import fiat_amount_as_satoshis
 from lnurl import decode as lnurl_decode
 from loguru import logger
 
 from .crud import (
+    claim_payment,
     deactivate_allowance,
+    finish_payment_attempt,
     get_all_active_allowances,
+    get_allowance,
     update_allowance_error,
     update_allowance_success,
-    update_next_payment_date,
 )
 from .models import Allowance
 from .schedule import next_occurrence
@@ -112,11 +116,36 @@ async def get_invoice_from_lnurl(
         raise Exception("Failed to get invoice from LNURL endpoint") from e
 
 
-async def execute_lightning_address_payment(allowance: Allowance) -> bool:
+async def execute_lightning_address_payment(  # noqa: C901
+    allowance: Allowance,
+) -> bool | None:
     """
     Execute payment to Lightning address
-    Returns True if successful, False otherwise
+    Return True for success, False for terminal failure, None while unresolved.
     """
+    # Refresh persisted state: another worker/manual request may already own it.
+    current = await get_allowance(allowance.id)
+    if current is None or current.next_payment_date != allowance.next_payment_date:
+        return None
+    allowance.pending_payment_hash = current.pending_payment_hash
+    if allowance.pending_payment_hash:
+        payment = await get_standalone_payment(
+            allowance.pending_payment_hash, wallet_id=allowance.wallet
+        )
+        if payment is None or payment.pending:
+            # Missing may mean a crash between recording the invoice and sending it.
+            # Keep the guard: automatically clearing it could duplicate a payment.
+            return None
+        if payment.success:
+            await update_allowance_success(
+                allowance.id, int(datetime.now(timezone.utc).timestamp())
+            )
+            return True
+        await update_allowance_error(
+            allowance.id, "Payment failed", int(datetime.now(timezone.utc).timestamp())
+        )
+        return False
+
     try:
         # Convert amount to sats if using fiat currency
         amount_sats = allowance.amount
@@ -204,6 +233,10 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
         # Step 4: Execute payment using LNBits pay_invoice
         logger.info("💸 Executing payment...")
 
+        payment_hash = decode_invoice(payment_request).payment_hash
+        if not await claim_payment(allowance, payment_hash):
+            return None
+        allowance.pending_payment_hash = payment_hash
         payment_result = await pay_invoice(
             wallet_id=allowance.wallet,
             payment_request=payment_request,
@@ -236,7 +269,7 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
             await update_allowance_error(
                 allowance.id, error_msg, int(datetime.now(timezone.utc).timestamp())
             )
-            return False
+            return None if payment_result.pending else False
 
     except Exception as e:
         error_msg = str(e)
@@ -247,7 +280,7 @@ async def execute_lightning_address_payment(allowance: Allowance) -> bool:
         await update_allowance_error(
             allowance.id, error_msg, int(datetime.now(timezone.utc).timestamp())
         )
-        return False
+        return None if allowance.pending_payment_hash else False
 
 
 def ensure_timezone_aware(dt):
@@ -343,6 +376,10 @@ async def check_and_process_allowances():  # noqa: C901
                             # Execute Lightning address payment
                             success = await execute_lightning_address_payment(allowance)
 
+                            if success is None:
+                                # Reconcile pending payments before advancing.
+                                continue
+
                             # Keep the original cadence after every attempt.
                             # Use completion time so a slow attempt cannot leave the
                             # next occurrence in the past and trigger a catch-up burst.
@@ -353,17 +390,13 @@ async def check_and_process_allowances():  # noqa: C901
                             )
 
                             if next_date is None:
-                                # One-off means one attempt, including pending/failure:
+                                # One-off attempts finish only after a terminal result.
                                 # Retrying could duplicate an unsettled payment.
-                                await deactivate_allowance(allowance.id)
+                                await finish_payment_attempt(allowance, None)
                                 deactivated_ids.add(allowance.id)
                                 continue
+                            await finish_payment_attempt(allowance, next_date)
                             allowance.next_payment_date = next_date
-
-                            # Update the next payment date in database
-                            await update_next_payment_date(
-                                allowance.id, allowance.next_payment_date
-                            )
 
                             if success:
                                 logger.info(
