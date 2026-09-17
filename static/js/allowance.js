@@ -26,6 +26,8 @@ window.app = Vue.createApp({
             const order = ['minutely', 'hourly', 'daily', 'weekly', 'monthly', 'yearly']
             return order.indexOf(a) - order.indexOf(b)
           }},
+          {name: 'next_payment_date', align: 'left', label: 'Next Payment', field: 'next_payment_date', sortable: true,
+            sort: (a, b) => (Date.parse(a) || 0) - (Date.parse(b) || 0)},
           {name: 'status', align: 'center', label: 'Status', field: 'active', sortable: true, sort: (a, b, rowA, rowB) => {
             // Sort by: Error (2), Active (1), Inactive (0)
             const getStatusValue = (row) => {

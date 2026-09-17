@@ -70,6 +70,9 @@
                     (every 10 seconds, 6 payments total)
                   </span>
                 </span>
+                <span v-else-if="col.name == 'next_payment_date'"
+                  v-text="formatDatetime(col.value) || '—'"
+                ></span>
                 <span v-else-if="col.name == 'status'">
                   <q-badge
                     :color="props.row.active ? (props.row.last_error ? 'negative' : 'positive') : 'grey'"
