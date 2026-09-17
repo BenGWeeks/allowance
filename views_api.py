@@ -473,7 +473,7 @@ async def api_allowance_health(wallet: WalletTypeInfo = Depends(require_invoice_
 
     heartbeat = await get_scheduler_health()
     now = int(datetime.now(timezone.utc).timestamp())
-    last = heartbeat.get("last_completed") or heartbeat.get("last_started") or 0
+    last = max(heartbeat.get("last_completed") or 0, heartbeat.get("last_started") or 0)
     scheduler_ok = now - last <= 180 and heartbeat.get("state") != "error"
     allowances = await get_allowances(get_wallet_id(wallet))
     overdue = sum(

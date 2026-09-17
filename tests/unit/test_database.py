@@ -80,12 +80,12 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         loaded = await crud.get_allowance(created.id)
         self.assertEqual(loaded.next_payment_date, next_date)
         await crud.update_allowance_error(
-            created.id, "Temporary failure", int(start.timestamp())
+            loaded, "Temporary failure", int(start.timestamp())
         )
         loaded = await crud.get_allowance(created.id)
         self.assertEqual(loaded.last_error, "Temporary failure")
         self.assertEqual(loaded.last_error_time, start)
-        await crud.update_allowance_success(created.id, int(next_date.timestamp()))
+        await crud.update_allowance_success(loaded, int(next_date.timestamp()))
         loaded = await crud.get_allowance(created.id)
         self.assertIsNone(loaded.last_error)
         self.assertEqual(loaded.last_success_time, next_date)
@@ -144,6 +144,64 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(await crud.claim_payment(paused, "paused"))
         self.assertFalse(await crud.claim_payment(updated, "stale-active"))
 
+    async def test_stale_expiry_cannot_deactivate_an_edited_allowance(self):
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        allowance = await crud.create_allowance(
+            CreateAllowanceData(
+                name="Expiry race",
+                wallet="wallet",
+                lightning_address="test@example.invalid",
+                amount=1,
+                start_datetime=now,
+                next_payment_date=now,
+                frequency_type="weekly",
+                memo="",
+            )
+        )
+        edit = CreateAllowanceData(**allowance.dict())
+        edit.end_datetime = now + timedelta(days=7)
+        current = await crud.update_allowance(edit)
+        await crud.deactivate_allowance(allowance.id, revision=allowance.revision)
+        self.assertTrue((await crud.get_allowance(allowance.id)).active)
+        await crud.deactivate_allowance(current.id, revision=current.revision)
+        self.assertFalse((await crud.get_allowance(current.id)).active)
+
+    async def test_stale_payment_metadata_cannot_overwrite_a_new_occurrence(self):
+        start = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        original = await crud.create_allowance(
+            CreateAllowanceData(
+                name="Reconciliation race",
+                wallet="wallet",
+                amount=1,
+                lightning_address="test@example.invalid",
+                start_datetime=start,
+                next_payment_date=start,
+                frequency_type="weekly",
+                memo="",
+            )
+        )
+        self.assertTrue(await crud.claim_payment(original, "first-hash"))
+        self.assertFalse(
+            await crud.update_allowance_error(original, "Pre-claim error", 1)
+        )
+        old = await crud.get_allowance(original.id)
+        await crud.finish_payment_attempt(old, start + timedelta(days=7))
+        current = await crud.get_allowance(original.id)
+        self.assertTrue(await crud.claim_payment(current, "second-hash"))
+        current = await crud.get_allowance(original.id)
+        self.assertTrue(await crud.update_allowance_success(current, 2000))
+        self.assertTrue(
+            await crud.update_allowance_error(current, "Current error", 2001)
+        )
+        self.assertFalse(await crud.update_allowance_success(old, 1000))
+        self.assertFalse(await crud.update_allowance_error(old, "Stale error", 1001))
+        old.pending_payment_hash = current.pending_payment_hash
+        self.assertFalse(await crud.update_allowance_success(old, 1000))
+        loaded = await crud.get_allowance(original.id)
+        self.assertEqual(int(loaded.last_success_time.timestamp()), 2000)
+        self.assertEqual(loaded.last_error, "Current error")
+        self.assertEqual(int(loaded.last_error_time.timestamp()), 2001)
+
     async def test_history_commits_once_with_schedule_and_is_deleted_with_parent(self):
         start = datetime(2020, 1, 1, tzinfo=timezone.utc)
         allowance = await crud.create_allowance(
@@ -178,3 +236,78 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         health = await crud.get_scheduler_health()
         self.assertEqual(health["state"], "healthy")
         self.assertGreater(health["last_completed"], 0)
+
+    async def history_fixture(self):
+        start = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        allowance = await crud.create_allowance(
+            CreateAllowanceData(
+                name="Rollback",
+                wallet="wallet",
+                lightning_address="test@example.invalid",
+                amount=1,
+                start_datetime=start,
+                next_payment_date=start,
+                frequency_type="weekly",
+                memo="",
+            )
+        )
+        self.assertTrue(await crud.claim_payment(allowance, "rollback-hash"))
+        return await crud.get_allowance(allowance.id)
+
+    async def test_history_insert_failure_rolls_back_schedule_and_claim(self):
+        allowance = await self.history_fixture()
+        execute = crud.TransactionConnection.execute
+
+        async def fail_history(connection, query, values=None):
+            if "INSERT INTO" in query and "payment_history" in query:
+                raise RuntimeError("Injected history failure")
+            return await execute(connection, query, values)
+
+        with patch.object(crud.TransactionConnection, "execute", fail_history):
+            with self.assertRaisesRegex(RuntimeError, "Injected history"):
+                await crud.finish_payment_attempt(
+                    allowance, datetime(2090, 1, 1, tzinfo=timezone.utc), True
+                )
+        loaded = await crud.get_allowance(allowance.id)
+        self.assertEqual(loaded.next_payment_date, allowance.next_payment_date)
+        self.assertEqual(loaded.pending_payment_hash, allowance.pending_payment_hash)
+        self.assertEqual(loaded.revision, allowance.revision)
+        self.assertEqual(await crud.get_payment_history(allowance.id), [])
+
+    async def test_delete_failure_preserves_allowance_and_history(self):
+        allowance = await self.history_fixture()
+        await crud.finish_payment_attempt(allowance, None, True)
+        execute = crud.TransactionConnection.execute
+
+        async def fail_parent(connection, query, values=None):
+            if "DELETE FROM" in query and "maintable" in query:
+                raise RuntimeError("Injected parent deletion failure")
+            return await execute(connection, query, values)
+
+        with patch.object(crud.TransactionConnection, "execute", fail_parent):
+            with self.assertRaisesRegex(RuntimeError, "Injected parent"):
+                await crud.delete_allowance(allowance.id)
+        self.assertIsNotNone(await crud.get_allowance(allowance.id))
+        self.assertEqual(len(await crud.get_payment_history(allowance.id)), 1)
+
+    async def test_history_migration_failure_rolls_back_schema_and_can_retry(self):
+        for table in ("payment_history", "scheduler_health"):
+            await self.database.execute(
+                f"DROP TABLE {self.database.references_schema}{table}"
+            )
+        execute = crud.TransactionConnection.execute
+
+        async def fail_seed(connection, query, values=None):
+            if "INSERT INTO" in query and "scheduler_health" in query:
+                raise RuntimeError("Injected migration seed failure")
+            return await execute(connection, query, values)
+
+        with patch.object(crud.TransactionConnection, "execute", fail_seed):
+            async with self.database.connect() as connection:
+                with self.assertRaisesRegex(RuntimeError, "Injected migration"):
+                    await migrations.m006_operational_history(connection)
+        # Retrying would fail on existing tables if the DDL had been committed.
+        async with self.database.connect() as connection:
+            await migrations.m006_operational_history(connection)
+        self.assertEqual((await crud.get_scheduler_health())["state"], "starting")
+        self.assertEqual(await crud.get_payment_history("missing"), [])

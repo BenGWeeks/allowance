@@ -168,7 +168,7 @@ async def execute_lightning_address_payment(  # noqa: C901
 
         if payment_result.success:
             await update_allowance_success(
-                allowance.id, int(datetime.now(timezone.utc).timestamp())
+                allowance, int(datetime.now(timezone.utc).timestamp())
             )
             return True
         else:
@@ -179,14 +179,14 @@ async def execute_lightning_address_payment(  # noqa: C901
             )
             logger.error("Allowance operation: execute_lightning_address_payment")
             await update_allowance_error(
-                allowance.id, error_msg, int(datetime.now(timezone.utc).timestamp())
+                allowance, error_msg, int(datetime.now(timezone.utc).timestamp())
             )
             return None if payment_result.pending else False
 
     except PaymentError as e:
 
         await update_allowance_error(
-            allowance.id,
+            allowance,
             (
                 "Payment rejected"
                 if e.status == "failed"
@@ -199,7 +199,7 @@ async def execute_lightning_address_payment(  # noqa: C901
         error_msg = "Payment processing failed; check payment status before retrying"
         logger.error("Allowance operation: execute_lightning_address_payment")
         await update_allowance_error(
-            allowance.id, error_msg, int(datetime.now(timezone.utc).timestamp())
+            allowance, error_msg, int(datetime.now(timezone.utc).timestamp())
         )
         return None if allowance.pending_payment_hash else False
 
@@ -222,10 +222,10 @@ async def reconcile_payment(allowance: Allowance, refresh: bool = False) -> bool
         return None
     now = int(datetime.now(timezone.utc).timestamp())
     if status.success:
-        await update_allowance_success(allowance.id, now)
-        return True
-    await update_allowance_error(allowance.id, "Payment failed", now)
-    return False
+        updated = await update_allowance_success(allowance, now)
+        return None if updated is False else True
+    updated = await update_allowance_error(allowance, "Payment failed", now)
+    return None if updated is False else False
 
 
 def ensure_timezone_aware(dt):
@@ -263,7 +263,9 @@ async def check_and_process_allowances():  # noqa: C901
                     if hasattr(allowance, "end_datetime") and allowance.end_datetime:
                         end_datetime = ensure_timezone_aware(allowance.end_datetime)
                         if current_time > end_datetime:
-                            await deactivate_allowance(allowance.id)
+                            await deactivate_allowance(
+                                allowance.id, revision=allowance.revision
+                            )
                             continue
 
                     next_payment_date = ensure_timezone_aware(
