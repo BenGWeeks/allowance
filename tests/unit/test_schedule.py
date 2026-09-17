@@ -182,10 +182,8 @@ class ScheduleEditTests(unittest.IsolatedAsyncioTestCase):
                     frequency_type="monthly",
                     active=active,
                 )
-                request = SimpleNamespace(
-                    json=AsyncMock(
-                        return_value={"name": "Renamed", "active": True, "revision": 0}
-                    )
+                request = views_api.AllowanceUpdateRequest(
+                    name="Renamed", active=True, revision=0
                 )
                 wallet = SimpleNamespace(id="wallet", user="owner")
 

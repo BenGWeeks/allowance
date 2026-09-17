@@ -210,7 +210,6 @@ window.app = Vue.createApp({
       if (!data.id) {
         backendData.frequency_type = data.frequency_type
         backendData.start_datetime = data.start_datetime ? new Date(data.start_datetime).toISOString() : new Date().toISOString()
-        backendData.next_payment_date = this.calculateNextPaymentDate(data.start_datetime, data.frequency_type)
       }
 
       if (backendData.id) {

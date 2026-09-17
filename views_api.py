@@ -1,8 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
-from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query
 from lnbits.core.crud import get_user
 from lnbits.core.models import Wallet, WalletTypeInfo
 from lnbits.decorators import (
@@ -21,7 +20,7 @@ from .crud import (
     get_allowances,
     update_allowance,
 )
-from .models import CreateAllowanceData
+from .models import AllowanceCreateRequest, AllowanceUpdateRequest, CreateAllowanceData
 from .tasks import execute_lightning_address_payment
 
 allowance_api_router = APIRouter()
@@ -38,64 +37,6 @@ def get_wallet_id(wallet: Wallet | WalletTypeInfo) -> str:
 
 def get_wallet_user(wallet: Wallet | WalletTypeInfo) -> str:
     return wallet.wallet.user if isinstance(wallet, WalletTypeInfo) else wallet.user
-
-
-def parse_datetime_string(date_str: Optional[str]) -> Optional[datetime]:  # noqa: C901
-    """Helper to parse datetime strings from various formats."""
-    if not date_str:
-        return None
-
-    # Handle empty strings
-    if date_str.strip() == "":
-        return None
-
-    # First try parsing ISO format with timezone offset like +00:00
-    # Python's isoformat() produces this format
-    if "+" in date_str or date_str.endswith("Z"):
-        try:
-            # Replace +00:00 with +0000 for strptime %z
-            normalized = date_str.replace("+00:00", "+0000").replace("-00:00", "-0000")
-            if normalized.endswith("Z"):
-                normalized = normalized[:-1] + "+0000"
-
-            # Try with microseconds first
-            try:
-                dt = datetime.strptime(normalized, "%Y-%m-%dT%H:%M:%S.%f%z")
-                return dt
-            except ValueError:
-                # Try without microseconds
-                dt = datetime.strptime(normalized, "%Y-%m-%dT%H:%M:%S%z")
-                return dt
-        except ValueError:
-            pass
-
-    # Try different formats
-    formats = [
-        "%Y-%m-%dT%H:%M:%S.%f",  # ISO format without timezone
-        "%Y-%m-%dT%H:%M:%S",  # ISO format without microseconds
-        "%Y-%m-%dT%H:%M",  # datetime-local format
-        "%Y-%m-%d %H:%M:%S",  # Alternative format
-    ]
-
-    for fmt in formats:
-        try:
-            dt = datetime.strptime(date_str, fmt)
-            # Make timezone aware
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            return dt
-        except ValueError:
-            continue
-
-    # Try parsing as timestamp
-    try:
-        timestamp = float(date_str)
-        return datetime.fromtimestamp(timestamp, tz=timezone.utc)
-    except (ValueError, TypeError):
-        pass
-
-    logger.warning("Allowance operation: parse_datetime_string")
-    return None
 
 
 ## Get wallet info for current user
@@ -181,7 +122,7 @@ async def api_allowances(  # noqa: C901
         raise
     except Exception:
         logger.error("Allowance operation: api_allowances")
-        return []
+        raise HTTPException(503, "Could not load allowances") from None
 
 
 ## Get a specific record by ID
@@ -220,234 +161,80 @@ async def api_allowance(
     return data
 
 
-## Update a record
-@allowance_api_router.put("/api/v1/allowance/{allowance_id}", status_code=HTTPStatus.OK)
-async def api_allowance_update(  # noqa: C901
+def validate_schedule_input(data: dict):
+    """Validate dates together, including existing fields on a partial update."""
+    end = data.get("end_datetime")
+    if end is not None and end < data["start_datetime"]:
+        raise HTTPException(422, "end_datetime must not precede start_datetime")
+    if (
+        data.get("active", True)
+        and end is not None
+        and end < datetime.now(timezone.utc)
+    ):
+        raise HTTPException(
+            422, "Cannot activate an allowance whose end date has passed"
+        )
+    if (
+        data.get("currency", "sats") in ("sats", "satoshis")
+        and not float(data["amount"]).is_integer()
+    ):
+        raise HTTPException(422, "Satoshi amounts must be whole numbers")
+
+
+@allowance_api_router.put("/api/v1/allowance/{allowance_id}")
+async def api_allowance_update(
     allowance_id: str,
-    request: Request,
+    data: AllowanceUpdateRequest,
     wallet: WalletTypeInfo = Depends(require_admin_key),
 ):
-    """Update an existing allowance."""
-    # Get existing allowance
     allowance = await get_allowance(allowance_id)
     if not allowance:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail="Allowance not found"
-        )
-
-    # Check ownership
+        raise HTTPException(404, "Allowance not found")
     if allowance.wallet != get_wallet_id(wallet):
         user = await get_user(get_wallet_user(wallet))
         if not user or not user.super_user:
-            raise HTTPException(
-                status_code=HTTPStatus.FORBIDDEN,
-                detail="Not authorized to update this allowance",
-            )
-
-    # Parse request data
-    data = await request.json()
-    if type(data.get("revision")) is not int or data["revision"] < 0:
-        raise HTTPException(
-            422, "A non-negative integer revision is required; reload before saving"
-        )
-
-
-    # Handle datetime fields
-    start_dt = (
-        parse_datetime_string(data.get("start_datetime"))
-        if data.get("start_datetime")
-        else None
-    )
-    end_dt = parse_datetime_string(data.get("end_datetime"))
-
-    # For updates, if start_datetime is not provided, use the existing one
-    # (frontend doesn't send it because the field is disabled)
-    if start_dt is None:
-        start_dt = allowance.start_datetime
-    # If start_datetime is provided and differs from existing, reject the change
-    elif start_dt != allowance.start_datetime:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail="Cannot change start_datetime of existing allowance",
-        )
-
-    # For updates, if frequency_type is not provided, use the existing one
-    # (frontend doesn't send it because the field is disabled)
-    frequency_type = data.get("frequency_type")
-    if frequency_type is None:
-        frequency_type = allowance.frequency_type
-    # If frequency_type is provided and differs from existing, reject the change
-    elif frequency_type != allowance.frequency_type:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail="Cannot change frequency_type of existing allowance",
-        )
-
-    # Validate: cannot activate if end_datetime is in the past
-    is_active = data.get("active", allowance.active)
-    if is_active and end_dt is not None:
-        current_time = datetime.now(timezone.utc)
-        if end_dt < current_time:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail="Cannot activate allowance: end_datetime is in the past",
-            )
-
-    # Editing or reactivating an allowance must not reset its schedule.
-    # An overdue occurrence is handled once by the worker on its next pass.
-    next_payment = allowance.next_payment_date
-
-    # Create update data
-    update_data = CreateAllowanceData(
-        id=allowance_id,
-        revision=data["revision"],
-        wallet=allowance.wallet,  # Keep original wallet
-        name=data.get("name", allowance.name),
-        lightning_address=data.get("lightning_address", allowance.lightning_address),
-        amount=data.get("amount", allowance.amount),
-        currency=data.get("currency", allowance.currency),
-        start_datetime=start_dt,
-        frequency_type=frequency_type,  # Use the validated frequency_type
-        next_payment_date=next_payment,
-        memo=data.get("memo", allowance.memo),
-        active=data.get("active", allowance.active),
-        end_datetime=end_dt,
-        lnurlpay=data.get("lnurlpay", allowance.lnurlpay),
-        total=data.get("total", allowance.total),
-        created_at=allowance.created_at,  # Keep original created_at
-    )
-
-    # Update in database
+            raise HTTPException(403, "Not authorized to update this allowance")
+    changes = data.dict(exclude_unset=True)
+    for field in ("id", "wallet", "start_datetime", "frequency_type"):
+        if field in changes and changes[field] != getattr(allowance, field):
+            raise HTTPException(422, f"Cannot change {field} of an existing allowance")
+    merged = {**allowance.dict(), **changes}
+    if merged.get("memo") is None:
+        merged["memo"] = ""
+    if merged.get("total") is None:
+        merged["total"] = 0
+    validate_schedule_input(merged)
     try:
-        updated = await update_allowance(update_data)
-
-        # Format response
-        result = updated.dict()
-        for field in [
-            "start_datetime",
-            "end_datetime",
-            "next_payment_date",
-            "created_at",
-        ]:
-            if result.get(field):
-                if isinstance(result[field], datetime):
-                    result[field] = result[field].isoformat()
-                elif isinstance(result[field], (int, float)):
-                    result[field] = datetime.fromtimestamp(
-                        result[field], tz=timezone.utc
-                    ).isoformat()
-
-        return result
-
-    except AllowanceConflictError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
-    except Exception as e:
-        logger.error("Allowance operation: api_allowance_update")
-        raise HTTPException(
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail="Failed to update allowance",
-        ) from e
+        updated = await update_allowance(CreateAllowanceData(**merged))
+        return updated.dict()
+    except AllowanceConflictError as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
-## Create a new record
 @allowance_api_router.post("/api/v1/allowance", status_code=HTTPStatus.CREATED)
-async def api_allowance_create(  # noqa: C901
-    request: Request,
+async def api_allowance_create(
+    data: AllowanceCreateRequest,
     wallet: WalletTypeInfo = Depends(require_admin_key),
 ):
-    """Create a new allowance."""
-    data = await request.json()
     wallet_id = get_wallet_id(wallet)
-
-    # Handle datetime fields
-    start_dt = parse_datetime_string(data.get("start_datetime"))
-    end_dt = parse_datetime_string(data.get("end_datetime"))
-
-    # Validate start_datetime is provided (now mandatory)
-    if start_dt is None:
+    if data.wallet is not None and data.wallet != wallet_id:
+        raise HTTPException(403, "Wallet does not match the authenticated wallet")
+    now = datetime.now(timezone.utc)
+    if data.start_datetime < now + timedelta(minutes=1):
         raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail="start_datetime is required",
+            422, "start_datetime must be at least 1 minute in the future"
         )
-
-    # Validate: start_datetime must be at least 1 minute in the future
-    # This ensures the first payment will definitely be made
-    current_time = datetime.now(timezone.utc)
-    minimum_start = current_time + timedelta(minutes=1)
-    if start_dt < minimum_start:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail=(
-                "start_datetime must be at least 1 minute in the future. "
-                "Please select a time at least 1 minute from now."
-            ),
+    values = data.dict(exclude={"id", "revision", "wallet"})
+    validate_schedule_input(values)
+    allowance = await create_allowance(
+        CreateAllowanceData(
+            **values,
+            wallet=wallet_id,
+            next_payment_date=data.start_datetime,
+            created_at=now,
         )
-
-    # Validate: cannot activate if end_datetime is in the past
-    is_active = data.get("active", True)
-    if is_active and end_dt is not None:
-        if end_dt < current_time:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail="Cannot activate allowance: end_datetime is in the past",
-            )
-
-    # Calculate next payment date
-    next_payment = start_dt
-
-    # Create new allowance data
-    create_data = CreateAllowanceData(
-        wallet=wallet_id,
-        name=data.get("name"),
-        lightning_address=data.get("lightning_address"),
-        amount=data.get("amount", 0),
-        currency=data.get("currency", "sats"),
-        start_datetime=start_dt,
-        frequency_type=data.get("frequency_type", "daily"),
-        next_payment_date=next_payment,
-        memo=data.get("memo", ""),
-        active=is_active,
-        end_datetime=end_dt,
-        lnurlpay=data.get("lnurlpay", ""),
-        total=data.get("total", 0),
-        created_at=datetime.now(timezone.utc),
     )
-
-    # Validate required fields
-    if not create_data.name or not create_data.lightning_address:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail="Name and lightning_address are required",
-        )
-
-    # Create in database
-    try:
-        allowance = await create_allowance(create_data)
-
-        # Format response
-        result = allowance.dict()
-        for field in [
-            "start_datetime",
-            "end_datetime",
-            "next_payment_date",
-            "created_at",
-        ]:
-            if result.get(field):
-                if isinstance(result[field], datetime):
-                    result[field] = result[field].isoformat()
-                elif isinstance(result[field], (int, float)):
-                    result[field] = datetime.fromtimestamp(
-                        result[field], tz=timezone.utc
-                    ).isoformat()
-
-        return result
-
-    except Exception as e:
-        logger.error("Allowance operation: api_allowance_create")
-        raise HTTPException(
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail="Failed to create allowance",
-        ) from e
+    return allowance.dict()
 
 
 ## Delete a record
