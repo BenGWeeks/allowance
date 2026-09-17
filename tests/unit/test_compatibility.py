@@ -98,8 +98,8 @@ class CompatibilityTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(error.await_count, int(not success))
 
     async def test_currency_quote_unavailable(self):
-        from starlette.exceptions import HTTPException
         from lnbits.utils import exchange_rates
+        from starlette.exceptions import HTTPException
 
         for quote in [(0, 0), (0, 100), (100, 0)]:
             with patch.object(
