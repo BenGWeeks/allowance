@@ -46,7 +46,9 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                     patch.object(
                         tasks,
                         "decode_invoice",
-                        return_value=SimpleNamespace(payment_hash="hash"),
+                        return_value=SimpleNamespace(
+                            payment_hash="hash", amount_msat=1000
+                        ),
                     )
                 )
                 stack.enter_context(
@@ -95,3 +97,37 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                 result = await client.post("/api/v1/allowance/test/reconcile")
             self.assertEqual(result.status_code, 403)
             reconcile.assert_not_awaited()
+
+    async def test_invoice_amount_must_match_before_claim_or_payment(self):
+        for amount in [None, 999, 1001]:
+            allowance = self.allowance()
+            with ExitStack() as stack:
+                for name, value in {
+                    "get_allowance": allowance,
+                    "resolve_lightning_address": ("https://example.invalid", {}),
+                    "get_invoice_from_lnurl": "invoice",
+                    "update_allowance_error": None,
+                }.items():
+                    stack.enter_context(
+                        patch.object(tasks, name, AsyncMock(return_value=value))
+                    )
+                stack.enter_context(
+                    patch.object(
+                        tasks,
+                        "decode_invoice",
+                        return_value=SimpleNamespace(
+                            payment_hash="hash", amount_msat=amount
+                        ),
+                    )
+                )
+                claim = stack.enter_context(
+                    patch.object(tasks, "claim_payment", AsyncMock())
+                )
+                pay = stack.enter_context(
+                    patch.object(tasks, "pay_invoice", AsyncMock())
+                )
+                self.assertIs(
+                    await tasks.execute_lightning_address_payment(allowance), False
+                )
+                claim.assert_not_awaited()
+                pay.assert_not_awaited()
