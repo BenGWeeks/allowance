@@ -71,7 +71,7 @@
                   </span>
                 </span>
                 <span v-else-if="col.name == 'next_payment_date'"
-                  v-text="formatDatetime(col.value) || '—'"
+                  v-text="!col.value || isNaN(new Date(col.value).getTime()) ? '—' : formatDatetime(col.value)"
                 ></span>
                 <span v-else-if="col.name == 'status'">
                   <q-badge
