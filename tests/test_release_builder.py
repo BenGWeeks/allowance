@@ -35,9 +35,15 @@ class ReleaseBuilderTests(unittest.TestCase):
             )
         )
         (self.repo / ".gitattributes").write_text(
-            "/.gitattributes export-ignore\n/private-fixture export-ignore\n"
+            (BUILDER.parents[1] / ".gitattributes").read_text()
+            + "/private-fixture export-ignore\n"
         )
         (self.repo / "private-fixture").write_text("must not be packaged")
+        for name in (
+            "static/image/allowance.psd",
+            "templates/allowance/index_old.html",
+        ):
+            (self.repo / name).write_text("obsolete fixture")
         self.git("init", "--quiet")
         self.commit()
 
@@ -90,6 +96,14 @@ class ReleaseBuilderTests(unittest.TestCase):
         )
         with ZipFile(archive) as package:
             self.assertNotIn("allowance/private-fixture", package.namelist())
+            self.assertNotIn("allowance/static/image/allowance.psd", package.namelist())
+            self.assertNotIn(
+                "allowance/templates/allowance/index_old.html", package.namelist()
+            )
+            self.assertIn(
+                "allowance/templates/allowance/index.html", package.namelist()
+            )
+            self.assertIn("allowance/static/image/allowance.png", package.namelist())
             self.assertIn("allowance/README.md", package.namelist())
 
     def test_mismatched_tag_is_rejected(self):

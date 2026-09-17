@@ -13,3 +13,5 @@
 /package.json export-ignore
 /package-lock.json export-ignore
 /extensions.json export-ignore
+/static/image/allowance.psd export-ignore
+/templates/allowance/index_old.html export-ignore
