@@ -222,7 +222,7 @@ window.app = Vue.createApp({
       const backendData = {
         id: data.id,
         name: data.name,  // Keep name field as expected by backend
-        memo: data.name,  // Also include memo field
+        memo: data.memo,
         wallet: data.wallet,
         lightning_address: data.lightning_address,
         amount: amount,  // Store the original amount (0.02 for GBP, 10 for sats)
