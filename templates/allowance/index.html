@@ -75,10 +75,11 @@
                 ></span>
                 <span v-else-if="col.name == 'status'">
                   <q-badge
-                    :color="props.row.active ? (props.row.last_error ? 'negative' : 'positive') : 'grey'"
-                    :label="props.row.active ? (props.row.last_error ? 'Error' : 'Active') : 'Inactive'"
+                    :color="props.row.pending_payment_hash ? 'warning' : props.row.active ? (props.row.last_error ? 'negative' : 'positive') : 'grey'"
+                    :label="props.row.pending_payment_hash ? 'Pending' : props.row.active ? (props.row.last_error ? 'Error' : 'Active') : 'Inactive'"
                   >
-                    <q-tooltip v-if="props.row.last_error">
+                    <q-tooltip v-if="props.row.pending_payment_hash">Payment outcome unresolved. Check status before sending another payment.</q-tooltip>
+                    <q-tooltip v-else-if="props.row.last_error">
                       <div class="text-weight-bold">Last Error:</div>
                       <div class="q-mt-xs" v-text="props.row.last_error"></div>
                       <div class="q-mt-xs text-caption" v-if="props.row.last_error_time">
@@ -121,6 +122,7 @@
                 <span v-else v-text="col.value"></span>
               </q-td>
               <q-td auto-width>
+                <q-btn v-if="props.row.pending_payment_hash" flat dense icon="sync" aria-label="Check payment status" @click="reconcileAllowance(props.row)"><q-tooltip>Check payment status</q-tooltip></q-btn>
                 <q-btn
                   flat
                   dense

@@ -304,6 +304,16 @@ window.app = Vue.createApp({
         data: {}
       }
     },
+    reconcileAllowance(row) {
+      const wallet = this.g.user.wallets.find(wallet => wallet.id === row.wallet)
+      if (!wallet) return
+      LNbits.api.request('POST', `/allowance/api/v1/allowance/${row.id}/reconcile`, wallet.adminkey)
+        .then(response => {
+          Quasar.Notify.create({type: response.data.pending ? 'warning' : 'positive', message: response.data.message})
+          this.getAllowances()
+        })
+        .catch(LNbits.utils.notifyApiError)
+    },
     openUpdateDialog(row) {
       console.log('🔄 openUpdateDialog called with row:', row)
       console.log('🔍 Row active field:', row.active, '(type:', typeof row.active, ')')

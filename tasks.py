@@ -6,6 +6,8 @@ import httpx
 from lnbits.bolt11 import decode as decode_invoice
 from lnbits.core.crud import get_standalone_payment
 from lnbits.core.services import pay_invoice
+from lnbits.core.services.payments import check_transaction_status
+from lnbits.exceptions import PaymentError
 from lnbits.utils.exchange_rates import fiat_amount_as_satoshis
 from lnurl import decode as lnurl_decode
 from loguru import logger
@@ -127,26 +129,11 @@ async def execute_lightning_address_payment(  # noqa: C901
     current = await get_allowance(allowance.id)
     if current is None or current.next_payment_date != allowance.next_payment_date:
         return None
-    if current.revision != allowance.revision or not current.active:
-        return None
     allowance.pending_payment_hash = current.pending_payment_hash
     if allowance.pending_payment_hash:
-        payment = await get_standalone_payment(
-            allowance.pending_payment_hash, wallet_id=allowance.wallet
-        )
-        if payment is None or payment.pending:
-            # Missing may mean a crash between recording the invoice and sending it.
-            # Keep the guard: automatically clearing it could duplicate a payment.
-            return None
-        if payment.success:
-            await update_allowance_success(
-                allowance.id, int(datetime.now(timezone.utc).timestamp())
-            )
-            return True
-        await update_allowance_error(
-            allowance.id, "Payment failed", int(datetime.now(timezone.utc).timestamp())
-        )
-        return False
+        return await reconcile_payment(allowance)
+    if current.revision != allowance.revision or not current.active:
+        return None
 
     try:
         # Convert amount to sats if using fiat currency
@@ -273,6 +260,19 @@ async def execute_lightning_address_payment(  # noqa: C901
             )
             return None if payment_result.pending else False
 
+    except PaymentError as e:
+        # LNbits explicitly marks preflight rejection and terminal funding-source
+        # failure as failed. Unknown outcomes retain the persisted claim.
+        await update_allowance_error(
+            allowance.id,
+            (
+                "Payment rejected"
+                if e.status == "failed"
+                else "Payment outcome unresolved"
+            ),
+            int(datetime.now(timezone.utc).timestamp()),
+        )
+        return False if e.status == "failed" else None
     except Exception as e:
         error_msg = str(e)
         logger.error(
@@ -283,6 +283,30 @@ async def execute_lightning_address_payment(  # noqa: C901
             allowance.id, error_msg, int(datetime.now(timezone.utc).timestamp())
         )
         return None if allowance.pending_payment_hash else False
+
+
+async def reconcile_payment(allowance: Allowance, refresh: bool = False) -> bool | None:
+    """Inspect an existing claim only; never request or send a new invoice."""
+    if not allowance.pending_payment_hash:
+        return None
+    payment = await get_standalone_payment(
+        allowance.pending_payment_hash, wallet_id=allowance.wallet
+    )
+    if payment is None:
+        return None
+    status = payment
+    if payment.pending and refresh:
+        status = await check_transaction_status(
+            allowance.wallet, allowance.pending_payment_hash
+        )
+    if status.pending:
+        return None
+    now = int(datetime.now(timezone.utc).timestamp())
+    if status.success:
+        await update_allowance_success(allowance.id, now)
+        return True
+    await update_allowance_error(allowance.id, "Payment failed", now)
+    return False
 
 
 def ensure_timezone_aware(dt):
