@@ -1,9 +1,9 @@
 """Exercise native installation in a disposable, offline LNbits container."""
 
 import asyncio
-import importlib
 import json
 import shutil
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,9 +42,11 @@ async def main():
         ),
         "Only disposable installation test databases are allowed",
     )
-    await migrate_databases()
     mode, candidate, previous = sys.argv[1:]
-    if mode == "upgrade":
+    fixture = Path(settings.lnbits_data_folder) / "upgrade-fixture.json"
+    if mode != "upgrade":
+        await migrate_databases()
+    if mode == "prepare":
         await install(previous)
         from lnbits.extensions.allowance import crud
         from lnbits.extensions.allowance.models import CreateAllowanceData
@@ -68,14 +70,10 @@ async def main():
             "SET pending_payment_hash = :hash WHERE id = :id",
             {"hash": "synthetic-pending-hash", "id": record.id},
         )
+        fixture.write_text(json.dumps({"id": record.id, "date": date.isoformat()}))
         await crud.db.engine.dispose()
-        for name in list(sys.modules):
-            if name == "lnbits.extensions.allowance" or name.startswith(
-                "lnbits.extensions.allowance."
-            ):
-                del sys.modules[name]
-        importlib.invalidate_caches()
-    elif mode != "fresh":
+        return
+    if mode not in {"fresh", "upgrade"}:
         raise ValueError("Expected fresh or upgrade mode")
 
     ext = await install(candidate)
@@ -96,9 +94,11 @@ async def main():
         "Missing scheduler health",
     )
     if mode == "upgrade":
-        updated = await crud.get_allowance(record.id)
+        saved = json.loads(fixture.read_text())
+        date = datetime.fromisoformat(saved["date"])
+        updated = await crud.get_allowance(saved["id"])
         require(
-            updated.name == record.name and updated.amount == record.amount,
+            updated.name == "Upgrade fixture" and updated.amount == 25,
             "Allowance data changed",
         )
         require(
@@ -121,4 +121,6 @@ async def main():
 
 
 if __name__ == "__main__":
+    if sys.argv[1] == "upgrade":
+        subprocess.run([sys.executable, __file__, "prepare", *sys.argv[2:]], check=True)
     asyncio.run(main())
