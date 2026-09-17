@@ -72,12 +72,52 @@ class RecurrenceTests(unittest.TestCase):
             next_occurrence(start, "daily", start), dt("2026-01-02T09:00:00")
         )
 
+    def test_once_has_no_recurrence(self):
+        start = dt("2026-01-01")
+        self.assertEqual(
+            next_occurrence(start, "once", start - timedelta(seconds=1)), start
+        )
+        self.assertIsNone(next_occurrence(start, "once", start))
+
     def test_unsupported_frequency_rejected(self):
         with self.assertRaises(ValueError):
             next_occurrence(dt("2026-01-01"), "invalid", dt("2026-01-01"))
 
 
 class WorkerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_once_attempt_is_terminal(self):
+        for success in [True, False]:
+            allowance = Allowance(
+                id="once-test",
+                name="Once",
+                wallet="wallet",
+                lightning_address="recipient@example.invalid",
+                amount=1,
+                start_datetime=dt("2020-01-01"),
+                next_payment_date=dt("2020-01-01"),
+                frequency_type="once",
+            )
+            with patch.object(
+                tasks, "get_all_active_allowances", AsyncMock(return_value=[allowance])
+            ), patch.object(
+                tasks,
+                "execute_lightning_address_payment",
+                AsyncMock(return_value=success),
+            ) as pay, patch.object(
+                tasks, "deactivate_allowance", AsyncMock()
+            ) as stop, patch.object(
+                tasks, "update_next_payment_date", AsyncMock()
+            ) as advance, patch.object(
+                tasks.asyncio,
+                "sleep",
+                AsyncMock(side_effect=[None, tasks.asyncio.CancelledError]),
+            ):
+                with self.assertRaises(tasks.asyncio.CancelledError):
+                    await tasks.check_and_process_allowances()
+                pay.assert_awaited_once()
+                stop.assert_awaited_once_with(allowance.id)
+                advance.assert_not_awaited()
+
     async def test_success_and_failure_advance_from_original_anchor(self):
         for success in [True, False]:
             with self.subTest(success=success):

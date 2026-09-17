@@ -1,11 +1,22 @@
 from typing import Optional, Union
 
-from lnbits.db import Database
+from lnbits.db import COCKROACH, POSTGRES, Database
 from lnbits.helpers import urlsafe_short_hash
 
 from .models import Allowance, CreateAllowanceData
 
-db = Database("ext_allowance")
+
+class AllowanceDatabase(Database):
+    """Bind epochs as UTC wall-clock values for our legacy TIMESTAMP columns."""
+
+    def timestamp_placeholder(self, key: str) -> str:
+        placeholder = super().timestamp_placeholder(key)
+        if self.type in {POSTGRES, COCKROACH}:
+            return f"({placeholder} AT TIME ZONE 'UTC')"
+        return placeholder
+
+
+db = AllowanceDatabase("ext_allowance")
 
 
 async def create_allowance(data: CreateAllowanceData) -> Allowance:

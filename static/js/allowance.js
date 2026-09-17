@@ -167,6 +167,7 @@ window.app = Vue.createApp({
       }
       
       console.log('🔍 Validation check:', {
+        memo: '',
         name: this.formDialog.data.name,
         wallet: this.formDialog.data.wallet,
         lightning_address: this.formDialog.data.lightning_address,

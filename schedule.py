@@ -11,8 +11,10 @@ _INTERVALS = {
 }
 
 
-def next_occurrence(start: datetime, frequency: str, after: datetime) -> datetime:
-    """Return the first occurrence strictly after `after` (or a future start).
+def next_occurrence(
+    start: datetime, frequency: str, after: datetime
+) -> datetime | None:
+    """Return the next occurrence, or None for a completed one-off schedule.
 
     Missed periods are skipped, rather than replayed. Calendar dates clamp to
     the end of shorter months, always using the original day as their anchor.
@@ -21,10 +23,12 @@ def next_occurrence(start: datetime, frequency: str, after: datetime) -> datetim
     start = start.replace(tzinfo=timezone.utc) if start.tzinfo is None else start
     after = after.replace(tzinfo=timezone.utc) if after.tzinfo is None else after
     start, after = start.astimezone(timezone.utc), after.astimezone(timezone.utc)
-    if frequency not in (*_INTERVALS, "monthly", "yearly"):
+    if frequency not in (*_INTERVALS, "monthly", "yearly", "once"):
         raise ValueError(f"Unsupported allowance frequency: {frequency}")
     if after < start:
         return start
+    if frequency == "once":
+        return None
     if frequency in _INTERVALS:
         interval = _INTERVALS[frequency]
         return start + ((after - start) // interval + 1) * interval
