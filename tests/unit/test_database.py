@@ -142,3 +142,25 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         paused = await crud.get_allowance(created.id)
         self.assertFalse(await crud.claim_payment(paused, "paused"))
         self.assertFalse(await crud.claim_payment(updated, "stale-active"))
+
+    async def test_stale_expiry_cannot_deactivate_an_edited_allowance(self):
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        allowance = await crud.create_allowance(
+            CreateAllowanceData(
+                name="Expiry race",
+                wallet="wallet",
+                lightning_address="test@example.invalid",
+                amount=1,
+                start_datetime=now,
+                next_payment_date=now,
+                frequency_type="weekly",
+                memo="",
+            )
+        )
+        edit = CreateAllowanceData(**allowance.dict())
+        edit.end_datetime = now + timedelta(days=7)
+        current = await crud.update_allowance(edit)
+        await crud.deactivate_allowance(allowance.id, revision=allowance.revision)
+        self.assertTrue((await crud.get_allowance(allowance.id)).active)
+        await crud.deactivate_allowance(current.id, revision=current.revision)
+        self.assertFalse((await crud.get_allowance(current.id)).active)
