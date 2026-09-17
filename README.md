@@ -1,5 +1,7 @@
 # Allowance - An [LNbits](https://github.com/lnbits/lnbits) Extension
 
+[![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/BenGWeeks/allowance?utm_source=oss&utm_medium=github&utm_campaign=BenGWeeks%2Fallowance&labelColor=171717&color=FF570A&label=CodeRabbit+Reviews)](https://coderabbit.ai)
+
 ![Allowance Extension Banner](static/image/banner_cropped.png)
 
 > **Note**: This extension was developed as a test of using Claude Code to build an LNBits extension, demonstrating AI-assisted development of Bitcoin Lightning applications.
