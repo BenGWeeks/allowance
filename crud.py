@@ -272,18 +272,18 @@ async def clear_allowance_error(allowance_id: str) -> None:
 
 async def claim_payment(allowance: Allowance, payment_hash: str) -> bool:
     """Claim this due occurrence before handing its invoice to LNbits."""
-    row = await db.fetchone(
+    result = await db.execute(
         f"UPDATE {db.references_schema}maintable "
         "SET pending_payment_hash = :hash "
         "WHERE id = :id AND pending_payment_hash IS NULL "
-        f"AND next_payment_date = {db.timestamp_placeholder('due')} RETURNING id",
+        f"AND next_payment_date = {db.timestamp_placeholder('due')}",
         {
             "id": allowance.id,
             "hash": payment_hash,
             "due": int(allowance.next_payment_date.timestamp()),
         },
     )
-    return row is not None
+    return result.rowcount == 1
 
 
 async def finish_payment_attempt(allowance: Allowance, next_date) -> None:
