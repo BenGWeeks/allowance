@@ -28,17 +28,14 @@ def validate_url(value: str) -> httpx.URL:
 
 def public_address(value: str) -> bool:
     address = ipaddress.ip_address(value)
-    if not address.is_global or address.is_multicast or address.is_reserved:
-        return False
-    if isinstance(address, ipaddress.IPv6Address):
-        # Do not allow IPv4 tunnelling/translation to bypass IPv4 checks.
-        if address.ipv4_mapped or address.sixtofour or address.teredo:
-            return False
-        if address in ipaddress.ip_network(
-            "64:ff9b::/96"
-        ) or address in ipaddress.ip_network("64:ff9b:1::/48"):
-            return False
-    return True
+    # IPv4-only egress avoids host-specific NAT64 prefixes translating a
+    # globally scoped IPv6 destination into an internal IPv4 connection.
+    return (
+        isinstance(address, ipaddress.IPv4Address)
+        and address.is_global
+        and not address.is_multicast
+        and not address.is_reserved
+    )
 
 
 class PublicNetworkBackend(httpcore.AnyIOBackend):
@@ -46,7 +43,7 @@ class PublicNetworkBackend(httpcore.AnyIOBackend):
         self, host, port, timeout=None, local_address=None, socket_options=None
     ):
         results = await asyncio.get_running_loop().getaddrinfo(
-            host, port, type=socket.SOCK_STREAM
+            host, port, family=socket.AF_INET, type=socket.SOCK_STREAM
         )
         addresses = list(dict.fromkeys(result[4][0] for result in results))
         if not addresses or not all(public_address(address) for address in addresses):
@@ -88,9 +85,9 @@ async def _get_json(url: httpx.URL) -> dict:
                 raise ValueError("LNURL endpoint returned an unsuccessful status")
             content = bytearray()
             async for chunk in response.aiter_stream():
-                content.extend(chunk)
-                if len(content) > MAX_RESPONSE_BYTES:
+                if len(content) + len(chunk) > MAX_RESPONSE_BYTES:
                     raise ValueError("LNURL response is too large")
+                content.extend(chunk)
     result = json.loads(content)
     if not isinstance(result, dict):
         raise ValueError("LNURL endpoint must return a JSON object")

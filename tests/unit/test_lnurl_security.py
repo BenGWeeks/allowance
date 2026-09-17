@@ -49,6 +49,8 @@ class NetworkTests(unittest.IsolatedAsyncioTestCase):
             "::ffff:127.0.0.1",
             "64:ff9b::7f00:1",
             "224.0.0.1",
+            "2001:4860:64::7f00:1",
+            "2606:4700:4700::1111",
         ]:
             results = [
                 (socket.AF_INET, 1, 6, "", (ip, 443)) for ip in ["8.8.8.8", blocked]
@@ -75,6 +77,7 @@ class NetworkTests(unittest.IsolatedAsyncioTestCase):
             result = await safe_http.get_public_json("https://recipient.example/pay")
         self.assertEqual(result, {"ok": True})
         dns.assert_awaited_once()
+        self.assertEqual(dns.await_args.kwargs["family"], socket.AF_INET)
         self.assertEqual(connect.await_args.args[0], "8.8.8.8")
         self.assertEqual(stream.hostname, "recipient.example")
         self.assertIn(b"Host: recipient.example", stream.written)
