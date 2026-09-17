@@ -21,6 +21,12 @@ function getConfig() {
   for (const key of ['TEST_LNBITS_URL', 'LNBITS_ADMIN_USERNAME', 'LNBITS_ADMIN_PASSWORD']) {
     if (!config[key]) throw new Error(`${key} must be set for browser tests`);
   }
+  const url = new URL(config.TEST_LNBITS_URL);
+  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) {
+    throw new Error('TEST_LNBITS_URL must use HTTPS except for local loopback HTTP');
+  }
+  if (url.username || url.password) throw new Error('Do not embed credentials in TEST_LNBITS_URL');
   return {
     baseUrl: config.TEST_LNBITS_URL,
     username: config.LNBITS_ADMIN_USERNAME,

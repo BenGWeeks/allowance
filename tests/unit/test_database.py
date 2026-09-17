@@ -43,6 +43,8 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         await migrations.m001_initial(self.database)
         await migrations.m002_namespace_postgres_table(self.database)
         await migrations.m002_namespace_postgres_table(self.database)
+        await migrations.m003_namespace_cockroach_table(self.database)
+        await migrations.m004_pending_payment(self.database)
 
     async def asyncTearDown(self):
         if self.database.type == POSTGRES:
@@ -87,6 +89,21 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(loaded.last_success_time, next_date)
         self.assertEqual(len(await crud.get_allowances(["test-wallet"])), 1)
         self.assertEqual(await crud.get_allowances(["other-wallet"]), [])
+        # Only one concurrent caller can own an occurrence. A persisted guard
+        # survives reload and stale completion cannot release someone else's hash.
+        self.assertTrue(await crud.claim_payment(loaded, "payment-one"))
+        self.assertFalse(await crud.claim_payment(loaded, "payment-two"))
+        pending = await crud.get_allowance(created.id)
+        self.assertEqual(pending.pending_payment_hash, "payment-one")
+        await crud.finish_payment_attempt(loaded, next_date + timedelta(days=1))
+        self.assertEqual(
+            (await crud.get_allowance(created.id)).pending_payment_hash, "payment-one"
+        )
+        await crud.finish_payment_attempt(pending, next_date + timedelta(days=1))
+        finished = await crud.get_allowance(created.id)
+        self.assertIsNone(finished.pending_payment_hash)
+        self.assertEqual(finished.next_payment_date, next_date + timedelta(days=1))
+        self.assertFalse(await crud.claim_payment(pending, "stale-occurrence"))
         await crud.deactivate_allowance(created.id)
         self.assertEqual(await crud.get_all_active_allowances(), [])
         await crud.delete_allowance(created.id)
