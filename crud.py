@@ -1,8 +1,10 @@
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional, Union
 
-from lnbits.db import POSTGRES, Database
+from lnbits.db import POSTGRES, SQLITE, Connection, Database
 from lnbits.helpers import urlsafe_short_hash
+from sqlalchemy import text
 
 from .models import Allowance, CreateAllowanceData
 
@@ -18,6 +20,35 @@ class AllowanceDatabase(Database):
 
 
 db = AllowanceDatabase("ext_allowance")
+
+
+class TransactionConnection(Connection):
+    """Leave commit/rollback to the transaction, unlike LNbits Connection.execute."""
+
+    async def execute(self, query: str, values: Optional[dict] = None):
+        params = self.rewrite_values(values) if values else {}
+        return await self.conn.execute(text(self.rewrite_query(query)), params)
+
+
+@asynccontextmanager
+async def transaction(database):
+    if isinstance(database, Database):
+        async with database.connect() as connection:
+            async with transaction(connection) as atomic:
+                yield atomic
+    else:
+        atomic = TransactionConnection(
+            database.conn, database.type, database.name, database.schema
+        )
+        if database.conn.in_transaction():
+            async with database.conn.begin_nested():
+                yield atomic
+        else:
+            async with database.conn.begin():
+                # SQLite's legacy driver does not begin a transaction for DDL.
+                if database.type == SQLITE:
+                    await database.conn.exec_driver_sql("BEGIN")
+                yield atomic
 
 
 async def create_allowance(data: CreateAllowanceData) -> Allowance:
@@ -146,7 +177,7 @@ async def update_allowance(data: CreateAllowanceData) -> Allowance:
 
 
 async def delete_allowance(allowance_id: str) -> None:
-    async with db.connect() as conn:
+    async with transaction(db) as conn:
         await conn.execute(
             f"DELETE FROM {db.references_schema}payment_history "
             "WHERE allowance_id = :id",
@@ -188,7 +219,7 @@ async def deactivate_allowance(
         f"""
         UPDATE {db.references_schema}maintable
         SET active = false, revision = revision + 1
-        WHERE id = :id AND (:revision IS NULL OR revision = :revision)
+        WHERE id = :id AND (CAST(:revision AS INTEGER) IS NULL OR revision = :revision)
         """,
         {"id": allowance_id, "revision": revision},
     )
@@ -303,7 +334,7 @@ async def finish_payment_attempt(
     else:
         assignment = f"next_payment_date = {db.timestamp_placeholder('next')}"
         values["next"] = int(next_date.timestamp())
-    async with db.connect() as conn:
+    async with transaction(db) as conn:
         result = await conn.execute(
             f"UPDATE {db.references_schema}maintable SET {assignment}, "
             "pending_payment_hash = NULL, revision = revision + 1 WHERE id = :id "

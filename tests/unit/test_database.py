@@ -46,6 +46,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         await migrations.m003_namespace_cockroach_table(self.database)
         await migrations.m004_pending_payment(self.database)
         await migrations.m005_allowance_revision(self.database)
+        await migrations.m006_operational_history(self.database)
 
     async def asyncTearDown(self):
         if self.database.type == POSTGRES:
@@ -235,3 +236,78 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         health = await crud.get_scheduler_health()
         self.assertEqual(health["state"], "healthy")
         self.assertGreater(health["last_completed"], 0)
+
+    async def history_fixture(self):
+        start = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        allowance = await crud.create_allowance(
+            CreateAllowanceData(
+                name="Rollback",
+                wallet="wallet",
+                lightning_address="test@example.invalid",
+                amount=1,
+                start_datetime=start,
+                next_payment_date=start,
+                frequency_type="weekly",
+                memo="",
+            )
+        )
+        self.assertTrue(await crud.claim_payment(allowance, "rollback-hash"))
+        return await crud.get_allowance(allowance.id)
+
+    async def test_history_insert_failure_rolls_back_schedule_and_claim(self):
+        allowance = await self.history_fixture()
+        execute = crud.TransactionConnection.execute
+
+        async def fail_history(connection, query, values=None):
+            if "INSERT INTO" in query and "payment_history" in query:
+                raise RuntimeError("Injected history failure")
+            return await execute(connection, query, values)
+
+        with patch.object(crud.TransactionConnection, "execute", fail_history):
+            with self.assertRaisesRegex(RuntimeError, "Injected history"):
+                await crud.finish_payment_attempt(
+                    allowance, datetime(2090, 1, 1, tzinfo=timezone.utc), True
+                )
+        loaded = await crud.get_allowance(allowance.id)
+        self.assertEqual(loaded.next_payment_date, allowance.next_payment_date)
+        self.assertEqual(loaded.pending_payment_hash, allowance.pending_payment_hash)
+        self.assertEqual(loaded.revision, allowance.revision)
+        self.assertEqual(await crud.get_payment_history(allowance.id), [])
+
+    async def test_delete_failure_preserves_allowance_and_history(self):
+        allowance = await self.history_fixture()
+        await crud.finish_payment_attempt(allowance, None, True)
+        execute = crud.TransactionConnection.execute
+
+        async def fail_parent(connection, query, values=None):
+            if "DELETE FROM" in query and "maintable" in query:
+                raise RuntimeError("Injected parent deletion failure")
+            return await execute(connection, query, values)
+
+        with patch.object(crud.TransactionConnection, "execute", fail_parent):
+            with self.assertRaisesRegex(RuntimeError, "Injected parent"):
+                await crud.delete_allowance(allowance.id)
+        self.assertIsNotNone(await crud.get_allowance(allowance.id))
+        self.assertEqual(len(await crud.get_payment_history(allowance.id)), 1)
+
+    async def test_history_migration_failure_rolls_back_schema_and_can_retry(self):
+        for table in ("payment_history", "scheduler_health"):
+            await self.database.execute(
+                f"DROP TABLE {self.database.references_schema}{table}"
+            )
+        execute = crud.TransactionConnection.execute
+
+        async def fail_seed(connection, query, values=None):
+            if "INSERT INTO" in query and "scheduler_health" in query:
+                raise RuntimeError("Injected migration seed failure")
+            return await execute(connection, query, values)
+
+        with patch.object(crud.TransactionConnection, "execute", fail_seed):
+            async with self.database.connect() as connection:
+                with self.assertRaisesRegex(RuntimeError, "Injected migration"):
+                    await migrations.m006_operational_history(connection)
+        # Retrying would fail on existing tables if the DDL had been committed.
+        async with self.database.connect() as connection:
+            await migrations.m006_operational_history(connection)
+        self.assertEqual((await crud.get_scheduler_health())["state"], "starting")
+        self.assertEqual(await crud.get_payment_history("missing"), [])

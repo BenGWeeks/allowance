@@ -40,3 +40,28 @@ class ObservabilityTests(unittest.IsolatedAsyncioTestCase):
                 response = await client.get("/api/v1/allowance/test/history")
             self.assertEqual(response.status_code, 403)
             read.assert_not_awaited()
+
+    async def test_recent_start_is_not_hidden_by_old_completion(self):
+        now = int(time.time())
+        for state, started, completed, expected in (
+            ("running", now, now - 600, True),
+            ("healthy", now - 600, now, True),
+            ("running", now - 600, now - 900, False),
+            ("error", now, now, False),
+            ("starting", None, None, False),
+        ):
+            with self.subTest(state=state, started=started), patch.object(
+                crud,
+                "get_scheduler_health",
+                AsyncMock(
+                    return_value={
+                        "state": state,
+                        "last_started": started,
+                        "last_completed": completed,
+                    }
+                ),
+            ), patch.object(views_api, "get_allowances", AsyncMock(return_value=[])):
+                result = await views_api.api_allowance_health(
+                    SimpleNamespace(id="owned")
+                )
+                self.assertIs(result["scheduler_ok"], expected)
