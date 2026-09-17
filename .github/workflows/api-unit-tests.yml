@@ -60,6 +60,19 @@ jobs:
             "lnbits/lnbits:$LNBITS_VERSION" \
             /app/.venv/bin/python /app/lnbits/extensions/allowance/tests/run_unit_tests.py
 
+  postgres:
+    name: PostgreSQL (LNbits v1.6.1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pull test runtimes
+        run: |
+          docker pull postgres:15
+          docker pull lnbits/lnbits:v1.6.1
+      - name: Run isolated PostgreSQL regressions
+        run: bash tests/run_postgres_tests.sh
+
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -72,10 +85,23 @@ jobs:
         run: python -m pip install black==24.10.0 ruff==0.11.13
       - name: Check formatting and lint
         run: |
-          black --check *.py tests/unit tests/run_unit_tests.py
-          ruff check *.py tests/unit tests/run_unit_tests.py
+          black --check ./*.py tests/unit tests/run_unit_tests.py
+          ruff check ./*.py tests/unit tests/run_unit_tests.py
       - name: Check extension metadata
         run: |
           python -m json.tool config.json > /dev/null
           python -m json.tool manifest.json > /dev/null
           python -m json.tool extensions.json > /dev/null
+
+  required:
+    name: Allowance checks passed
+    if: always()
+    needs: [versions, regression, postgres, quality]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require all checks to succeed
+        env:
+          RESULTS: ${{ join(needs.*.result, ',') }}
+        run: |
+          test "$RESULTS" = "success,success,success,success"

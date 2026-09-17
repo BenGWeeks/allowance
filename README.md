@@ -183,7 +183,8 @@ docker run --rm --network none \
 
 The historical network/API/browser scripts remain available for manual dev
 testing. CI does not claim browser or PostgreSQL coverage. Configure the
-`quality` and `Regression (...)` jobs as required branch-protection checks.
+`Allowance checks passed` as the required branch-protection check. It aggregates
+all matrix, PostgreSQL and quality jobs under a stable name.
 
 The obsolete automatic Claude-review workflow was removed because its configured
 model is unavailable. CodeRabbit reviews require enabling the GitHub App for this
@@ -191,3 +192,30 @@ repository; comments requesting a review alone do not install the app.
 
 `.coderabbit.yaml` enables review of stacked PRs targeting `fix/*` or `ci/*`,
 as well as the default branch and `develop`, once the app has repository access.
+
+### Dev browser verification
+
+The Playwright lifecycle test creates an **inactive** monthly allowance, edits its
+name, amount and memo, reloads to verify persistence and unchanged schedule dates,
+then deletes it through the UI. API assertions confirm each result; cleanup only
+removes the record created by that run. It does not test Lightning settlement.
+
+Set `TEST_LNBITS_URL`, `LNBITS_ADMIN_USERNAME`, `LNBITS_ADMIN_PASSWORD` and
+`PAYLINK_EMAIL`, `ALLOWANCE_TEST_CREATE_AMOUNT` and `ALLOWANCE_TEST_EDIT_AMOUNT`
+(positive integer sats) in the ignored root `.env.local` or environment. Use an initialized
+dev instance with Allowance enabled and a wallet. Use a test recipient ending in
+`.invalid` for this inactive CRUD test.
+
+```bash
+cd tests
+npm ci
+npx playwright install chromium
+# Set this explicitly to the same dev URL as TEST_LNBITS_URL:
+export ALLOWANCE_UI_TEST_CONFIRM=http://127.0.0.1:5004
+npx playwright test --project=chromium
+```
+
+Screenshots and the HTML report are stored locally in ignored test output folders.
+Do not publish artifacts containing account information. Browser tests are run
+explicitly against dev; CI runs offline unit/SQLite regressions plus PostgreSQL
+regressions in disposable containers (`bash tests/run_postgres_tests.sh`).

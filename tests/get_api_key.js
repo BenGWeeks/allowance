@@ -70,7 +70,6 @@ async function getAdminApiKey(page = null) {
     const walletId = adminWallet.id;
     
     console.log(`✅ Found admin wallet: ${walletId}`);
-    console.log(`✅ Admin API key: ${adminKey}`);
     
     // Only dispose if we created our own context
     if (!page && apiContext.dispose) {

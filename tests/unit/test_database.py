@@ -1,9 +1,11 @@
+import os
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
+from uuid import uuid4
 
-from lnbits.db import SQLITE, Database
+from lnbits.db import POSTGRES, SQLITE, Database
 from lnbits.extensions.allowance import crud, migrations
 from lnbits.extensions.allowance.models import CreateAllowanceData
 from lnbits.settings import settings
@@ -11,19 +13,33 @@ from lnbits.settings import settings
 
 class DatabaseTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        # Own a temporary database even if somebody invokes this test locally.
-        if crud.db.type != SQLITE:
-            raise RuntimeError("Run database regressions in the isolated SQLite runner")
-        folder = tempfile.TemporaryDirectory(prefix="allowance-regression-")
-        self.addCleanup(folder.cleanup)
-        with patch.object(settings, "lnbits_data_folder", folder.name):
-            self.database = Database("ext_allowance_regression")
+        if crud.db.type == POSTGRES:
+            if (
+                os.environ.get("ALLOWANCE_POSTGRES_TEST") != "1"
+                or os.environ.get("LNBITS_DATABASE_URL")
+                != "postgres://allowance_tests@allowance-postgres-test:5432/allowance_tests"
+            ):
+                raise RuntimeError(
+                    "PostgreSQL tests require the disposable test container"
+                )
+            self.database = Database("ext_allowance_regression_" + uuid4().hex)
+        elif crud.db.type == SQLITE:
+            folder = tempfile.TemporaryDirectory(prefix="allowance-regression-")
+            self.addCleanup(folder.cleanup)
+            with patch.object(settings, "lnbits_data_folder", folder.name):
+                self.database = Database("ext_allowance_regression")
+        else:
+            raise RuntimeError("Unsupported regression database")
         patcher = patch.object(crud, "db", self.database)
         patcher.start()
         self.addCleanup(patcher.stop)
         await migrations.m001_initial(self.database)
+        await migrations.m002_namespace_postgres_table(self.database)
+        await migrations.m002_namespace_postgres_table(self.database)
 
     async def asyncTearDown(self):
+        if self.database.type == POSTGRES:
+            await self.database.execute(f"DROP SCHEMA {self.database.schema} CASCADE")
         await self.database.engine.dispose()
 
     async def test_persisted_schedule_and_error_tracking(self):
