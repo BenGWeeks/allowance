@@ -32,10 +32,10 @@ docker run -d --name "$container" --network "$network" \
   -e POSTGRES_USER=allowance_install -e POSTGRES_HOST_AUTH_METHOD=trust \
   postgres:15 -c timezone=America/New_York >/dev/null
 for attempt in {1..30}; do
-  if docker exec "$container" pg_isready -U allowance_install >/dev/null; then break; fi
+  if docker exec "$container" pg_isready -h 127.0.0.1 -U allowance_install >/dev/null; then break; fi
   sleep 1
 done
-docker exec "$container" pg_isready -U allowance_install
+docker exec "$container" pg_isready -h 127.0.0.1 -U allowance_install
 for mode in fresh upgrade; do
   docker exec "$container" createdb -U allowance_install "allowance_$mode"
   docker run --rm --network "$network" \
