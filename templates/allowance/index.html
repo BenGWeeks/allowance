@@ -137,7 +137,7 @@
               </q-td>
               <q-td auto-width>
                 <q-btn flat dense icon="history" aria-label="Payment history" @click="showHistory(props.row)"><q-tooltip>Payment history</q-tooltip></q-btn>
-                <q-btn v-if="props.row.pending_payment_hash" flat dense icon="sync" aria-label="Check payment status" @click="reconcileAllowance(props.row)"><q-tooltip>Check payment status</q-tooltip></q-btn>
+                <q-btn :disable="!props.row.pending_payment_hash" flat dense icon="sync" aria-label="Check payment status" @click="reconcileAllowance(props.row)"><q-tooltip>Check payment status</q-tooltip></q-btn>
                 <q-btn
                   flat
                   dense
