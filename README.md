@@ -234,3 +234,14 @@ If LNbits has no payment record (for example after a crash during submission), t
 claim stays protected. The server operator must verify the funding-source payment
 before changing that claim. Clearing the error message does not release it. Pausing
 prevents new claims but cannot cancel a payment already submitted to Lightning.
+
+### LNURL network policy
+
+Lightning-address discovery and invoice callbacks use public HTTPS endpoints on
+port 443 with IPv4 connectivity. IPv6-only endpoints are unsupported; IPv4-only
+egress prevents host-specific NAT64 translation from bypassing address checks. Private, loopback, link-local, multicast and translated IP destinations,
+credentials in URLs, and redirects are rejected. DNS results are validated at
+connection time and the connection is pinned to the validated IP while preserving
+TLS hostname verification. Requests have a ten-second total deadline and a 256 KiB
+response limit. Internal-only or onion LNURL services are not supported by this policy.
+Returned invoices must contain exactly the requested millisatoshi amount.

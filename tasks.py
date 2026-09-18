@@ -1,8 +1,8 @@
 import asyncio
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import quote
 
-import httpx
 from lnbits.bolt11 import decode as decode_invoice
 from lnbits.core.crud import get_standalone_payment
 from lnbits.core.services import pay_invoice
@@ -22,100 +22,55 @@ from .crud import (
     update_allowance_success,
 )
 from .models import Allowance
+from .safe_http import get_public_json, validate_url
 from .schedule import next_occurrence
 
 
 async def resolve_lightning_address(
     lightning_address: str,
 ) -> tuple[str, dict[str, Any]]:
-    """
-    Convert Lightning address (user@domain.com) to LNURL-pay endpoint
-    Returns tuple of (callback_url, lnurl_data)
-    """
-    if lightning_address.startswith("lnurl") or lightning_address.startswith("LNURL"):
-        # Already an LNURL, decode it
-        try:
-            decoded_url = lnurl_decode(lightning_address)
-            async with httpx.AsyncClient() as client:
-                response = await client.get(decoded_url, timeout=10.0)
-                response.raise_for_status()
-                lnurl_data = response.json()
-                return lnurl_data.get("callback"), lnurl_data
-        except Exception as e:
-            logger.error("Allowance operation: resolve_lightning_address")
-            raise Exception(f"Invalid LNURL: {lightning_address}") from e
-
-    if "@" not in lightning_address:
-        raise Exception(f"Invalid Lightning address format: {lightning_address}")
-
-    # Split the Lightning address
-    user, domain = lightning_address.split("@", 1)
-
-    # Construct the well-known URL
-    well_known_url = f"https://{domain}/.well-known/lnurlp/{user}"
-
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(well_known_url, timeout=10.0)
-            response.raise_for_status()
-
-            lnurl_data = response.json()
-            callback_url = lnurl_data.get("callback")
-
-            if not callback_url:
-                raise Exception("No callback URL found in LNURL-pay response")
-
-            return callback_url, lnurl_data
-
-    except httpx.HTTPError as e:
-        logger.error("Allowance operation: resolve_lightning_address")
-        raise Exception(
-            f"Failed to resolve Lightning address: {lightning_address}"
-        ) from e
-    except Exception as e:
-        logger.error("Allowance operation: resolve_lightning_address")
-        raise Exception(
-            f"Failed to resolve Lightning address: {lightning_address}"
-        ) from e
+    if "@" not in lightning_address and lightning_address.lower().startswith("lnurl"):
+        url = str(lnurl_decode(lightning_address))
+    else:
+        if lightning_address.count("@") != 1:
+            raise ValueError("Invalid Lightning address")
+        user, domain = lightning_address.split("@")
+        if not user or not domain or any(char in domain for char in "/?#\\"):
+            raise ValueError("Invalid Lightning address")
+        url = f"https://{domain}/.well-known/lnurlp/{quote(user, safe='')}"
+    data = await get_public_json(url)
+    minimum, maximum = data.get("minSendable"), data.get("maxSendable")
+    if (
+        data.get("tag") != "payRequest"
+        or type(minimum) is not int
+        or type(maximum) is not int
+        or not 0 < minimum <= maximum
+        or not isinstance(data.get("metadata"), str)
+    ):
+        raise ValueError("Invalid LNURL-pay response")
+    callback = data.get("callback")
+    if not isinstance(callback, str):
+        raise ValueError("Missing LNURL callback")
+    validate_url(callback)
+    comment_allowed = data.get("commentAllowed", 0)
+    if type(comment_allowed) is not int or not 0 <= comment_allowed <= 10000:
+        raise ValueError("Invalid LNURL comment limit")
+    return callback, data
 
 
 async def get_invoice_from_lnurl(
     callback_url: str, amount_msats: int, memo: str = ""
 ) -> str:
-    """
-    Get invoice from LNURL-pay callback URL
-    Returns the payment request (invoice)
-    """
-    try:
-        params: dict[str, int | str] = {
-            "amount": amount_msats,  # Amount in millisatoshis
-        }
-
-        if memo:
-            params["comment"] = memo
-
-        async with httpx.AsyncClient() as client:
-            response = await client.get(callback_url, params=params, timeout=10.0)
-            response.raise_for_status()
-
-            invoice_data = response.json()
-
-            if invoice_data.get("status") == "ERROR":
-                error_reason = invoice_data.get("reason", "Unknown error")
-                raise Exception(f"LNURL-pay error: {error_reason}")
-
-            payment_request = invoice_data.get("pr")
-            if not payment_request:
-                raise Exception("No payment request found in LNURL-pay response")
-
-            return payment_request
-
-    except httpx.HTTPError as e:
-        logger.error("Allowance operation: get_invoice_from_lnurl")
-        raise Exception("Failed to get invoice from LNURL endpoint") from e
-    except Exception as e:
-        logger.error("Allowance operation: get_invoice_from_lnurl")
-        raise Exception("Failed to get invoice from LNURL endpoint") from e
+    params: dict[str, int | str] = {"amount": amount_msats}
+    if memo:
+        params["comment"] = memo
+    data = await get_public_json(callback_url, params=params)
+    if data.get("status") == "ERROR":
+        raise ValueError("LNURL endpoint rejected the invoice request")
+    invoice = data.get("pr")
+    if not isinstance(invoice, str) or not invoice:
+        raise ValueError("Missing LNURL invoice")
+    return invoice
 
 
 async def execute_lightning_address_payment(  # noqa: C901
@@ -200,7 +155,10 @@ async def execute_lightning_address_payment(  # noqa: C901
 
         # Step 4: Execute payment using LNBits pay_invoice
 
-        payment_hash = decode_invoice(payment_request).payment_hash
+        invoice = decode_invoice(payment_request)
+        if invoice.amount_msat != amount_msats:
+            raise ValueError("Invoice amount does not match the requested amount")
+        payment_hash = invoice.payment_hash
         if not await claim_payment(allowance, payment_hash):
             return None
         allowance.pending_payment_hash = payment_hash
