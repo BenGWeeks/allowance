@@ -1,58 +1,43 @@
+name: Prepare release
+
 on:
   push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: allowance-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  checks:
+    uses: ./.github/workflows/api-unit-tests.yml
+
   release:
+    needs: checks
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v3
-      - name: Create github release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.ref_name }}
-        run: |
-          gh release create "$tag" --generate-notes
-
-  pullrequest:
-    needs: [release]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.EXT_GITHUB }}
-          repository: lnbits/lnbits-extensions
-          path: './lnbits-extensions'
-
-      - name: setup git user
-        run: |
-          git config --global user.name "alan"
-          git config --global user.email "alan@lnbits.com"
-
-      - name: Create pull request in extensions repo
+          persist-credentials: false
+      - name: Build verified release assets
         env:
-          GH_TOKEN: ${{ secrets.EXT_GITHUB }}
-          repo_name: '${{ github.event.repository.name }}'
-          tag: '${{ github.ref_name }}'
-          branch: 'update-${{ github.event.repository.name }}-${{ github.ref_name }}'
-          title: '[UPDATE] ${{ github.event.repository.name }} to ${{ github.ref_name }}'
-          body: 'https://github.com/lnbits/${{ github.event.repository.name }}/releases/${{ github.ref_name }}'
-          archive: 'https://github.com/lnbits/${{ github.event.repository.name }}/archive/refs/tags/${{ github.ref_name }}.zip'
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
         run: |
-          cd lnbits-extensions
-          git checkout -b $branch
-
-          # if there is another open PR
-          git pull origin $branch || echo "branch does not exist"
-
-          sh util.sh update_extension $repo_name $tag
-
-          git add -A
-          git commit -am "$title"
-          git push origin $branch
-
-          # check if pr exists before creating it
-          gh config set pager cat
-          check=$(gh pr list -H $branch | wc -l)
-          test $check -ne 0 || gh pr create --title "$title" --body "$body" --repo lnbits/lnbits-extensions
+          python3 scripts/build_release.py --tag "$RELEASE_TAG" \
+            --repository "$RELEASE_REPOSITORY" --output /tmp/allowance-release
+      - name: Create draft release for maintainer approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" --verify-tag --draft --generate-notes \
+            /tmp/allowance-release/*.zip \
+            /tmp/allowance-release/SHA256SUMS \
+            /tmp/allowance-release/release-manifest.json
