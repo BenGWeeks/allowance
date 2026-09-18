@@ -42,7 +42,7 @@ async def resolve_lightning_address(
                 lnurl_data = response.json()
                 return lnurl_data.get("callback"), lnurl_data
         except Exception as e:
-            logger.error(f"Failed to decode LNURL: {e}")
+            logger.error("Allowance operation: resolve_lightning_address")
             raise Exception(f"Invalid LNURL: {lightning_address}") from e
 
     if "@" not in lightning_address:
@@ -68,12 +68,12 @@ async def resolve_lightning_address(
             return callback_url, lnurl_data
 
     except httpx.HTTPError as e:
-        logger.error(f"HTTP error resolving Lightning address {lightning_address}: {e}")
+        logger.error("Allowance operation: resolve_lightning_address")
         raise Exception(
             f"Failed to resolve Lightning address: {lightning_address}"
         ) from e
     except Exception as e:
-        logger.error(f"Error resolving Lightning address {lightning_address}: {e}")
+        logger.error("Allowance operation: resolve_lightning_address")
         raise Exception(
             f"Failed to resolve Lightning address: {lightning_address}"
         ) from e
@@ -111,10 +111,10 @@ async def get_invoice_from_lnurl(
             return payment_request
 
     except httpx.HTTPError as e:
-        logger.error(f"HTTP error getting invoice from LNURL: {e}")
+        logger.error("Allowance operation: get_invoice_from_lnurl")
         raise Exception("Failed to get invoice from LNURL endpoint") from e
     except Exception as e:
-        logger.error(f"Error getting invoice from LNURL: {e}")
+        logger.error("Allowance operation: get_invoice_from_lnurl")
         raise Exception("Failed to get invoice from LNURL endpoint") from e
 
 
@@ -141,9 +141,6 @@ async def execute_lightning_address_payment(  # noqa: C901
 
         if allowance.currency and allowance.currency not in ["sats", "satoshis"]:
             # Need to convert fiat to sats
-            logger.info(
-                f"💱 Converting {allowance.amount} {allowance.currency} to sats"
-            )
 
             amount_sats = await fiat_amount_as_satoshis(
                 allowance.amount, allowance.currency.upper()
@@ -156,7 +153,6 @@ async def execute_lightning_address_payment(  # noqa: C901
         amount_msats = int(amount_sats * 1000)
 
         # Step 1: Resolve Lightning address to LNURL-pay endpoint
-        logger.info(f"🔍 Resolving Lightning address: {allowance.lightning_address}")
         callback_url, lnurl_data = await resolve_lightning_address(
             allowance.lightning_address
         )
@@ -190,28 +186,11 @@ async def execute_lightning_address_payment(  # noqa: C901
             )
 
         # Step 3: Get invoice from LNURL-pay endpoint with appropriate memo
-        currency_display = (
-            f"{allowance.amount} {allowance.currency}"
-            if allowance.currency and allowance.currency != "sats"
-            else f"{amount_sats} sats"
-        )
-        logger.info(f"📋 Getting invoice for {currency_display} ({amount_sats} sats)")
-
         # Prepare memo based on comment allowance
         memo = ""
         if comment_allowed > 0:
             desired_memo = allowance.memo or f"#allowance: {allowance.name}"
             memo = desired_memo[:comment_allowed]  # Truncate to allowed length
-            if len(desired_memo) > comment_allowed:
-                logger.info(
-                    f"⚠️ Memo truncated from {len(desired_memo)} to "
-                    f"{comment_allowed} characters"
-                )
-        else:
-            logger.info(
-                "ℹ️ LNURL endpoint doesn't accept comments, "  # noqa: RUF001
-                "sending without memo"
-            )
 
         payment_request = await get_invoice_from_lnurl(
             callback_url,
@@ -220,7 +199,6 @@ async def execute_lightning_address_payment(  # noqa: C901
         )
 
         # Step 4: Execute payment using LNBits pay_invoice
-        logger.info("💸 Executing payment...")
 
         payment_hash = decode_invoice(payment_request).payment_hash
         if not await claim_payment(allowance, payment_hash):
@@ -246,7 +224,6 @@ async def execute_lightning_address_payment(  # noqa: C901
             await update_allowance_success(
                 allowance, int(datetime.now(timezone.utc).timestamp())
             )
-            logger.info(f"✅ Payment successful for allowance: {allowance.name}")
             return True
         else:
             error_msg = (
@@ -254,7 +231,7 @@ async def execute_lightning_address_payment(  # noqa: C901
                 if payment_result.pending
                 else "Payment failed"
             )
-            logger.error(f"❌ Payment failed for allowance: {allowance.name}")
+            logger.error("Allowance operation: execute_lightning_address_payment")
             await update_allowance_error(
                 allowance, error_msg, int(datetime.now(timezone.utc).timestamp())
             )
@@ -273,11 +250,9 @@ async def execute_lightning_address_payment(  # noqa: C901
             int(datetime.now(timezone.utc).timestamp()),
         )
         return False if e.status == "failed" else None
-    except Exception as e:
-        error_msg = str(e)
-        logger.error(
-            f"❌ Error executing payment for allowance {allowance.name}: {error_msg}"
-        )
+    except Exception:
+        error_msg = "Payment processing failed; check payment status before retrying"
+        logger.error("Allowance operation: execute_lightning_address_payment")
         # Store error information
         await update_allowance_error(
             allowance, error_msg, int(datetime.now(timezone.utc).timestamp())
@@ -328,20 +303,14 @@ async def check_and_process_allowances():  # noqa: C901
 
     while True:
         try:
-            logger.info("🔄 Checking allowances for scheduled payments...")
 
             # Get all active allowances
             allowances = await get_all_active_allowances()
-            logger.info(f"📊 Found {len(allowances)} active allowances to process")
             current_time = datetime.now(timezone.utc)
 
             # Process each allowance
             for allowance in allowances:
                 try:
-                    logger.debug(
-                        f"🔍 Checking allowance: {allowance.name} "
-                        f"(ID: {allowance.id[:8]}...)"
-                    )
 
                     # The query already filters for active=true,
                     # so no need to check again
@@ -353,17 +322,12 @@ async def check_and_process_allowances():  # noqa: C901
                     ):
                         start_datetime = ensure_timezone_aware(allowance.start_datetime)
                         if current_time < start_datetime:
-                            logger.info(
-                                f"⏳ Allowance {allowance.name} hasn't started yet "
-                                f"(starts at {start_datetime})"
-                            )
                             continue
 
                     # Check if end_datetime has passed
                     if hasattr(allowance, "end_datetime") and allowance.end_datetime:
                         end_datetime = ensure_timezone_aware(allowance.end_datetime)
                         if current_time > end_datetime:
-                            logger.info(f"⏰ Allowance {allowance.name} has expired")
                             # Deactivate the expired allowance
                             await deactivate_allowance(
                                 allowance.id, revision=allowance.revision
@@ -376,16 +340,7 @@ async def check_and_process_allowances():  # noqa: C901
                         allowance.next_payment_date
                     )
 
-                    logger.debug(
-                        f"⏰ {allowance.name}: next_payment={next_payment_date}, "
-                        f"current={current_time}, "
-                        f"due={current_time >= next_payment_date}"
-                    )
-
                     if current_time >= next_payment_date:
-                        logger.info(
-                            f"💸 Processing payment for allowance: {allowance.name}"
-                        )
 
                         try:
                             # Validate recurrence before attempting a payment.
@@ -418,33 +373,21 @@ async def check_and_process_allowances():  # noqa: C901
                             await finish_payment_attempt(allowance, next_date)
                             allowance.next_payment_date = next_date
 
-                            if success:
-                                logger.info(
-                                    f"✅ Next payment scheduled for: "
-                                    f"{allowance.next_payment_date}"
-                                )
-                            else:
+                            if not success:
                                 logger.error(
-                                    f"❌ Payment failed. Next attempt scheduled for: "
-                                    f"{allowance.next_payment_date}"
+                                    "Allowance operation: check_and_process_allowances"
                                 )
 
-                        except Exception as e:
+                        except Exception:
                             logger.error(
-                                f"❌ Error processing allowance {allowance.name}: {e!s}"
+                                "Allowance operation: check_and_process_allowances"
                             )
 
-                except Exception as e:
-                    logger.error(
-                        f"❌ Error handling allowance "
-                        f"{getattr(allowance, 'name', 'unknown')}: {e!s}"
-                    )
-                    import traceback
+                except Exception:
+                    logger.error("Allowance operation: check_and_process_allowances")
 
-                    logger.error(f"Traceback: {traceback.format_exc()}")
-
-        except Exception as e:
-            logger.error(f"❌ Error in allowance scheduler: {e!s}")
+        except Exception:
+            logger.error("Allowance operation: check_and_process_allowances")
 
         # Check every 60 seconds (1 minute minimum payment frequency)
         await asyncio.sleep(60)
