@@ -161,13 +161,14 @@ async def api_allowance(
     return data
 
 
-def validate_schedule_input(data: dict):
+def validate_schedule_input(data: dict, *, activating: bool = True):
     """Validate dates together, including existing fields on a partial update."""
     end = data.get("end_datetime")
     if end is not None and end < data["start_datetime"]:
         raise HTTPException(422, "end_datetime must not precede start_datetime")
     if (
-        data.get("active", True)
+        activating
+        and data.get("active", True)
         and end is not None
         and end < datetime.now(timezone.utc)
     ):
@@ -203,7 +204,9 @@ async def api_allowance_update(
         merged["memo"] = ""
     if merged.get("total") is None:
         merged["total"] = 0
-    validate_schedule_input(merged)
+    validate_schedule_input(
+        merged, activating=not allowance.active or changes.get("active") is True
+    )
     try:
         updated = await update_allowance(CreateAllowanceData(**merged))
         return updated.dict()
