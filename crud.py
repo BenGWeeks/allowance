@@ -56,7 +56,6 @@ async def create_allowance(data: CreateAllowanceData) -> Allowance:
 
     data.id = urlsafe_short_hash()
 
-    # Convert datetime objects to timestamps (integers) for database
     start_ts: Union[datetime, int] = data.start_datetime
     if isinstance(start_ts, datetime):
         start_ts = int(start_ts.timestamp())
@@ -73,8 +72,6 @@ async def create_allowance(data: CreateAllowanceData) -> Allowance:
     if created_ts and isinstance(created_ts, datetime):
         created_ts = int(created_ts.timestamp())
 
-    # Use direct SQL to avoid field name mapping issues
-    # Build the SQL based on whether end_datetime is NULL
     if end_ts is None:
         sql = f"""
         INSERT INTO {db.references_schema}maintable
@@ -191,7 +188,6 @@ async def delete_allowance(allowance_id: str) -> None:
 
 async def update_next_payment_date(allowance_id: str, next_payment_date) -> None:
     """Update only the next payment date for an allowance"""
-    # Convert datetime to timestamp integer as LNbits stores timestamps in DB
     from datetime import datetime
 
     if isinstance(next_payment_date, datetime):
@@ -199,7 +195,6 @@ async def update_next_payment_date(allowance_id: str, next_payment_date) -> None
     else:
         next_payment_ts = next_payment_date
 
-    # Bind the timestamp as data, just like the allowance ID.
     await db.execute(
         f"""
         UPDATE {db.references_schema}maintable
