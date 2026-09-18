@@ -29,7 +29,7 @@ from .schedule import next_occurrence
 async def resolve_lightning_address(
     lightning_address: str,
 ) -> tuple[str, dict[str, Any]]:
-    if lightning_address.lower().startswith("lnurl"):
+    if "@" not in lightning_address and lightning_address.lower().startswith("lnurl"):
         url = str(lnurl_decode(lightning_address))
     else:
         if lightning_address.count("@") != 1:
