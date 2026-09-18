@@ -223,16 +223,20 @@ async def reconcile_payment(allowance: Allowance, refresh: bool = False) -> bool
     """Inspect an existing claim only; never request or send a new invoice."""
     if not allowance.pending_payment_hash:
         return None
-    payment = await get_standalone_payment(
-        allowance.pending_payment_hash, wallet_id=allowance.wallet
-    )
-    if payment is None:
-        return None
-    status = payment
-    if payment.pending and refresh:
-        status = await check_transaction_status(
-            allowance.wallet, allowance.pending_payment_hash
+    try:
+        payment = await get_standalone_payment(
+            allowance.pending_payment_hash, wallet_id=allowance.wallet
         )
+        if payment is None:
+            return None
+        status = payment
+        if payment.pending and refresh:
+            status = await check_transaction_status(
+                allowance.wallet, allowance.pending_payment_hash
+            )
+    except Exception:
+        logger.warning("Could not inspect allowance payment status")
+        return None
     if status.pending:
         return None
     now = int(datetime.now(timezone.utc).timestamp())

@@ -146,3 +146,30 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                 tasks, "update_allowance_error", AsyncMock(return_value=False)
             ):
                 self.assertIsNone(await tasks.reconcile_payment(allowance))
+
+    async def test_status_lookup_failures_preserve_pending_claim(self):
+        for failing_call in ("get_standalone_payment", "check_transaction_status"):
+            allowance = self.allowance()
+            allowance.pending_payment_hash = "pending-hash"
+            before = allowance.dict()
+            pending = SimpleNamespace(pending=True, success=False)
+            with patch.object(
+                tasks, "get_standalone_payment", AsyncMock(return_value=pending)
+            ), patch.object(
+                tasks, "check_transaction_status", AsyncMock(return_value=pending)
+            ), patch.object(
+                tasks, failing_call, AsyncMock(side_effect=TimeoutError())
+            ), patch.object(
+                tasks, "update_allowance_success", AsyncMock()
+            ) as success, patch.object(
+                tasks, "update_allowance_error", AsyncMock()
+            ) as error, patch.object(
+                tasks, "pay_invoice", AsyncMock()
+            ) as pay:
+                self.assertIsNone(
+                    await tasks.reconcile_payment(allowance, refresh=True)
+                )
+                self.assertEqual(allowance.dict(), before)
+                success.assert_not_awaited()
+                error.assert_not_awaited()
+                pay.assert_not_awaited()

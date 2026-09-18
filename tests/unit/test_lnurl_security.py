@@ -126,3 +126,49 @@ class NetworkTests(unittest.IsolatedAsyncioTestCase):
             ):
                 with self.assertRaises(ValueError):
                     await tasks.resolve_lightning_address("user@example.com")
+
+    async def test_stalled_first_address_does_not_prevent_fallback(self):
+        stream = Stream(b'{"ok":true}')
+        addresses = ["8.8.8.8", "1.1.1.1"]
+        results = [(socket.AF_INET, 1, 6, "", (ip, 443)) for ip in addresses]
+        attempted = []
+        cancelled = asyncio.Event()
+
+        async def connect(host, port, timeout, local_address, socket_options):
+            attempted.append((host, timeout))
+            if host == addresses[0]:
+                try:
+                    await asyncio.Future()
+                finally:
+                    cancelled.set()
+            return stream
+
+        with patch.object(
+            asyncio.get_running_loop(), "getaddrinfo", AsyncMock(return_value=results)
+        ), patch.object(
+            httpcore.AnyIOBackend, "connect_tcp", AsyncMock(side_effect=connect)
+        ), patch.object(
+            safe_http, "REQUEST_TIMEOUT", 0.6
+        ):
+            result = await safe_http.get_public_json("https://recipient.example/pay")
+        self.assertEqual(result, {"ok": True})
+        self.assertTrue(cancelled.is_set())
+        self.assertEqual([host for host, _ in attempted], addresses)
+        self.assertTrue(all(0 < timeout < 0.6 for _, timeout in attempted))
+        self.assertEqual(stream.hostname, "recipient.example")
+
+    async def test_connect_timeout_tries_next_validated_address(self):
+        results = [
+            (socket.AF_INET, 1, 6, "", (ip, 443)) for ip in ("8.8.8.8", "1.1.1.1")
+        ]
+        with patch.object(
+            asyncio.get_running_loop(), "getaddrinfo", AsyncMock(return_value=results)
+        ), patch.object(
+            httpcore.AnyIOBackend,
+            "connect_tcp",
+            AsyncMock(side_effect=[httpcore.ConnectTimeout(), Stream(b"{}")]),
+        ) as connect:
+            self.assertEqual(
+                await safe_http.get_public_json("https://recipient.example/pay"), {}
+            )
+        self.assertEqual(connect.await_count, 2)
