@@ -8,6 +8,14 @@ window.app = Vue.createApp({
       // Detect user's locale for date formatting
       userLocale: navigator.language || 'en-GB',
       allowances: [],
+      healthWarning: '',
+      healthTimer: null,
+      historyDialog: {show: false, rows: [], loading: false},
+      historyColumns: [
+        {name: 'scheduled', label: 'Scheduled', field: row => this.formatDatetime(new Date(row.scheduled_at * 1000).toISOString()), align: 'left'},
+        {name: 'completed', label: 'Completed', field: row => this.formatDatetime(new Date(row.completed_at * 1000).toISOString()), align: 'left'},
+        {name: 'outcome', label: 'Outcome', field: 'outcome', align: 'left'}
+      ],
       currencies: [],
       fiatRates: {},
       allowanceTable: {
@@ -28,6 +36,7 @@ window.app = Vue.createApp({
           }},
           {name: 'next_payment_date', align: 'left', label: 'Next Payment', field: 'next_payment_date', sortable: true,
             sort: (a, b) => (Date.parse(a) || 0) - (Date.parse(b) || 0)},
+          {name: 'last_success_time', align: 'left', label: 'Last Success', field: 'last_success_time', sortable: true},
           {name: 'status', align: 'center', label: 'Status', field: 'active', sortable: true, sort: (a, b, rowA, rowB) => {
             // Sort by: Error (2), Active (1), Inactive (0)
             const getStatusValue = (row) => {
@@ -59,7 +68,38 @@ window.app = Vue.createApp({
     }
   },
   methods: {
+    async loadHealth() {
+      if (!this.g?.user?.wallets?.length) return
+      try {
+        const responses = await Promise.all(this.g.user.wallets.map(wallet =>
+          LNbits.api.request('GET', '/allowance/api/v1/health', wallet.inkey)))
+        const checks = responses.map(response => response.data)
+        if (checks.some(check => !check.scheduler_ok)) {
+          this.healthWarning = 'The allowance scheduler is not healthy. Contact the server operator.'
+        } else {
+          const overdue = checks.reduce((sum, check) => sum + check.overdue, 0)
+          const pending = checks.reduce((sum, check) => sum + check.pending, 0)
+          this.healthWarning = overdue || pending ? `${overdue} overdue allowances; ${pending} unresolved payments. Check their status.` : ''
+        }
+      } catch (_) {
+        this.healthWarning = 'Allowance status is unavailable. The extension may be disabled or unreachable.'
+      }
+    },
+    async showHistory(row) {
+      const wallet = this.g.user.wallets.find(wallet => wallet.id === row.wallet)
+      if (!wallet) return
+      this.historyDialog = {show: true, rows: [], loading: true}
+      try {
+        const response = await LNbits.api.request('GET', `/allowance/api/v1/allowance/${row.id}/history`, wallet.inkey)
+        this.historyDialog.rows = response.data
+      } catch (error) {
+        LNbits.utils.notifyApiError(error)
+      } finally {
+        this.historyDialog.loading = false
+      }
+    },
     getAllowances() {
+      this.loadHealth()
 
       this.allowanceTable.loading = true
       
@@ -614,7 +654,11 @@ window.app = Vue.createApp({
       // If end_datetime is cleared or in the future, user can freely toggle active
     }
   },
+  beforeUnmount() {
+    clearInterval(this.healthTimer)
+  },
   created() {
+    this.healthTimer = setInterval(() => this.loadHealth(), 60000)
     if (this.g?.user?.wallets?.length) {
       this.getAllowances()
       this.loadCurrencies()
