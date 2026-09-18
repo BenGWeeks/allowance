@@ -113,3 +113,36 @@ class ValidationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(save.await_args.args[0].memo, "")
             self.assertEqual(save.await_args.args[0].total, 0)
+
+    async def test_expired_allowance_can_be_edited_without_reactivation(self):
+        self.allowance.start_datetime = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        self.allowance.end_datetime = datetime(2021, 1, 1, tzinfo=timezone.utc)
+        for active in (True, False):
+            self.allowance.active = active
+            for payload in ({"name": "Renamed"}, {"amount": 2}, {"active": False}):
+                with self.subTest(active=active, payload=payload), patch.object(
+                    views_api, "get_allowance", AsyncMock(return_value=self.allowance)
+                ), patch.object(
+                    views_api,
+                    "update_allowance",
+                    AsyncMock(return_value=self.allowance),
+                ) as save:
+                    response = await self.client.put(
+                        "/api/v1/allowance/test", json={"revision": 0, **payload}
+                    )
+                    self.assertEqual(response.status_code, 200, response.text)
+                    save.assert_awaited_once()
+
+    async def test_explicit_activation_of_expired_allowance_is_rejected(self):
+        self.allowance.start_datetime = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        self.allowance.end_datetime = datetime(2021, 1, 1, tzinfo=timezone.utc)
+        for active in (True, False):
+            self.allowance.active = active
+            with patch.object(
+                views_api, "get_allowance", AsyncMock(return_value=self.allowance)
+            ), patch.object(views_api, "update_allowance", AsyncMock()) as save:
+                response = await self.client.put(
+                    "/api/v1/allowance/test", json={"revision": 0, "active": True}
+                )
+                self.assertEqual(response.status_code, 422)
+                save.assert_not_awaited()
