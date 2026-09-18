@@ -172,3 +172,25 @@ class NetworkTests(unittest.IsolatedAsyncioTestCase):
                 await safe_http.get_public_json("https://recipient.example/pay"), {}
             )
         self.assertEqual(connect.await_count, 2)
+
+    async def test_lightning_username_starting_with_lnurl_is_not_decoded(self):
+        data = {
+            "tag": "payRequest",
+            "minSendable": 1000,
+            "maxSendable": 2000,
+            "metadata": '[["text/plain","Test"]]',
+            "callback": "https://example.com/pay",
+        }
+        for username in ("lnurluser", "LNURLuser"):
+            with patch.object(
+                tasks, "get_public_json", AsyncMock(return_value=data)
+            ) as fetch, patch.object(tasks, "lnurl_decode") as decode:
+                callback, result = await tasks.resolve_lightning_address(
+                    f"{username}@example.com"
+                )
+                self.assertEqual(callback, data["callback"])
+                self.assertEqual(result, data)
+                fetch.assert_awaited_once_with(
+                    f"https://example.com/.well-known/lnurlp/{username}"
+                )
+                decode.assert_not_called()
