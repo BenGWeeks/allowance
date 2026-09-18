@@ -668,3 +668,42 @@ async def api_test_scheduler(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             detail=f"Error testing scheduler: {e!s}",
         ) from e
+
+
+@allowance_api_router.post("/api/v1/allowance/{allowance_id}/reconcile")
+async def api_allowance_reconcile(
+    allowance_id: str, wallet: WalletTypeInfo = Depends(require_admin_key)
+):
+    """Check a claimed payment without initiating a new payment, even if paused."""
+    from .crud import finish_payment_attempt
+    from .schedule import next_occurrence
+    from .tasks import reconcile_payment
+
+    allowance = await get_allowance(allowance_id)
+    if not allowance:
+        raise HTTPException(404, "Allowance not found")
+    if allowance.wallet != get_wallet_id(wallet):
+        raise HTTPException(403, "Not authorized to reconcile this allowance")
+    if not allowance.pending_payment_hash:
+        return {"pending": False, "message": "No unresolved payment"}
+    result = await reconcile_payment(allowance, refresh=True)
+    if result is None:
+        return {
+            "pending": True,
+            "message": "Payment remains unresolved. No new payment was sent. "
+            "If LNbits has no record, ask the server operator to verify the "
+            "funding-source payment before changing the claim.",
+        }
+    await finish_payment_attempt(
+        allowance,
+        next_occurrence(
+            allowance.start_datetime,
+            allowance.frequency_type,
+            datetime.now(timezone.utc),
+        ),
+    )
+    return {
+        "pending": False,
+        "success": result,
+        "message": "Payment status confirmed; schedule updated",
+    }
