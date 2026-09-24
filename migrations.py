@@ -26,7 +26,7 @@ async def _migration_transaction(database):
         atomic = _MigrationConnection(
             database.conn, database.type, database.name, database.schema
         )
-        if database.conn.in__migration_transaction():
+        if database.conn.in_transaction():
             async with database.conn.begin_nested():
                 yield atomic
         else:
