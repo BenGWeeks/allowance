@@ -245,3 +245,24 @@ connection time and the connection is pinned to the validated IP while preservin
 TLS hostname verification. Requests have a ten-second total deadline and a 256 KiB
 response limit. Internal-only or onion LNURL services are not supported by this policy.
 Returned invoices must contain exactly the requested millisatoshi amount.
+
+### Operational monitoring
+
+The allowance screen shows **Last Success**, the latest 50 completed attempts in
+**Payment history**, and warnings for overdue payments, unresolved claims or a
+stale scheduler. History starts when this update is installed; earlier payments
+remain in LNbits wallet history. Deleting an allowance also deletes its extension
+history. The history API supports `limit` (1–100) and `offset` for older entries.
+
+`GET /allowance/api/v1/health` accepts a wallet invoice key and reports only that
+wallet's overdue/pending counts, plus scheduler health. A heartbeat older than
+three minutes is unhealthy. Poll externally to detect an extension that is disabled
+or fails to load, because a disabled extension cannot report its own health.
+
+Run `python3 scripts/check_allowance_health.py` from your uptime monitor or cron
+with `ALLOWANCE_URL` (the LNbits base URL) and `ALLOWANCE_INVOICE_KEY` supplied through
+a protected environment file. Use one check per wallet that has allowances.
+Exit code 0 means healthy; 2 means attention is required, including 404, authentication
+failure, stale heartbeat or an unreachable server. Configure your monitor to alert
+on nonzero exits. The script performs no writes or payments and never prints the key.
+HTTPS is required except for loopback development URLs; redirects are rejected.

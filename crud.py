@@ -1,8 +1,10 @@
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional, Union
 
-from lnbits.db import POSTGRES, Database
+from lnbits.db import POSTGRES, SQLITE, Connection, Database
 from lnbits.helpers import urlsafe_short_hash
+from sqlalchemy import text
 
 from .models import Allowance, CreateAllowanceData
 
@@ -18,6 +20,35 @@ class AllowanceDatabase(Database):
 
 
 db = AllowanceDatabase("ext_allowance")
+
+
+class TransactionConnection(Connection):
+    """Leave commit/rollback to the transaction, unlike LNbits Connection.execute."""
+
+    async def execute(self, query: str, values: Optional[dict] = None):
+        params = self.rewrite_values(values) if values else {}
+        return await self.conn.execute(text(self.rewrite_query(query)), params)
+
+
+@asynccontextmanager
+async def transaction(database):
+    if isinstance(database, Database):
+        async with database.connect() as connection:
+            async with transaction(connection) as atomic:
+                yield atomic
+    else:
+        atomic = TransactionConnection(
+            database.conn, database.type, database.name, database.schema
+        )
+        if database.conn.in_transaction():
+            async with database.conn.begin_nested():
+                yield atomic
+        else:
+            async with database.conn.begin():
+                # SQLite's legacy driver does not begin a transaction for DDL.
+                if database.type == SQLITE:
+                    await database.conn.exec_driver_sql("BEGIN")
+                yield atomic
 
 
 async def create_allowance(data: CreateAllowanceData) -> Allowance:
@@ -146,10 +177,16 @@ async def update_allowance(data: CreateAllowanceData) -> Allowance:
 
 
 async def delete_allowance(allowance_id: str) -> None:
-    await db.execute(
-        f"DELETE FROM {db.references_schema}maintable WHERE id = :id",
-        {"id": allowance_id},
-    )
+    async with transaction(db) as conn:
+        await conn.execute(
+            f"DELETE FROM {db.references_schema}payment_history "
+            "WHERE allowance_id = :id",
+            {"id": allowance_id},
+        )
+        await conn.execute(
+            f"DELETE FROM {db.references_schema}maintable WHERE id = :id",
+            {"id": allowance_id},
+        )
 
 
 async def update_next_payment_date(allowance_id: str, next_payment_date) -> None:
@@ -277,7 +314,9 @@ async def claim_payment(allowance: Allowance, payment_hash: str) -> bool:
     return result.rowcount == 1
 
 
-async def finish_payment_attempt(allowance: Allowance, next_date) -> None:
+async def finish_payment_attempt(
+    allowance: Allowance, next_date, outcome: Optional[bool] = None
+) -> None:
     """Atomically release this attempt and advance or finish its schedule."""
     values = {
         "id": allowance.id,
@@ -295,9 +334,52 @@ async def finish_payment_attempt(allowance: Allowance, next_date) -> None:
     else:
         assignment = f"next_payment_date = {db.timestamp_placeholder('next')}"
         values["next"] = int(next_date.timestamp())
-    await db.execute(
-        f"UPDATE {db.references_schema}maintable SET {assignment}, "
-        "pending_payment_hash = NULL, revision = revision + 1 WHERE id = :id "
-        f"AND {condition} AND next_payment_date = {db.timestamp_placeholder('due')}",
-        values,
+    async with transaction(db) as conn:
+        result = await conn.execute(
+            f"UPDATE {db.references_schema}maintable SET {assignment}, "
+            "pending_payment_hash = NULL, revision = revision + 1 WHERE id = :id "
+            f"AND {condition} "
+            f"AND next_payment_date = {db.timestamp_placeholder('due')}",
+            values,
+        )
+        if result.rowcount == 1 and outcome is not None:
+            await conn.execute(
+                f"INSERT INTO {db.references_schema}payment_history "
+                "(id, allowance_id, scheduled_at, completed_at, outcome, payment_hash) "
+                "VALUES (:event, :id, :due, :completed, :outcome, :hash) "
+                "ON CONFLICT (id) DO NOTHING",
+                {
+                    "event": f"{allowance.id}:{values['due']}",
+                    "id": allowance.id,
+                    "due": values["due"],
+                    "completed": int(datetime.now(timezone.utc).timestamp()),
+                    "outcome": "succeeded" if outcome else "failed",
+                    "hash": allowance.pending_payment_hash,
+                },
+            )
+
+
+async def get_payment_history(allowance_id: str, limit: int = 50, offset: int = 0):
+    rows = await db.fetchall(
+        f"SELECT * FROM {db.references_schema}payment_history "
+        "WHERE allowance_id = :id ORDER BY completed_at DESC, id DESC "
+        "LIMIT :limit OFFSET :offset",
+        {"id": allowance_id, "limit": limit, "offset": offset},
     )
+    return [dict(row) for row in rows]
+
+
+async def record_scheduler_heartbeat(state: str):
+    field = "last_started" if state == "running" else "last_completed"
+    await db.execute(
+        f"UPDATE {db.references_schema}scheduler_health "
+        f"SET {field} = :now, state = :state WHERE id = 'worker'",
+        {"now": int(datetime.now(timezone.utc).timestamp()), "state": state},
+    )
+
+
+async def get_scheduler_health():
+    row = await db.fetchone(
+        f"SELECT * FROM {db.references_schema}scheduler_health WHERE id = 'worker'"
+    )
+    return dict(row) if row else {}

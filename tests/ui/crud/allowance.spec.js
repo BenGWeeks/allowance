@@ -16,6 +16,8 @@ test('create, edit, reload and delete a monthly allowance through the UI', async
   const name = `Playwright allowance ${Date.now()}`;
   const updatedName = `${name} edited`;
   const errors = [];
+  const browserLogs = [];
+  page.on('console', message => browserLogs.push(message.text()));
   page.on('pageerror', error => errors.push(error.message));
   await login(page);
   const key = await getAdminApiKey(page);
@@ -52,7 +54,12 @@ test('create, edit, reload and delete a monthly allowance through the UI', async
     await expect(page.getByRole('row').filter({hasText: name})).toBeVisible();
     await page.screenshot({path: testInfo.outputPath('created.png'), fullPage: true});
 
+    await expect(page.getByRole('cell', {name: 'Last Success', exact: true})).toBeVisible();
+    expect((await page.request.get(`${config.baseUrl}/allowance/api/v1/health`, {headers})).status()).toBe(200);
     let row = page.getByRole('row').filter({hasText: name});
+    await row.getByRole('button', {name: 'Payment history', exact: true}).click();
+    await expect(page.getByRole('dialog').getByText('No recorded payments yet')).toBeVisible();
+    await page.getByRole('dialog').getByRole('button', {name: 'Close', exact: true}).click();
     await row.getByRole('button', {name: 'Edit allowance', exact: true}).click();
     await expect(dialog.getByLabel('Start date & time *', {exact: true})).toBeDisabled();
     await expect(dialog.locator('.q-select').filter({hasText: 'Frequency *'})).toHaveClass(/disabled/);
@@ -87,6 +94,7 @@ test('create, edit, reload and delete a monthly allowance through the UI', async
     createdId = null;
     await page.screenshot({path: testInfo.outputPath('deleted.png'), fullPage: true});
     expect(errors).toEqual([]);
+    expect(browserLogs.some(message => message.includes(key))).toBe(false);
   } finally {
     // Remove only this run's record if a browser assertion fails midway.
     if (createdId) {
