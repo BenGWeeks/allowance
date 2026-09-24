@@ -221,3 +221,16 @@ Screenshots and the HTML report are stored locally in ignored test output folder
 Do not publish artifacts containing account information. Browser tests are run
 explicitly against dev; CI runs offline unit/SQLite regressions plus PostgreSQL
 regressions in disposable containers (`bash tests/run_postgres_tests.sh`).
+
+### Unresolved payments
+
+A **Pending** badge means an invoice has been claimed but its final outcome is
+not yet known. Use **Check payment status** to query LNbits without sending a new
+payment. This also works while the allowance is paused. Once a terminal status is
+confirmed, the schedule advances from its original anchor, skipping missed periods.
+An explicit LNbits payment rejection is terminal; timeouts and unknown errors are not.
+
+If LNbits has no payment record (for example after a crash during submission), the
+claim stays protected. The server operator must verify the funding-source payment
+before changing that claim. Clearing the error message does not release it. Pausing
+prevents new claims but cannot cancel a payment already submitted to Lightning.

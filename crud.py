@@ -197,37 +197,49 @@ async def get_all_active_allowances() -> list[Allowance]:
     )
 
 
-async def update_allowance_error(
-    allowance_id: str, error_message: str, error_time: int
-) -> None:
-    """Store error information for an allowance"""
-    await db.execute(
-        f"""
-        UPDATE {db.references_schema}maintable
-        SET last_error = :error_message,
-            last_error_time = {db.timestamp_placeholder("error_time")}
-        WHERE id = :allowance_id
-        """,
+def payment_state_filter(allowance: Allowance):
+    condition = (
+        "pending_payment_hash = :hash"
+        if allowance.pending_payment_hash
+        else "pending_payment_hash IS NULL AND revision = :revision"
+    )
+    return (
+        f"id = :id AND {condition} "
+        f"AND next_payment_date = {db.timestamp_placeholder('due')}",
         {
-            "error_message": error_message,
-            "error_time": error_time,
-            "allowance_id": allowance_id,
+            "id": allowance.id,
+            "hash": allowance.pending_payment_hash,
+            "revision": allowance.revision,
+            "due": int(allowance.next_payment_date.timestamp()),
         },
     )
 
 
-async def update_allowance_success(allowance_id: str, success_time: int) -> None:
-    """Clear error and store success time for an allowance"""
-    await db.execute(
-        f"""
-        UPDATE {db.references_schema}maintable
-        SET last_error = NULL,
-            last_error_time = NULL,
-            last_success_time = {db.timestamp_placeholder("success_time")}
-        WHERE id = :allowance_id
-        """,
-        {"success_time": success_time, "allowance_id": allowance_id},
+async def update_allowance_error(
+    allowance: Allowance, error_message: str, error_time: int
+) -> bool:
+    """Record an error only while the observed occurrence still owns the claim."""
+    condition, values = payment_state_filter(allowance)
+    result = await db.execute(
+        f"UPDATE {db.references_schema}maintable SET last_error = :error_message, "
+        f"last_error_time = {db.timestamp_placeholder('error_time')} "
+        f"WHERE {condition}",
+        {**values, "error_message": error_message, "error_time": error_time},
     )
+    return result.rowcount == 1
+
+
+async def update_allowance_success(allowance: Allowance, success_time: int) -> bool:
+    """Record success only while the observed occurrence still owns the claim."""
+    condition, values = payment_state_filter(allowance)
+    result = await db.execute(
+        f"UPDATE {db.references_schema}maintable SET last_error = NULL, "
+        "last_error_time = NULL, "
+        f"last_success_time = {db.timestamp_placeholder('success_time')} "
+        f"WHERE {condition}",
+        {**values, "success_time": success_time},
+    )
+    return result.rowcount == 1
 
 
 async def clear_allowance_error(allowance_id: str) -> None:
