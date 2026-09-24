@@ -40,12 +40,13 @@ async def main():
             "postgres://allowance_install@allowance-install-postgres:5432/allowance_fresh",
             "postgres://allowance_install@allowance-install-postgres:5432/allowance_upgrade",
             "postgres://allowance_install@allowance-install-postgres:5432/allowance_warm_upgrade",
+            "postgres://allowance_install@allowance-install-postgres:5432/allowance_cached_upgrade",
         ),
         "Only disposable installation test databases are allowed",
     )
     mode, candidate, previous = sys.argv[1:]
     fixture = Path(settings.lnbits_data_folder) / "upgrade-fixture.json"
-    if mode not in {"upgrade", "warm_upgrade", "verify_restart"}:
+    if mode not in {"upgrade", "warm_upgrade"}:
         await migrate_databases()
     if mode == "prepare":
         await install(previous)
@@ -82,20 +83,27 @@ async def main():
         fixture.write_text(json.dumps({"id": record.id, "date": date.isoformat()}))
         await crud.db.engine.dispose()
         return
-    if mode not in {"fresh", "upgrade", "warm_upgrade", "verify_restart"}:
+    if mode not in {
+        "fresh",
+        "upgrade",
+        "warm_upgrade",
+        "cached_upgrade",
+        "verify_restart",
+    }:
         raise ValueError("Expected fresh or upgrade mode")
 
-    if mode == "warm_upgrade":
+    if mode in {"warm_upgrade", "cached_upgrade"}:
         from lnbits.extensions.allowance import crud as legacy_crud
 
         require(not hasattr(legacy_crud, "transaction"), "Expected v1.0.6 cached CRUD")
+        cached = "lnbits.extensions.allowance.migrations" in sys.modules
         require(
-            "lnbits.extensions.allowance.migrations" not in sys.modules,
-            "Reproduce freshly loaded migrations with legacy CRUD still cached",
+            cached == (mode == "cached_upgrade"), "Unexpected migration cache state"
         )
         await install(candidate)
         require(
-            (await get_db_version("allowance")).version == 7, "Warm migration failed"
+            (await get_db_version("allowance")).version == (4 if cached else 7),
+            "Unexpected migration version before restart",
         )
         require(
             sys.modules["lnbits.extensions.allowance.crud"] is legacy_crud,
@@ -104,7 +112,11 @@ async def main():
         await legacy_crud.db.engine.dispose()
         return
 
-    ext = await install(candidate)
+    ext = (
+        InstallableExtension(id="allowance", name="Allowance", version="test")
+        if mode == "verify_restart"
+        else await install(candidate)
+    )
     from lnbits.extensions.allowance import crud
 
     version = await get_db_version("allowance")
@@ -149,10 +161,10 @@ async def main():
 
 
 if __name__ == "__main__":
-    if sys.argv[1] in {"upgrade", "warm_upgrade"}:
+    if sys.argv[1] in {"upgrade", "warm_upgrade", "cached_upgrade"}:
         subprocess.run([sys.executable, __file__, "prepare", *sys.argv[2:]], check=True)
     asyncio.run(main())
-    if sys.argv[1] == "warm_upgrade":
+    if sys.argv[1] in {"warm_upgrade", "cached_upgrade"}:
         subprocess.run(
             [sys.executable, __file__, "verify_restart", *sys.argv[2:]], check=True
         )

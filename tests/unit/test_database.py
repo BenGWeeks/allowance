@@ -326,6 +326,44 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await crud.get_scheduler_health())["state"], "starting")
         self.assertEqual(await crud.get_payment_history("missing"), [])
 
+    async def test_schedule_migration_failure_rolls_back_columns_and_can_retry(self):
+        columns = ("timezone_name", "retry_count", "retry_after", "retry_deadline")
+        await self.database.execute(
+            f"DROP TABLE {self.database.references_schema}wallet_limits"
+        )
+        for column in columns:
+            await self.database.execute(
+                f"ALTER TABLE {self.database.references_schema}maintable "
+                f"DROP COLUMN {column}"
+            )
+        execute = migrations._MigrationConnection.execute
+
+        async def fail_rewrite(connection, query, values=None):
+            if query.startswith("UPDATE") and "start_datetime" in query:
+                raise RuntimeError("Injected schedule migration failure")
+            return await execute(connection, query, values)
+
+        with patch.object(migrations._MigrationConnection, "execute", fail_rewrite):
+            async with self.database.connect() as connection:
+                with self.assertRaisesRegex(RuntimeError, "Injected schedule"):
+                    await migrations.m007_retry_and_local_schedule(connection)
+        if self.database.type == POSTGRES:
+            rows = await self.database.fetchall(
+                "SELECT column_name AS name FROM information_schema.columns "
+                "WHERE table_schema = :schema AND table_name = 'maintable'",
+                {"schema": self.database.schema},
+            )
+        else:
+            rows = await self.database.fetchall("PRAGMA table_info(maintable)")
+        self.assertFalse(set(columns) & {row["name"] for row in rows})
+        async with self.database.connect() as connection:
+            await migrations.m007_retry_and_local_schedule(connection)
+        # Recreating wallet_limits also proves its failed CREATE was rolled back.
+        await self.database.execute(
+            f"SELECT timezone_name, retry_count, retry_after, retry_deadline "
+            f"FROM {self.database.references_schema}maintable"
+        )
+
     async def test_history_migration_retry_preserves_committed_data(self):
         allowance = await self.history_fixture()
         await crud.finish_payment_attempt(allowance, None, True)
