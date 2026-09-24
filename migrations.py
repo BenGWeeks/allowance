@@ -1,6 +1,40 @@
 # Released migrations are append-only; add a new migration for schema changes.
 
-from typing import Any
+from contextlib import asynccontextmanager
+from typing import Any, Optional
+
+from lnbits.db import SQLITE, Connection, Database
+from sqlalchemy import text
+
+
+# Keep migrations independent of extension modules cached from older releases.
+class _MigrationConnection(Connection):
+    """Leave commit/rollback to the transaction, unlike LNbits Connection.execute."""
+
+    async def execute(self, query: str, values: Optional[dict] = None):
+        params = self.rewrite_values(values) if values else {}
+        return await self.conn.execute(text(self.rewrite_query(query)), params)
+
+
+@asynccontextmanager
+async def _migration_transaction(database):
+    if isinstance(database, Database):
+        async with database.connect() as connection:
+            async with _migration_transaction(connection) as atomic:
+                yield atomic
+    else:
+        atomic = _MigrationConnection(
+            database.conn, database.type, database.name, database.schema
+        )
+        if database.conn.in__migration_transaction():
+            async with database.conn.begin_nested():
+                yield atomic
+        else:
+            async with database.conn.begin():
+                # SQLite's legacy driver does not begin a transaction for DDL.
+                if database.type == SQLITE:
+                    await database.conn.exec_driver_sql("BEGIN")
+                yield atomic
 
 
 async def m001_initial(db: Any) -> None:
@@ -95,9 +129,7 @@ async def m005_allowance_revision(db: Any) -> None:
 
 
 async def m006_operational_history(db):
-    from .crud import transaction
-
-    async with transaction(db) as atomic:
+    async with _migration_transaction(db) as atomic:
         await atomic.execute(
             f"""
             CREATE TABLE IF NOT EXISTS {db.references_schema}payment_history (
@@ -130,9 +162,7 @@ async def m006_operational_history(db):
 async def m007_retry_and_local_schedule(db):
     from lnbits.db import POSTGRES, SQLITE
 
-    from .crud import transaction
-
-    async with transaction(db) as atomic:
+    async with _migration_transaction(db) as atomic:
         await atomic.execute(
             f"CREATE TABLE {db.references_schema}wallet_limits "
             "(wallet TEXT PRIMARY KEY)"

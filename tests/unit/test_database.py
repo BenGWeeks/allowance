@@ -297,14 +297,14 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
             await self.database.execute(
                 f"DROP TABLE {self.database.references_schema}{table}"
             )
-        execute = crud.TransactionConnection.execute
+        execute = migrations._MigrationConnection.execute
 
         async def fail_seed(connection, query, values=None):
             if "INSERT INTO" in query and "scheduler_health" in query:
                 raise RuntimeError("Injected migration seed failure")
             return await execute(connection, query, values)
 
-        with patch.object(crud.TransactionConnection, "execute", fail_seed):
+        with patch.object(migrations._MigrationConnection, "execute", fail_seed):
             async with self.database.connect() as connection:
                 with self.assertRaisesRegex(RuntimeError, "Injected migration"):
                     await migrations.m006_operational_history(connection)

@@ -39,12 +39,13 @@ async def main():
             "",
             "postgres://allowance_install@allowance-install-postgres:5432/allowance_fresh",
             "postgres://allowance_install@allowance-install-postgres:5432/allowance_upgrade",
+            "postgres://allowance_install@allowance-install-postgres:5432/allowance_warm_upgrade",
         ),
         "Only disposable installation test databases are allowed",
     )
     mode, candidate, previous = sys.argv[1:]
     fixture = Path(settings.lnbits_data_folder) / "upgrade-fixture.json"
-    if mode != "upgrade":
+    if mode not in {"upgrade", "warm_upgrade", "verify_restart"}:
         await migrate_databases()
     if mode == "prepare":
         await install(previous)
@@ -81,8 +82,27 @@ async def main():
         fixture.write_text(json.dumps({"id": record.id, "date": date.isoformat()}))
         await crud.db.engine.dispose()
         return
-    if mode not in {"fresh", "upgrade"}:
+    if mode not in {"fresh", "upgrade", "warm_upgrade", "verify_restart"}:
         raise ValueError("Expected fresh or upgrade mode")
+
+    if mode == "warm_upgrade":
+        from lnbits.extensions.allowance import crud as legacy_crud
+
+        require(not hasattr(legacy_crud, "transaction"), "Expected v1.0.6 cached CRUD")
+        require(
+            "lnbits.extensions.allowance.migrations" not in sys.modules,
+            "Reproduce freshly loaded migrations with legacy CRUD still cached",
+        )
+        await install(candidate)
+        require(
+            (await get_db_version("allowance")).version == 7, "Warm migration failed"
+        )
+        require(
+            sys.modules["lnbits.extensions.allowance.crud"] is legacy_crud,
+            "The test must retain the old CRUD module throughout installation",
+        )
+        await legacy_crud.db.engine.dispose()
+        return
 
     ext = await install(candidate)
     from lnbits.extensions.allowance import crud
@@ -101,7 +121,7 @@ async def main():
         (await crud.get_scheduler_health())["state"] == "starting",
         "Missing scheduler health",
     )
-    if mode == "upgrade":
+    if mode in {"upgrade", "verify_restart"}:
         saved = json.loads(fixture.read_text())
         date = datetime.fromisoformat(saved["date"])
         updated = await crud.get_allowance(saved["id"])
@@ -129,6 +149,10 @@ async def main():
 
 
 if __name__ == "__main__":
-    if sys.argv[1] == "upgrade":
+    if sys.argv[1] in {"upgrade", "warm_upgrade"}:
         subprocess.run([sys.executable, __file__, "prepare", *sys.argv[2:]], check=True)
     asyncio.run(main())
+    if sys.argv[1] == "warm_upgrade":
+        subprocess.run(
+            [sys.executable, __file__, "verify_restart", *sys.argv[2:]], check=True
+        )

@@ -1,4 +1,6 @@
+import ast
 import asyncio
+import inspect
 import hashlib
 import unittest
 from datetime import datetime, timezone
@@ -7,12 +9,21 @@ from unittest.mock import AsyncMock, patch
 
 from lnbits.core.models import KeyType, Wallet, WalletTypeInfo
 from lnbits.extensions import allowance as extension
-from lnbits.extensions.allowance import tasks, views_api
+from lnbits.extensions.allowance import migrations, tasks, views_api
 from lnbits.extensions.allowance.models import Allowance
 from lnbits.task_manager import task_manager
 
 
 class CompatibilityTests(unittest.IsolatedAsyncioTestCase):
+    def test_migrations_do_not_import_cached_extension_modules(self):
+        for node in ast.walk(ast.parse(inspect.getsource(migrations))):
+            if isinstance(node, ast.ImportFrom):
+                self.assertEqual(node.level, 0)
+                self.assertFalse((node.module or "").startswith("lnbits.extensions"))
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    self.assertFalse(alias.name.startswith("lnbits.extensions"))
+
     def test_wallet_wrapper_is_not_monkey_patched(self):
         self.assertNotIn("adminkey", WalletTypeInfo.__dict__)
         wallet = Wallet(
