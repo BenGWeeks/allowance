@@ -457,7 +457,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
             [row.id for row in await crud.get_all_active_allowances()], [second.id]
         )
 
-    async def test_sqlite_timestamp_migration_preserves_text_and_integer_values(self):
+    async def test_sqlite_timestamp_migration_normalizes_valid_dates(self):
         if self.database.type != SQLITE:
             self.skipTest("SQLite dynamic storage types only")
         with tempfile.TemporaryDirectory(prefix="allowance-legacy-") as folder:
@@ -470,6 +470,8 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
                 )
                 samples = {
                     "text": "2026-01-01 09:00:00",
+                    "offset": "2026-01-01T10:00:00+01:00",
+                    "invalid": "not-a-date",
                     "integer": 1767258000,
                     "fraction": 1767258000.75,
                 }
@@ -484,7 +486,9 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
                     for row in await legacy.fetchall("SELECT * FROM maintable")
                 }
                 for field in ("start_datetime", "next_payment_date"):
-                    self.assertEqual(rows["text"][field], samples["text"])
+                    self.assertEqual(rows["text"][field], samples["integer"])
+                    self.assertEqual(rows["offset"][field], samples["integer"])
+                    self.assertEqual(rows["invalid"][field], samples["invalid"])
                     self.assertEqual(rows["integer"][field], samples["integer"])
                     self.assertEqual(rows["fraction"][field], int(samples["fraction"]))
             finally:

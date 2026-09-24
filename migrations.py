@@ -157,3 +157,10 @@ async def m007_retry_and_local_schedule(db):
                 f"UPDATE {db.references_schema}maintable "
                 f"SET {column} = {expression}{condition}"
             )
+            if db.type == SQLITE:
+                await atomic.execute(
+                    f"UPDATE {db.references_schema}maintable "
+                    f"SET {column} = CAST(strftime('%s', {column}) AS INTEGER) "
+                    f"WHERE typeof({column}) = 'text' "
+                    f"AND strftime('%s', {column}) IS NOT NULL"
+                )
