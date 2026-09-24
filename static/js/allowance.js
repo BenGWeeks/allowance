@@ -224,6 +224,7 @@ window.app = Vue.createApp({
 
       const backendData = {
         id: data.id,
+        revision: data.revision,
         name: data.name,  // Keep name field as expected by backend
         memo: data.memo,
         wallet: data.wallet,
@@ -318,6 +319,7 @@ window.app = Vue.createApp({
       // Set data piece by piece to ensure reactivity
       this.formDialog.data = {
         id: clonedData.id,
+        revision: clonedData.revision,
         name: clonedData.name,
         wallet: clonedData.wallet,
         lightning_address: clonedData.lightning_address,

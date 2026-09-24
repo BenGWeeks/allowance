@@ -9,6 +9,7 @@ from pydantic import BaseModel, validator
 class CreateAllowanceData(BaseModel):
     id: Optional[str] = ""
     name: str
+    revision: int = 0
     wallet: Optional[str]
     lightning_address: str  # Lightning address like user@domain.com or LNURL
     amount: float = 0
@@ -40,6 +41,7 @@ class CreateAllowanceData(BaseModel):
 class Allowance(BaseModel):
     id: str
     name: str
+    revision: int = 0
     wallet: Optional[str] = None
     lightning_address: str
     amount: float = 0

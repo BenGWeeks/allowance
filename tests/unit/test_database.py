@@ -45,6 +45,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         await migrations.m002_namespace_postgres_table(self.database)
         await migrations.m003_namespace_cockroach_table(self.database)
         await migrations.m004_pending_payment(self.database)
+        await migrations.m005_allowance_revision(self.database)
 
     async def asyncTearDown(self):
         if self.database.type == POSTGRES:
@@ -108,3 +109,58 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await crud.get_all_active_allowances(), [])
         await crud.delete_allowance(created.id)
         self.assertIsNone(await crud.get_allowance(created.id))
+
+    async def test_edits_and_claims_cannot_use_stale_state(self):
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        created = await crud.create_allowance(
+            CreateAllowanceData(
+                name="Race",
+                wallet="wallet",
+                lightning_address="test@example.invalid",
+                amount=1,
+                start_datetime=now - timedelta(days=1),
+                next_payment_date=now,
+                frequency_type="weekly",
+                memo="",
+            )
+        )
+        stale = CreateAllowanceData(**created.dict())
+        future = now + timedelta(days=7)
+        await crud.finish_payment_attempt(created, future)
+        stale.name = "Renamed"
+        with self.assertRaises(crud.AllowanceConflictError):
+            await crud.update_allowance(stale)
+        current = await crud.get_allowance(created.id)
+        self.assertEqual(current.next_payment_date, future)
+        edited = CreateAllowanceData(**current.dict())
+        edited.next_payment_date = now  # editable updates must ignore this field
+        edited.name = "Renamed"
+        updated = await crud.update_allowance(edited)
+        self.assertEqual(updated.next_payment_date, future)
+        self.assertFalse(await crud.claim_payment(current, "stale-edit"))
+        await crud.deactivate_allowance(created.id)
+        paused = await crud.get_allowance(created.id)
+        self.assertFalse(await crud.claim_payment(paused, "paused"))
+        self.assertFalse(await crud.claim_payment(updated, "stale-active"))
+
+    async def test_stale_expiry_cannot_deactivate_an_edited_allowance(self):
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        allowance = await crud.create_allowance(
+            CreateAllowanceData(
+                name="Expiry race",
+                wallet="wallet",
+                lightning_address="test@example.invalid",
+                amount=1,
+                start_datetime=now,
+                next_payment_date=now,
+                frequency_type="weekly",
+                memo="",
+            )
+        )
+        edit = CreateAllowanceData(**allowance.dict())
+        edit.end_datetime = now + timedelta(days=7)
+        current = await crud.update_allowance(edit)
+        await crud.deactivate_allowance(allowance.id, revision=allowance.revision)
+        self.assertTrue((await crud.get_allowance(allowance.id)).active)
+        await crud.deactivate_allowance(current.id, revision=current.revision)
+        self.assertFalse((await crud.get_allowance(current.id)).active)

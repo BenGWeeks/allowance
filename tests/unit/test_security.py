@@ -82,6 +82,23 @@ class AuthorizationTests(unittest.IsolatedAsyncioTestCase):
             response = await self.client.get("/api/v1/allowance/private")
             self.assertEqual(response.status_code, 403)
 
+    async def test_update_requires_client_revision(self):
+        for payload in [
+            {"name": "Stale edit"},
+            {"revision": None},
+            {"revision": True},
+            {"revision": "0"},
+            {"revision": -1},
+        ]:
+            with patch.object(
+                views_api,
+                "get_allowance",
+                AsyncMock(return_value=SimpleNamespace(wallet=self.wallet.id)),
+            ), patch.object(views_api, "update_allowance", AsyncMock()) as save:
+                result = await self.client.put("/api/v1/allowance/test", json=payload)
+                self.assertEqual(result.status_code, 422)
+                save.assert_not_awaited()
+
 
 class QueryTests(unittest.IsolatedAsyncioTestCase):
     async def test_wallet_id_is_bound_as_data(self):
