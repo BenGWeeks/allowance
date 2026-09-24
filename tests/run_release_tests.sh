@@ -17,8 +17,12 @@ curl --fail --location --retry 3 --output "$work/previous.zip" \
   https://github.com/BenGWeeks/allowance/releases/download/v1.0.6/allowance-1.0.6.zip
 printf '%s  %s\n' 538620a14642d6200a8ddc000a5fa8557e9453bda6728c612b452a4d721fe4ce \
   "$work/previous.zip" | sha256sum --check
+curl --fail --location --retry 3 --output "$work/broken.zip" \
+  https://codeload.github.com/BenGWeeks/allowance/zip/20ec40e8f7df7b38efcec50343d3549201dc392e
+printf '%s  %s\n' 554faadf7f968e6bbb87c0300e4ce117bd10f9cf21365951a18c304de2b240aa \
+  "$work/broken.zip" | sha256sum --check
 candidate=$(basename "$work"/candidate/*.zip)
-for mode in fresh upgrade; do
+for mode in fresh upgrade warm_upgrade cached_upgrade failed_upgrade; do
   docker run --rm --network none \
     -e LNBITS_DATA_FOLDER=/tmp/allowance-install-test \
     -e LNBITS_BACKEND_WALLET_CLASS=FakeWallet -e LOGURU_LEVEL=ERROR \
@@ -36,7 +40,7 @@ for attempt in {1..30}; do
   sleep 1
 done
 docker exec "$container" pg_isready -h 127.0.0.1 -U allowance_install
-for mode in fresh upgrade; do
+for mode in fresh upgrade warm_upgrade cached_upgrade failed_upgrade; do
   docker exec "$container" createdb -U allowance_install "allowance_$mode"
   docker run --rm --network "$network" \
     -e LNBITS_DATABASE_URL="postgres://allowance_install@allowance-install-postgres:5432/allowance_$mode" \

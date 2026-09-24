@@ -37,10 +37,28 @@ pinned SHA256. It then uses LNbits' native installer, core migration runner and
 extension version tracking in disposable containers for fresh installation,
 upgrade and reinstallation on both SQLite and PostgreSQL. Upgrade fixtures are
 inactive, synthetic records, including a pending payment identity; the check
-verifies that their data and schedule survive. The baseline and upgrade phases
-use separate Python processes; this covers a restart-based upgrade, not a hot
-upgrade of an already loaded extension. Restart LNbits when deploying this release
-so the new Python modules and migrations are loaded. Containers use FakeWallet and have
+verifies that their data and schedule survive.
+
+The cold-upgrade test uses separate Python processes. The warm-upgrade test
+imports the previous release's runtime modules before installing the candidate in
+that same process, reproducing LNbits loading new migrations alongside cached old
+CRUD. It then starts a fresh process to verify the migrated data and candidate
+runtime. A second warm variant runs the real startup migrations first, retaining
+the old migrations module too: installation leaves the schema at version 4 until
+the subsequent startup applies the candidate migrations. Migrations must not
+import sibling extension modules.
+
+Deactivate Allowance before upgrading through the UI, then restart LNbits after
+installation so all new Python modules are loaded. Check activation and scheduler
+health after restarting. After a failed 1.1.0 attempt, restore the previous files
+and restart before trying 1.1.1; see the README recovery guidance. The tests do not claim that live route or scheduler
+replacement is safe without that restart.
+
+The v1.1.1 repair changes only how m006/m007 obtain their transaction helper; their
+SQL and schema versions are unchanged. Adding m008 would not fix installations
+blocked before m006 finishes. Already migrated databases do not rerun these steps.
+
+Containers use FakeWallet and have
 no external network access (PostgreSQL uses an internal Docker network).
 
 These checks cover archive loading and schema upgrades, not real Lightning

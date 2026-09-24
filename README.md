@@ -289,6 +289,22 @@ failure, stale heartbeat or an unreachable server. Configure your monitor to ale
 on nonzero exits. The script performs no writes or payments and never prints the key.
 HTTPS is required except for loopback development URLs; redirects are rejected.
 
+### Upgrading to 1.1.1
+
+Version 1.1.1 fixes the migration import error when upgrading from 1.0.6 through
+LNbits. Do not choose 1.1.0 for a UI upgrade.
+
+Deactivate Allowance before installing the update, then restart LNbits immediately
+after installation and check activation and scheduler health. LNbits can retain
+old Python modules in memory even after reporting a successful installation;
+the restart loads the candidate runtime and completes any deferred migrations.
+
+If you already attempted 1.1.0 and installation failed, ask the server operator
+to restore the previous extension files and restart LNbits before trying 1.1.1.
+The failed attempt can leave broken migrations cached and remove the extension
+files. Do not delete the extension database, reset its migration version, or clear
+pending payment hashes. Back up the databases before recovery or upgrading.
+
 ### Preparing releases
 
 See the [release guide](docs/releasing.md) for archive validation, draft releases,
