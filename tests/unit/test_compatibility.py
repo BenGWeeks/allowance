@@ -1,7 +1,7 @@
 import ast
 import asyncio
-import inspect
 import hashlib
+import inspect
 import unittest
 from datetime import datetime, timezone
 from types import SimpleNamespace
