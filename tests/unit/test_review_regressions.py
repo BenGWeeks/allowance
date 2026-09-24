@@ -309,3 +309,73 @@ class ReviewRegressions(unittest.IsolatedAsyncioTestCase):
             mocks["get_invoice_from_lnurl"].return_value = response.payment_request
             self.assertTrue(await tasks.execute_lightning_address_payment(allowance))
             mocks["pay_invoice"].assert_awaited_once()
+
+    async def test_free_slots_refill_without_waiting_for_next_minute(self):
+        now = datetime.now(timezone.utc)
+        for rows in (
+            [self.allowance(id=str(i), wallet=str(i)) for i in range(16)],
+            [
+                self.allowance(id=str(i), wallet="same", frequency_type="minutely")
+                for i in range(10)
+            ],
+        ):
+            workers = tasks.AllowanceWorkers()
+            process = AsyncMock()
+            with patch.object(tasks, "process_allowance", process):
+                try:
+                    for offset in range(2):
+                        instant = now + timedelta(minutes=offset)
+                        for _ in range(3):
+                            await workers.poll(rows, instant)
+                        self.assertEqual(process.await_count, len(rows) * (offset + 1))
+                    self.assertFalse(workers.running)
+                    self.assertFalse(workers.completed_in_poll)
+                finally:
+                    await workers.close()
+
+    async def test_unchanged_pending_row_is_not_polled_in_a_busy_loop(self):
+        now = datetime.now(timezone.utc)
+        workers = tasks.AllowanceWorkers()
+        row = self.allowance(pending_payment_hash="unknown")
+        with patch.object(tasks, "process_allowance", AsyncMock()) as process:
+            try:
+                await workers.poll([row], now)
+                for seconds in (1, 2, 59):
+                    await workers.poll([row], now + timedelta(seconds=seconds))
+                self.assertEqual(process.await_count, 1)
+                self.assertFalse(workers.completed_in_poll)
+                await workers.poll([row], now + timedelta(seconds=60))
+                self.assertEqual(process.await_count, 2)
+            finally:
+                await workers.close()
+
+    async def test_retry_expiry_skips_periods_before_the_retry_window(self):
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        due = now - timedelta(days=10)
+        allowance = self.allowance(
+            start_datetime=due,
+            next_payment_date=due,
+            frequency_type="daily",
+            retry_deadline=now,
+        )
+        with patch.object(
+            tasks, "execute_lightning_address_payment", AsyncMock(return_value=False)
+        ), patch.object(tasks, "finish_payment_attempt", AsyncMock()) as finish:
+            await tasks.process_allowance(allowance, now)
+            finish.assert_awaited_once_with(allowance, now, False)
+
+    async def test_new_occurrence_is_not_throttled_by_previous_observation(self):
+        now = datetime.now(timezone.utc)
+        row = self.allowance(
+            next_payment_date=now - timedelta(seconds=40), frequency_type="minutely"
+        )
+        workers = tasks.AllowanceWorkers()
+        with patch.object(tasks, "process_allowance", AsyncMock()) as process:
+            try:
+                await workers.poll([row], now)
+                row.next_payment_date = now + timedelta(seconds=20)
+                row.revision += 1
+                await workers.poll([row], now + timedelta(seconds=20))
+                self.assertEqual(process.await_count, 2)
+            finally:
+                await workers.close()

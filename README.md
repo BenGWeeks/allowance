@@ -165,7 +165,9 @@ source before repairing such a claim; never clear it merely to retry a payment.
 
 The scheduler polls independently of payment completion, with one in-flight
 worker per wallet and up to eight overall. Each worker takes at most five rows;
-wallets and rows rotate between polls so a backlog cannot monopolize scheduling.
+wallets and rows rotate between turns so a backlog cannot monopolize scheduling.
+Free slots are refilled immediately; unchanged pending rows are checked at most
+once a minute. New due work is fetched at least once per minute.
 Claimed payments have no extension-imposed cancelling timeout. New creation is limited to 100 allowances per wallet;
 existing records are retained. Invalid stored rows are logged and skipped so they
 cannot stop other users' payments. Operators must repair those rows separately.

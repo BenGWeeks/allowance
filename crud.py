@@ -5,7 +5,6 @@ from typing import Optional, Union
 from lnbits.db import POSTGRES, SQLITE, Connection, Database, dict_to_model
 from lnbits.helpers import urlsafe_short_hash
 from loguru import logger
-from pydantic import ValidationError
 from sqlalchemy import text
 
 from .models import Allowance, CreateAllowanceData
@@ -255,7 +254,7 @@ async def get_all_active_allowances() -> list[Allowance]:
     for row in rows:
         try:
             allowances.append(dict_to_model(dict(row), Allowance))
-        except (ValidationError, ValueError):
+        except Exception:
             logger.error(
                 "Skipping invalid allowance row {}; operator repair required", row["id"]
             )

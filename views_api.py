@@ -210,10 +210,15 @@ async def api_allowance_update(
         merged["memo"] = ""
     if merged.get("total") is None:
         merged["total"] = 0
+    payment_changes = {
+        key for key, value in changes.items() if value != getattr(allowance, key)
+    }
+    if not allowance.active and merged["active"]:
+        payment_changes.update({"amount", "currency", "lightning_address"})
     validate_schedule_input(
         merged,
         activating=not allowance.active or changes.get("active") is True,
-        changed=set(changes),
+        changed=payment_changes,
     )
     try:
         updated = await update_allowance(CreateAllowanceData(**merged))

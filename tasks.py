@@ -303,7 +303,7 @@ async def process_allowance(allowance: Allowance, current_time: datetime):
         return
     after = datetime.now(timezone.utc)
     if not success and allowance.retry_deadline and after >= allowance.retry_deadline:
-        after = allowance.next_payment_date
+        after = allowance.retry_deadline - timedelta(seconds=1)
     next_date = next_occurrence(
         allowance.start_datetime,
         allowance.frequency_type,
@@ -318,11 +318,22 @@ class AllowanceWorkers:
         self.running: dict[str, asyncio.Task] = {}
         self.last_wallet: str | None = None
         self.last_allowance: dict[str, str] = {}
+        self.last_checked: dict[str, tuple[datetime, tuple]] = {}
+        self.completed_in_poll = False
+
+    @staticmethod
+    def observation(allowance):
+        return (
+            allowance.revision,
+            allowance.next_payment_date,
+            allowance.pending_payment_hash,
+        )
 
     def collect(self) -> bool:
         failed = False
         for wallet, task in list(self.running.items()):
             if task.done():
+                self.completed_in_poll = True
                 del self.running[wallet]
                 if task.cancelled() or task.exception():
                     failed = True
@@ -330,9 +341,21 @@ class AllowanceWorkers:
         return failed
 
     async def poll(self, allowances: list[Allowance], now: datetime) -> bool:
+        self.completed_in_poll = False
         failed = self.collect()
+        ids = {a.id for a in allowances}
+        self.last_checked = {
+            key: value for key, value in self.last_checked.items() if key in ids
+        }
         wallets = defaultdict(list)
         for allowance in allowances:
+            checked = self.last_checked.get(allowance.id)
+            if (
+                checked
+                and checked[1] == self.observation(allowance)
+                and now < checked[0] + timedelta(seconds=60)
+            ):
+                continue
             if allowance.pending_payment_hash or (
                 allowance.active
                 and (
@@ -370,6 +393,7 @@ class AllowanceWorkers:
     async def process_wallet(self, wallet, records, now):
         for allowance in records:
             self.last_allowance[wallet] = allowance.id
+            self.last_checked[allowance.id] = (now, self.observation(allowance))
             await process_allowance(allowance, now)
 
     async def close(self):
@@ -383,6 +407,7 @@ async def check_and_process_allowances():
     workers = AllowanceWorkers()
     try:
         while True:
+            workers.completed_in_poll = False
             cycle_failed = False
             try:
                 await record_scheduler_heartbeat("running")
@@ -397,6 +422,15 @@ async def check_and_process_allowances():
                 await record_scheduler_heartbeat("error" if cycle_failed else "healthy")
             except Exception:
                 logger.error("Could not record allowance scheduler heartbeat")
-            await asyncio.sleep(60)
+            if workers.completed_in_poll:
+                await asyncio.sleep(0)
+            elif workers.running:
+                await asyncio.wait(
+                    workers.running.values(),
+                    timeout=60,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+            else:
+                await asyncio.sleep(60)
     finally:
         await workers.close()

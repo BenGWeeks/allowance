@@ -186,3 +186,34 @@ class ValidationTests(unittest.IsolatedAsyncioTestCase):
                 start_datetime="2090-01-01T00:00:00Z",
                 timezone_name="Invalid/Zone",
             )
+
+    async def test_ui_shaped_pause_allows_unchanged_legacy_payment_values(self):
+        self.allowance.currency = "XYZ"
+        self.allowance.lightning_address = "legacy-invalid"
+        payload = {
+            "revision": 0,
+            "name": "Renamed",
+            "amount": self.allowance.amount,
+            "currency": self.allowance.currency,
+            "lightning_address": self.allowance.lightning_address,
+            "wallet": self.allowance.wallet,
+            "active": False,
+            "memo": "",
+        }
+        with patch.object(
+            views_api, "get_allowance", AsyncMock(return_value=self.allowance)
+        ), patch.object(
+            views_api, "update_allowance", AsyncMock(return_value=self.allowance)
+        ) as save:
+            result = await self.client.put("/api/v1/allowance/test", json=payload)
+            self.assertEqual(result.status_code, 200)
+            save.assert_awaited_once()
+        self.allowance.active = False
+        with patch.object(
+            views_api, "get_allowance", AsyncMock(return_value=self.allowance)
+        ), patch.object(views_api, "update_allowance", AsyncMock()) as save:
+            result = await self.client.put(
+                "/api/v1/allowance/test", json={**payload, "active": True}
+            )
+            self.assertEqual(result.status_code, 422)
+            save.assert_not_awaited()

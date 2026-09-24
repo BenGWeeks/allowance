@@ -443,3 +443,16 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0].currency, "sats")
         self.assertTrue(rows[0].active)
+
+    async def test_malformed_sqlite_timestamp_does_not_block_valid_rows(self):
+        if self.database.type != SQLITE:
+            self.skipTest("PostgreSQL enforces timestamp column types")
+        first = await self.history_fixture()
+        second = await self.history_fixture()
+        await self.database.execute(
+            "UPDATE maintable SET created_at = '2024-01-01 00:00:00' WHERE id = :id",
+            {"id": first.id},
+        )
+        self.assertEqual(
+            [row.id for row in await crud.get_all_active_allowances()], [second.id]
+        )
