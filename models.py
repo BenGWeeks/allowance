@@ -1,5 +1,3 @@
-# Data models for your extension
-
 import math
 from datetime import datetime, timezone
 from typing import Literal, Optional
@@ -12,7 +10,7 @@ class CreateAllowanceData(BaseModel):
     name: str
     revision: int = 0
     wallet: Optional[str]
-    lightning_address: str  # Lightning address like user@domain.com or LNURL
+    lightning_address: str
     amount: float = 0
     currency: str = "sats"
     start_datetime: datetime
@@ -21,13 +19,13 @@ class CreateAllowanceData(BaseModel):
     memo: str
     active: bool = True
     end_datetime: Optional[datetime] = None
-    lnurlpay: Optional[str] = None  # LNURL pay string for compatibility
-    total: float = 0  # Total amount processed
-    created_at: Optional[datetime] = None  # Auto-set by database
+    lnurlpay: Optional[str] = None  # Retained for legacy records.
+    total: float = 0
+    created_at: Optional[datetime] = None
 
     @validator("start_datetime", "next_payment_date", "end_datetime", "created_at")
     def timestamps_are_utc(cls, value):  # noqa: N805
-        # PostgreSQL TIMESTAMP columns return naive datetimes representing UTC.
+
         if value is not None and value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value
@@ -53,15 +51,13 @@ class Allowance(BaseModel):
     memo: Optional[str] = ""
     active: bool = True
     end_datetime: Optional[datetime] = None
-    lnurlpay: Optional[str] = None  # LNURL pay string for compatibility
-    total: Optional[float] = 0  # Total amount processed
-    created_at: Optional[datetime] = None  # When the allowance was created
+    lnurlpay: Optional[str] = None  # Retained for legacy records.
+    total: Optional[float] = 0
+    created_at: Optional[datetime] = None
     pending_payment_hash: Optional[str] = None
-    last_error: Optional[str] = None  # Last error message
-    last_error_time: Optional[datetime] = None  # When the last error occurred
-    last_success_time: Optional[datetime] = (
-        None  # When the last successful payment was made
-    )
+    last_error: Optional[str] = None
+    last_error_time: Optional[datetime] = None
+    last_success_time: Optional[datetime] = None
 
     @validator(
         "start_datetime",

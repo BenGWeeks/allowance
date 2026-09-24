@@ -17,17 +17,8 @@ def allowance_renderer():
     return template_renderer(["allowance/templates"])
 
 
-#######################################
-##### ADD YOUR PAGE ENDPOINTS HERE ####
-#######################################
-
-
-# Backend admin page
-
-
 @allowance_generic_router.get("/", response_class=HTMLResponse)
 async def index(request: Request, user: User = Depends(check_user_exists)):
-    # Back to the original approach but we'll handle it in the template
     return allowance_renderer().TemplateResponse(
         request=request,
         name="allowance/index.html",
@@ -37,14 +28,10 @@ async def index(request: Request, user: User = Depends(check_user_exists)):
 
 @allowance_generic_router.get("/test-minimal", response_class=HTMLResponse)
 async def test_minimal(request: Request):
-    # Use same approach as index
     user_dict = {"id": "test", "username": "Test", "wallets": []}
     return allowance_renderer().TemplateResponse(
         "allowance/test-minimal.html", {"request": request, "user": user_dict}
     )
-
-
-# Frontend shareable page
 
 
 @allowance_generic_router.get("/{allowance_id}")
@@ -63,9 +50,6 @@ async def allowance(request: Request, allowance_id):
             "web_manifest": f"/allowance/manifest/{allowance_id}.webmanifest",
         },
     )
-
-
-# Manifest for public page, customise or remove manifest completely
 
 
 @allowance_generic_router.get("/manifest/{allowance_id}.webmanifest")
