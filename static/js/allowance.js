@@ -60,13 +60,13 @@ window.app = Vue.createApp({
   },
   methods: {
     getAllowances() {
-      console.log('🔍 Loading allowances...')
+
       this.allowanceTable.loading = true
       
       // Use the first available wallet for admin operations
       const wallet = this.g.user.wallets[0]
       if (!wallet) {
-        console.error('❌ No wallet found for authentication')
+
         this.allowanceTable.loading = false
         return
       }
@@ -78,17 +78,11 @@ window.app = Vue.createApp({
           wallet.adminkey
         )
         .then(response => {
-          console.log('✅ Allowances loaded:', response.data)
-          // Log first allowance to see what fields are available
-          if (response.data && response.data.length > 0) {
-            console.log('📊 First allowance fields:', Object.keys(response.data[0]))
-            console.log('📅 First allowance start_datetime:', response.data[0].start_datetime)
-            console.log('📅 First allowance end_datetime:', response.data[0].end_datetime)
-          }
+
           this.allowances = response.data
         })
         .catch(err => {
-          console.error('❌ Error loading allowances:', err)
+
           LNbits.utils.notifyApiError(err)
         })
         .finally(() => {
@@ -113,22 +107,17 @@ window.app = Vue.createApp({
         start_datetime: defaultStart
       }
       this.formDialog.show = true
-      console.log('📅 Form opened with default start datetime (5 min from now):', defaultStart)
-      console.log('🔘 Active state set to:', this.formDialog.data.active)
+
     },
     saveAllowance(event) {
       // Prevent default form submission like LNURLP pattern
       if (event) {
         event.preventDefault()
       }
-      
-      console.log('🔥 saveAllowance called')
-      console.log('📊 Form data:', this.formDialog.data)
-      console.log('🔘 Active field at submission:', this.formDialog.data.active, '(type:', typeof this.formDialog.data.active, ')')
-      
+
       // Don't proceed if dialog is not shown
       if (!this.formDialog.show) {
-        console.log('❌ Form dialog is not visible, aborting saveAllowance')
+
         return
       }
       
@@ -168,19 +157,9 @@ window.app = Vue.createApp({
           errors.push('Cannot activate allowance: end date is in the past')
         }
       }
-      
-      console.log('🔍 Validation check:', {
-        name: this.formDialog.data.name,
-        wallet: this.formDialog.data.wallet,
-        lightning_address: this.formDialog.data.lightning_address,
-        amount: this.formDialog.data.amount,
-        frequency_type: this.formDialog.data.frequency_type,
-        start_datetime: this.formDialog.data.start_datetime,
-        errors: errors
-      })
-      
+
       if (errors.length > 0) {
-        console.log('❌ Validation errors:', errors)
+
         this.$q.notify({
           type: 'negative',
           message: 'Validation failed: ' + errors.join(', '),
@@ -189,29 +168,20 @@ window.app = Vue.createApp({
         })
         return
       }
-      
-      console.log('✅ Validation passed, proceeding...')
-      
-      console.log('🔍 Available wallets:', this.g.user.wallets)
-      console.log('🔍 Looking for wallet ID:', this.formDialog.data.wallet)
-      
+
       const wallet = _.findWhere(this.g.user.wallets, {
         id: this.formDialog.data.wallet
       })
-      console.log('💰 Selected wallet:', wallet)
-      
+
       if (!wallet) {
-        console.log('❌ No wallet found')
+
         LNbits.utils.notifyApiError('No wallet selected')
         return
       }
-      
-      console.log('✅ Wallet found, preparing data...')
 
       const data = _.clone(this.formDialog.data)
       
       // Transform data to match backend model
-      console.log('🔥 Processing active field:', data.active, '(type:', typeof data.active, ')')
 
       // Don't convert currency amounts here - conversion happens at payment time
       let amount = parseFloat(data.amount) || 0
@@ -242,23 +212,19 @@ window.app = Vue.createApp({
         backendData.start_datetime = data.start_datetime ? new Date(data.start_datetime).toISOString() : new Date().toISOString()
         backendData.next_payment_date = this.calculateNextPaymentDate(data.start_datetime, data.frequency_type)
       }
-      
-      console.log('🔥 Backend data active field:', backendData.active, '(type:', typeof backendData.active, ')')
-      console.log('📤 Final data to send:', backendData)
-      console.log('🔍 Decision point - has ID?', !!backendData.id, 'ID value:', backendData.id)
-      
+
       if (backendData.id) {
-        console.log('🔄 Updating existing allowance')
+
         this.updateAllowance(wallet, backendData)
       } else {
-        console.log('➕ Creating new allowance')
+
         this.createAllowance(wallet, backendData)
       }
     },
     createAllowance(wallet, data) {
-      console.log('🚀 createAllowance called with:', { wallet, data })
+
       this.formDialog.loading = true
-      console.log('📡 Making POST request...')
+
       LNbits.api
         .request('POST', '/allowance/api/v1/allowance', wallet.adminkey, data)
         .then(response => {
@@ -315,10 +281,6 @@ window.app = Vue.createApp({
         .catch(LNbits.utils.notifyApiError)
     },
     openUpdateDialog(row) {
-      console.log('🔄 openUpdateDialog called with row:', row)
-      console.log('🔍 Row active field:', row.active, '(type:', typeof row.active, ')')
-      console.log('📅 Row start_datetime:', row.start_datetime)
-      console.log('📅 Row end_datetime:', row.end_datetime)
 
       // Reset form dialog first
       this.formDialog.data = {}
@@ -341,8 +303,6 @@ window.app = Vue.createApp({
         memo: clonedData.memo,
         end_datetime: clonedData.end_datetime
       }
-      
-      console.log('📋 After cloning:', this.formDialog.data)
 
       // Convert datetime fields from UTC (API) to local time (for Quasar)
       // API returns ISO strings like "2025-09-28T07:49:00+00:00" in UTC
@@ -351,7 +311,7 @@ window.app = Vue.createApp({
         if (typeof this.formDialog.data.start_datetime === 'string') {
           const utcDate = new Date(this.formDialog.data.start_datetime)
           this.formDialog.data.start_datetime = this.toQuasarDatetimeString(utcDate)
-          console.log('✅ Converted start_datetime to Quasar format:', this.formDialog.data.start_datetime)
+
         }
       }
 
@@ -359,7 +319,7 @@ window.app = Vue.createApp({
         if (typeof this.formDialog.data.end_datetime === 'string') {
           const utcDate = new Date(this.formDialog.data.end_datetime)
           this.formDialog.data.end_datetime = this.toQuasarDatetimeString(utcDate)
-          console.log('✅ Converted end_datetime to Quasar format:', this.formDialog.data.end_datetime)
+
         }
       }
       
@@ -383,19 +343,12 @@ window.app = Vue.createApp({
       
       // Set active with Vue.set to ensure reactivity (Vue 3 compatibility)
       this.$set ? this.$set(this.formDialog.data, 'active', activeValue) : (this.formDialog.data.active = activeValue)
-      
-      console.log('🔘 Active conversion:')
-      console.log('  Original value:', originalActive, '(type:', typeof originalActive, ')')
-      console.log('  Converted to:', this.formDialog.data.active, '(type:', typeof this.formDialog.data.active, ')')
-      
-      console.log('✅ Final form data:', JSON.stringify(this.formDialog.data, null, 2))
+
       this.formDialog.show = true
       
       // Force Vue to update and ensure toggle reflects the active state
       this.$nextTick(() => {
-        console.log('🔄 Vue nextTick - form data:', this.formDialog.data)
-        console.log('🔄 Vue nextTick - active value:', this.formDialog.data.active)
-        
+
         // Force reactivity update for the active field
         this.$forceUpdate()
       })
@@ -443,17 +396,17 @@ window.app = Vue.createApp({
             let rates = _.clone(this.fiatRates)
             rates[currency] = response.data.rate
             this.fiatRates = rates
-            console.log(`💱 Rate for ${currency}: 1 ${currency} = ${response.data.rate} sats`)
+
           })
           .catch(err => {
-            console.error(`Failed to get rate for ${currency}:`, err)
+
           })
       }
     },
     toggleActive() {
-      console.log('🔄 Manual toggle called - before:', this.formDialog.data.active)
+
       this.formDialog.data.active = !this.formDialog.data.active
-      console.log('🔄 Manual toggle called - after:', this.formDialog.data.active)
+
       this.$forceUpdate()
     },
     formatErrorTime(timestamp) {
@@ -579,34 +532,30 @@ window.app = Vue.createApp({
       return date.toISOString()
     },
     loadCurrencies() {
-      console.log('🌍 Loading currencies from LNbits core API...')
-      
+
       // Try without authentication first (public endpoint)
       LNbits.api
         .request('GET', '/api/v1/currencies')
         .then(response => {
-          console.log('✅ Currencies loaded successfully:', response.data?.length || 0, 'currencies')
+
           this.currencies = ['sats', ...response.data]
         })
         .catch(err => {
-          console.warn('⚠️ Public currencies API failed, trying with authentication...', err.message || err)
-          
+
           // Try with authentication as fallback
           if (this.g?.user?.wallets?.[0]?.inkey) {
             LNbits.api
               .request('GET', '/api/v1/currencies', this.g.user.wallets[0].inkey)
               .then(response => {
-                console.log('✅ Currencies loaded with auth:', response.data?.length || 0, 'currencies')
+
                 this.currencies = ['sats', ...response.data]
               })
               .catch(authErr => {
-                console.error('❌ Failed to fetch currencies with auth:', authErr.message || authErr)
-                console.log('💡 Falling back to basic currencies')
+
                 this.currencies = ['sats', 'USD', 'EUR']
               })
           } else {
-            console.error('❌ Failed to fetch currencies and no auth available:', err.message || err)
-            console.log('💡 Falling back to basic currencies')
+
             this.currencies = ['sats', 'USD', 'EUR']
           }
         })
@@ -659,7 +608,7 @@ window.app = Vue.createApp({
         const endDate = new Date(newVal)
         const now = new Date()
         if (endDate < now) {
-          console.log('⚠️ End date is in the past, deactivating allowance')
+
           this.formDialog.data.active = false
         }
       }
@@ -677,7 +626,7 @@ window.app = Vue.createApp({
           this.getAllowances()
           this.loadCurrencies()
         } else {
-          console.warn('User data still not available, loading basic currencies only')
+
           this.currencies = ['sats', 'USD', 'EUR']
         }
       }, 1000)
