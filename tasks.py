@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from time import monotonic
 from typing import Any
 from urllib.parse import quote
 
@@ -405,15 +406,20 @@ class AllowanceWorkers:
 
 async def check_and_process_allowances():
     workers = AllowanceWorkers()
+    next_poll = monotonic()
     try:
         while True:
             workers.completed_in_poll = False
-            cycle_failed = False
+            cycle_failed = workers.collect()
+            now = monotonic()
+            if now >= next_poll:
+                next_poll += (int((now - next_poll) // 60) + 1) * 60
             try:
                 await record_scheduler_heartbeat("running")
                 allowances = await get_all_active_allowances()
-                cycle_failed = await workers.poll(
-                    allowances, datetime.now(timezone.utc)
+                cycle_failed = (
+                    await workers.poll(allowances, datetime.now(timezone.utc))
+                    or cycle_failed
                 )
             except Exception:
                 cycle_failed = True
@@ -422,15 +428,18 @@ async def check_and_process_allowances():
                 await record_scheduler_heartbeat("error" if cycle_failed else "healthy")
             except Exception:
                 logger.error("Could not record allowance scheduler heartbeat")
-            if workers.completed_in_poll:
+            timeout = max(0, next_poll - monotonic())
+            if cycle_failed:
+                await asyncio.sleep(60)
+            elif workers.completed_in_poll:
                 await asyncio.sleep(0)
             elif workers.running:
                 await asyncio.wait(
                     workers.running.values(),
-                    timeout=60,
+                    timeout=timeout,
                     return_when=asyncio.FIRST_COMPLETED,
                 )
             else:
-                await asyncio.sleep(60)
+                await asyncio.sleep(timeout)
     finally:
         await workers.close()

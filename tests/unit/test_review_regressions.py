@@ -379,3 +379,94 @@ class ReviewRegressions(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(process.await_count, 2)
             finally:
                 await workers.close()
+
+    async def test_main_loop_minutely_cadence_does_not_drift_with_payment_time(self):
+        origin = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        row = self.allowance(
+            start_datetime=origin, next_payment_date=origin, frequency_type="minutely"
+        )
+        clock = [0.0]
+        attempts = []
+        finishing = []
+        real_sleep, real_wait = asyncio.sleep, asyncio.wait
+
+        async def process(allowance, _now):
+            attempts.append(clock[0])
+            done = asyncio.get_running_loop().create_future()
+            finishing.append((clock[0] + 5, done))
+            await done
+            row.next_payment_date = origin + timedelta(
+                seconds=(int(clock[0] // 60) + 1) * 60
+            )
+            row.revision += 1
+
+        async def sleep(seconds):
+            if clock[0] + seconds >= 900:
+                raise asyncio.CancelledError
+            clock[0] += seconds
+            await real_sleep(0)
+
+        async def wait(futures, *, timeout, return_when=asyncio.ALL_COMPLETED):
+            if timeout == 0:
+                return await real_wait(futures, timeout=0, return_when=return_when)
+            pending = [(at, done) for at, done in finishing if not done.done()]
+            clock[0] = min(clock[0] + timeout, min(at for at, _ in pending))
+            for at, done in pending:
+                if at <= clock[0]:
+                    done.set_result(None)
+            return await real_wait(futures, timeout=0, return_when=return_when)
+
+        with patch.object(
+            tasks, "monotonic", side_effect=lambda: clock[0]
+        ), patch.object(tasks, "datetime") as dates, patch.object(
+            tasks, "get_all_active_allowances", AsyncMock(return_value=[row])
+        ), patch.object(
+            tasks, "record_scheduler_heartbeat", AsyncMock()
+        ), patch.object(
+            tasks, "process_allowance", process
+        ), patch.object(
+            tasks.asyncio, "sleep", sleep
+        ), patch.object(
+            tasks.asyncio, "wait", wait
+        ):
+            dates.now.side_effect = lambda *_: origin + timedelta(seconds=clock[0])
+            with self.assertRaises(asyncio.CancelledError):
+                await tasks.check_and_process_allowances()
+        self.assertEqual(attempts, list(range(0, 900, 60)))
+
+    async def test_main_loop_backs_off_when_database_and_worker_fail(self):
+        release = asyncio.Event()
+        real_wait = asyncio.wait
+        sleeps = []
+        calls = [0]
+
+        async def read():
+            calls[0] += 1
+            if calls[0] == 1:
+                return [self.allowance()]
+            if calls[0] >= 4:
+                raise asyncio.CancelledError
+            raise RuntimeError("Database unavailable")
+
+        async def process(*_):
+            await release.wait()
+            raise RuntimeError("Worker database unavailable")
+
+        async def wait(futures, *, timeout, return_when=asyncio.ALL_COMPLETED):
+            if timeout:
+                release.set()
+            return await real_wait(futures, timeout=0, return_when=return_when)
+
+        async def sleep(seconds):
+            sleeps.append(seconds)
+
+        with patch.object(tasks, "get_all_active_allowances", read), patch.object(
+            tasks, "record_scheduler_heartbeat", AsyncMock()
+        ), patch.object(tasks, "process_allowance", process), patch.object(
+            tasks.asyncio, "sleep", sleep
+        ), patch.object(
+            tasks.asyncio, "wait", wait
+        ):
+            with self.assertRaises(asyncio.CancelledError):
+                await tasks.check_and_process_allowances()
+        self.assertEqual(sleeps, [60, 60])
