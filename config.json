@@ -1,6 +1,6 @@
 {
   "name": "Allowance",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "short_description": "Automatic recurring payments",
   "tile": "/allowance/static/image/allowance.png",
   "min_lnbits_version": "1.6.0",
