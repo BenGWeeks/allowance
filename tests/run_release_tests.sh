@@ -18,8 +18,8 @@ curl --fail --location --retry 3 --output "$work/previous.zip" \
 printf '%s  %s\n' 538620a14642d6200a8ddc000a5fa8557e9453bda6728c612b452a4d721fe4ce \
   "$work/previous.zip" | sha256sum --check
 curl --fail --location --retry 3 --output "$work/broken.zip" \
-  https://github.com/BenGWeeks/allowance/releases/download/v1.1.0/allowance-1.1.0.zip
-printf '%s  %s\n' 85f31b9b133aac1db06c56ef6b6d4d208457432721b0b2872ebe26dfdc49b419 \
+  https://codeload.github.com/BenGWeeks/allowance/zip/20ec40e8f7df7b38efcec50343d3549201dc392e
+printf '%s  %s\n' 554faadf7f968e6bbb87c0300e4ce117bd10f9cf21365951a18c304de2b240aa \
   "$work/broken.zip" | sha256sum --check
 candidate=$(basename "$work"/candidate/*.zip)
 for mode in fresh upgrade warm_upgrade cached_upgrade failed_upgrade; do
