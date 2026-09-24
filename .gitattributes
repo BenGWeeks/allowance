@@ -1,0 +1,17 @@
+/.gitattributes export-ignore
+/.github export-ignore
+/.gitignore export-ignore
+/.coderabbit.yaml export-ignore
+/.env* export-ignore
+/.prettierrc* export-ignore
+/CLAUDE.md export-ignore
+/Makefile export-ignore
+/docker-compose.yml export-ignore
+/docs export-ignore
+/tests export-ignore
+/scripts export-ignore
+/package.json export-ignore
+/package-lock.json export-ignore
+/extensions.json export-ignore
+/static/image/allowance.psd export-ignore
+/templates/allowance/index_old.html export-ignore
