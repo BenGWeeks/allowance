@@ -66,7 +66,9 @@ class CompatibilityTests(unittest.IsolatedAsyncioTestCase):
                 ), patch.object(
                     tasks,
                     "decode_invoice",
-                    return_value=SimpleNamespace(payment_hash="hash"),
+                    return_value=SimpleNamespace(
+                        payment_hash="hash", amount_msat=2000000
+                    ),
                 ), patch.object(
                     tasks, "fiat_amount_as_satoshis", AsyncMock(return_value=2000)
                 ) as convert, patch.object(
