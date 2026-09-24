@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 
 from fastapi import APIRouter, Depends, Query
+from httpx import InvalidURL
 from lnbits.core.crud import get_user
 from lnbits.core.models import Wallet, WalletTypeInfo
 from lnbits.decorators import (
@@ -13,6 +14,7 @@ from starlette.exceptions import HTTPException
 
 from .crud import (
     AllowanceConflictError,
+    AllowanceLimitError,
     create_allowance,
     delete_allowance,
     get_all_active_allowances,
@@ -21,7 +23,7 @@ from .crud import (
     update_allowance,
 )
 from .models import AllowanceCreateRequest, AllowanceUpdateRequest, CreateAllowanceData
-from .tasks import execute_lightning_address_payment
+from .tasks import lightning_address_url
 
 allowance_api_router = APIRouter()
 
@@ -145,8 +147,27 @@ async def api_allowance(
     return data
 
 
-def validate_schedule_input(data: dict, *, activating: bool = True):
+def validate_schedule_input(
+    data: dict, *, activating: bool = True, changed: set | None = None
+):
     """Validate dates together, including existing fields on a partial update."""
+    from lnbits.utils.exchange_rates import allowed_currencies
+
+    changed = (
+        {"amount", "currency", "lightning_address"} if changed is None else changed
+    )
+    currency = data.get("currency", "sats")
+    if (
+        "currency" in changed
+        and currency not in ("sats", "satoshis")
+        and currency.upper() not in allowed_currencies()
+    ):
+        raise HTTPException(422, "Unsupported currency")
+    try:
+        if "lightning_address" in changed:
+            lightning_address_url(data["lightning_address"])
+    except (ValueError, TypeError, InvalidURL):
+        raise HTTPException(422, "Invalid Lightning address or LNURL") from None
     end = data.get("end_datetime")
     if end is not None and end < data["start_datetime"]:
         raise HTTPException(422, "end_datetime must not precede start_datetime")
@@ -160,7 +181,8 @@ def validate_schedule_input(data: dict, *, activating: bool = True):
             422, "Cannot activate an allowance whose end date has passed"
         )
     if (
-        data.get("currency", "sats") in ("sats", "satoshis")
+        changed.intersection({"amount", "currency"})
+        and data.get("currency", "sats") in ("sats", "satoshis")
         and not float(data["amount"]).is_integer()
     ):
         raise HTTPException(422, "Satoshi amounts must be whole numbers")
@@ -180,7 +202,7 @@ async def api_allowance_update(
         if not user or not user.super_user:
             raise HTTPException(403, "Not authorized to update this allowance")
     changes = data.dict(exclude_unset=True)
-    for field in ("id", "wallet", "start_datetime", "frequency_type"):
+    for field in ("id", "wallet", "start_datetime", "frequency_type", "timezone_name"):
         if field in changes and changes[field] != getattr(allowance, field):
             raise HTTPException(422, f"Cannot change {field} of an existing allowance")
     merged = {**allowance.dict(), **changes}
@@ -188,8 +210,15 @@ async def api_allowance_update(
         merged["memo"] = ""
     if merged.get("total") is None:
         merged["total"] = 0
+    payment_changes = {
+        key for key, value in changes.items() if value != getattr(allowance, key)
+    }
+    if not allowance.active and merged["active"]:
+        payment_changes.update({"amount", "currency", "lightning_address"})
     validate_schedule_input(
-        merged, activating=not allowance.active or changes.get("active") is True
+        merged,
+        activating=not allowance.active or changes.get("active") is True,
+        changed=payment_changes,
     )
     try:
         updated = await update_allowance(CreateAllowanceData(**merged))
@@ -213,14 +242,17 @@ async def api_allowance_create(
         )
     values = data.dict(exclude={"id", "revision", "wallet"})
     validate_schedule_input(values)
-    allowance = await create_allowance(
-        CreateAllowanceData(
-            **values,
-            wallet=wallet_id,
-            next_payment_date=data.start_datetime,
-            created_at=now,
+    try:
+        allowance = await create_allowance(
+            CreateAllowanceData(
+                **values,
+                wallet=wallet_id,
+                next_payment_date=data.start_datetime,
+                created_at=now,
+            )
         )
-    )
+    except AllowanceLimitError as exc:
+        raise HTTPException(422, str(exc)) from exc
     return allowance.dict()
 
 
@@ -281,70 +313,6 @@ async def api_currency_rate(
         raise HTTPException(
             status_code=HTTPStatus.SERVICE_UNAVAILABLE,
             detail="Could not fetch currency rate",
-        ) from e
-
-
-@allowance_api_router.post(
-    "/api/v1/allowance/{allowance_id}/trigger", status_code=HTTPStatus.OK
-)
-async def api_allowance_trigger(
-    allowance_id: str,
-    wallet: WalletTypeInfo = Depends(require_admin_key),
-):
-    """Manually trigger a payment for an allowance (for testing)."""
-    allowance = await get_allowance(allowance_id)
-    if not allowance:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail="Allowance not found"
-        )
-
-    if allowance.wallet != get_wallet_id(wallet):
-        user = await get_user(get_wallet_user(wallet))
-        if not user or not user.super_user:
-            raise HTTPException(
-                status_code=HTTPStatus.FORBIDDEN,
-                detail="Not authorized to trigger this allowance",
-            )
-
-    try:
-        success = await execute_lightning_address_payment(allowance)
-
-        if success is None:
-            return {
-                "success": False,
-                "pending": True,
-                "message": "Payment outcome unresolved; no new invoice sent",
-            }
-        from .crud import finish_payment_attempt
-        from .schedule import next_occurrence
-
-        await finish_payment_attempt(
-            allowance,
-            next_occurrence(
-                allowance.start_datetime,
-                allowance.frequency_type,
-                datetime.now(timezone.utc),
-            ),
-            success,
-        )
-        if success:
-            return {
-                "success": True,
-                "message": f"Payment triggered successfully for {allowance.name}",
-                "amount": allowance.amount,
-                "lightning_address": allowance.lightning_address,
-            }
-        else:
-            raise HTTPException(
-                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-                detail="Payment execution failed",
-            )
-
-    except Exception as e:
-        logger.error("Allowance operation: api_allowance_trigger")
-        raise HTTPException(
-            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail="Failed to trigger payment",
         ) from e
 
 
@@ -443,6 +411,7 @@ async def api_allowance_reconcile(
             allowance.start_datetime,
             allowance.frequency_type,
             datetime.now(timezone.utc),
+            allowance.timezone_name,
         ),
         result,
     )

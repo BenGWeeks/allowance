@@ -2,8 +2,9 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional, Union
 
-from lnbits.db import POSTGRES, SQLITE, Connection, Database
+from lnbits.db import POSTGRES, SQLITE, Connection, Database, dict_to_model
 from lnbits.helpers import urlsafe_short_hash
+from loguru import logger
 from sqlalchemy import text
 
 from .models import Allowance, CreateAllowanceData
@@ -51,6 +52,13 @@ async def transaction(database):
                 yield atomic
 
 
+class AllowanceLimitError(Exception):
+    pass
+
+
+MAX_ALLOWANCES_PER_WALLET = 100
+
+
 async def create_allowance(data: CreateAllowanceData) -> Allowance:
     from datetime import datetime
 
@@ -76,10 +84,10 @@ async def create_allowance(data: CreateAllowanceData) -> Allowance:
         sql = f"""
         INSERT INTO {db.references_schema}maintable
         (id, name, wallet, lightning_address, amount, currency,
-         start_datetime, frequency_type, next_payment_date, memo,
+         start_datetime, frequency_type, timezone_name, next_payment_date, memo,
          active, end_datetime, created_at)
         VALUES (:id, :name, :wallet, :lightning_address, :amount, :currency,
-         {db.timestamp_placeholder("start_datetime")}, :frequency_type,
+         {db.timestamp_placeholder("start_datetime")}, :frequency_type, :timezone_name,
          {db.timestamp_placeholder("next_payment_date")}, :memo,
          :active, NULL, {db.timestamp_placeholder("created_at")})
         """
@@ -87,33 +95,48 @@ async def create_allowance(data: CreateAllowanceData) -> Allowance:
         sql = f"""
         INSERT INTO {db.references_schema}maintable
         (id, name, wallet, lightning_address, amount, currency,
-         start_datetime, frequency_type, next_payment_date, memo,
+         start_datetime, frequency_type, timezone_name, next_payment_date, memo,
          active, end_datetime, created_at)
         VALUES (:id, :name, :wallet, :lightning_address, :amount, :currency,
-         {db.timestamp_placeholder("start_datetime")}, :frequency_type,
+         {db.timestamp_placeholder("start_datetime")}, :frequency_type, :timezone_name,
          {db.timestamp_placeholder("next_payment_date")}, :memo,
          :active, {db.timestamp_placeholder("end_datetime")},
          {db.timestamp_placeholder("created_at")})
         """
 
-    await db.execute(
-        sql,
-        {
-            "id": data.id,
-            "name": data.name,
-            "wallet": data.wallet,
-            "lightning_address": data.lightning_address,
-            "amount": data.amount,
-            "currency": data.currency,
-            "start_datetime": start_ts,
-            "frequency_type": data.frequency_type,
-            "next_payment_date": next_ts,
-            "memo": data.memo,
-            "active": data.active,
-            "end_datetime": end_ts,
-            "created_at": created_ts or int(datetime.now().timestamp()),
-        },
-    )
+    async with transaction(db) as conn:
+        await conn.execute(
+            f"INSERT INTO {db.references_schema}wallet_limits "
+            "(wallet) VALUES (:wallet) "
+            "ON CONFLICT (wallet) DO UPDATE SET wallet = excluded.wallet",
+            {"wallet": data.wallet},
+        )
+        row = await conn.fetchone(
+            f"SELECT COUNT(*) AS count FROM {db.references_schema}maintable "
+            "WHERE wallet = :wallet",
+            {"wallet": data.wallet},
+        )
+        if row["count"] >= MAX_ALLOWANCES_PER_WALLET:
+            raise AllowanceLimitError("Maximum 100 allowances per wallet")
+        await conn.execute(
+            sql,
+            {
+                "id": data.id,
+                "name": data.name,
+                "wallet": data.wallet,
+                "lightning_address": data.lightning_address,
+                "amount": data.amount,
+                "currency": data.currency,
+                "start_datetime": start_ts,
+                "frequency_type": data.frequency_type,
+                "timezone_name": data.timezone_name,
+                "next_payment_date": next_ts,
+                "memo": data.memo,
+                "active": data.active,
+                "end_datetime": end_ts,
+                "created_at": created_ts or int(datetime.now().timestamp()),
+            },
+        )
     return Allowance(**data.dict())
 
 
@@ -151,6 +174,7 @@ async def update_allowance(data: CreateAllowanceData) -> Allowance:
         f"UPDATE {db.references_schema}maintable SET "
         "name = :name, lightning_address = :lightning_address, "
         "amount = :amount, currency = :currency, memo = :memo, active = :active, "
+        "retry_after = NULL, retry_deadline = NULL, retry_count = 0, "
         f"end_datetime = {db.timestamp_placeholder('end')}, revision = revision + 1 "
         "WHERE id = :id AND revision = :revision",
         {
@@ -221,12 +245,20 @@ async def deactivate_allowance(
 
 
 async def get_all_active_allowances() -> list[Allowance]:
-    """Get all active allowances for scheduled processing"""
-    return await db.fetchall(
-        f"SELECT * FROM {db.references_schema}maintable WHERE active = true "
-        "ORDER BY next_payment_date",
-        model=Allowance,
+    rows = await db.fetchall(
+        f"SELECT * FROM {db.references_schema}maintable "
+        "WHERE active = true OR pending_payment_hash IS NOT NULL "
+        "ORDER BY next_payment_date"
     )
+    allowances = []
+    for row in rows:
+        try:
+            allowances.append(dict_to_model(dict(row), Allowance))
+        except Exception:
+            logger.error(
+                "Skipping invalid allowance row {}; operator repair required", row["id"]
+            )
+    return allowances
 
 
 def payment_state_filter(allowance: Allowance):
@@ -295,6 +327,9 @@ async def claim_payment(allowance: Allowance, payment_hash: str) -> bool:
         "WHERE id = :id AND pending_payment_hash IS NULL "
         "AND active = true AND revision = :revision "
         f"AND start_datetime <= {db.timestamp_placeholder('now')} "
+        f"AND next_payment_date <= {db.timestamp_placeholder('now')} "
+        "AND (retry_after IS NULL OR "
+        f"retry_after <= {db.timestamp_placeholder('now')}) "
         "AND (end_datetime IS NULL OR "
         f"end_datetime >= {db.timestamp_placeholder('now')}) "
         f"AND next_payment_date = {db.timestamp_placeholder('due')}",
@@ -332,7 +367,8 @@ async def finish_payment_attempt(
     async with transaction(db) as conn:
         result = await conn.execute(
             f"UPDATE {db.references_schema}maintable SET {assignment}, "
-            "pending_payment_hash = NULL, revision = revision + 1 WHERE id = :id "
+            "pending_payment_hash = NULL, retry_count = 0, retry_after = NULL, "
+            "retry_deadline = NULL, revision = revision + 1 WHERE id = :id "
             f"AND {condition} "
             f"AND next_payment_date = {db.timestamp_placeholder('due')}",
             values,
@@ -378,3 +414,22 @@ async def get_scheduler_health():
         f"SELECT * FROM {db.references_schema}scheduler_health WHERE id = 'worker'"
     )
     return dict(row) if row else {}
+
+
+async def defer_payment(
+    allowance: Allowance, retry_at: datetime, deadline: datetime
+) -> bool:
+    """Only the attempt owner may release a confirmed unsent claim for retry."""
+    condition, values = payment_state_filter(allowance)
+    result = await db.execute(
+        f"UPDATE {db.references_schema}maintable SET pending_payment_hash = NULL, "
+        "retry_count = retry_count + 1, revision = revision + 1, "
+        f"retry_after = {db.timestamp_placeholder('retry_at')}, "
+        f"retry_deadline = {db.timestamp_placeholder('deadline')} WHERE {condition}",
+        {
+            **values,
+            "retry_at": int(retry_at.timestamp()),
+            "deadline": int(deadline.timestamp()),
+        },
+    )
+    return result.rowcount == 1

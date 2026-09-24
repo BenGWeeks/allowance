@@ -1,7 +1,8 @@
-"""UTC recurrence anchored to the original start, independent of worker delays."""
+"""Calendar recurrence anchored to the original local start."""
 
 from calendar import monthrange
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 _INTERVALS = {
     "minutely": timedelta(minutes=1),
@@ -12,7 +13,7 @@ _INTERVALS = {
 
 
 def next_occurrence(
-    start: datetime, frequency: str, after: datetime
+    start: datetime, frequency: str, after: datetime, timezone_name: str = "UTC"
 ) -> datetime | None:
     """Return the next occurrence, or None for a completed one-off schedule.
 
@@ -22,16 +23,24 @@ def next_occurrence(
     """
     start = start.replace(tzinfo=timezone.utc) if start.tzinfo is None else start
     after = after.replace(tzinfo=timezone.utc) if after.tzinfo is None else after
-    start, after = start.astimezone(timezone.utc), after.astimezone(timezone.utc)
+    zone = timezone.utc if timezone_name == "UTC" else ZoneInfo(timezone_name)
+    after_utc = after.astimezone(timezone.utc)
+    start, after = start.astimezone(zone), after.astimezone(zone)
     if frequency not in (*_INTERVALS, "monthly", "yearly", "once"):
         raise ValueError(f"Unsupported allowance frequency: {frequency}")
-    if after < start:
-        return start
+    if after_utc < start.astimezone(timezone.utc):
+        return start.astimezone(timezone.utc)
     if frequency == "once":
         return None
     if frequency in _INTERVALS:
         interval = _INTERVALS[frequency]
-        return start + ((after - start) // interval + 1) * interval
+        if frequency in ("minutely", "hourly"):
+            anchor = start.astimezone(timezone.utc)
+            return anchor + ((after_utc - anchor) // interval + 1) * interval
+        candidate = start + ((after - start) // interval) * interval
+        while candidate.astimezone(timezone.utc) <= after_utc:
+            candidate += interval
+        return candidate.astimezone(timezone.utc)
 
     step = 1 if frequency == "monthly" else 12
     elapsed_months = (after.year - start.year) * 12 + after.month - start.month
@@ -42,11 +51,11 @@ def next_occurrence(
         month=month + 1,
         day=min(start.day, monthrange(year, month + 1)[1]),
     )
-    if candidate <= after:
+    if candidate.astimezone(timezone.utc) <= after_utc:
         year, month = divmod(start.year * 12 + start.month - 1 + months + step, 12)
         candidate = start.replace(
             year=year,
             month=month + 1,
             day=min(start.day, monthrange(year, month + 1)[1]),
         )
-    return candidate
+    return candidate.astimezone(timezone.utc)

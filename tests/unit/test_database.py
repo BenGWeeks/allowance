@@ -1,3 +1,4 @@
+import asyncio
 import os
 import tempfile
 import unittest
@@ -47,6 +48,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         await migrations.m004_pending_payment(self.database)
         await migrations.m005_allowance_revision(self.database)
         await migrations.m006_operational_history(self.database)
+        await migrations.m007_retry_and_local_schedule(self.database)
 
     async def asyncTearDown(self):
         if self.database.type == POSTGRES:
@@ -333,3 +335,161 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
             await migrations.m006_operational_history(connection)
         self.assertEqual(await crud.get_scheduler_health(), before)
         self.assertEqual(len(await crud.get_payment_history(allowance.id)), 1)
+
+    async def test_invalid_stored_amount_does_not_block_other_allowances(self):
+        valid = await self.history_fixture()
+        other = CreateAllowanceData(**valid.dict())
+        other.id = None
+        bad = await crud.create_allowance(other)
+        await self.database.execute(
+            f"UPDATE {self.database.references_schema}maintable "
+            "SET amount = :amount WHERE id = :id",
+            {"amount": 0.00001 if self.database.type == POSTGRES else 0, "id": bad.id},
+        )
+        self.assertEqual(
+            [row.id for row in await crud.get_all_active_allowances()], [valid.id]
+        )
+
+    async def test_retry_keeps_due_date_and_fences_stale_attempts(self):
+        allowance = await self.history_fixture()
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        self.assertTrue(
+            await crud.defer_payment(
+                allowance, now + timedelta(minutes=1), now + timedelta(hours=1)
+            )
+        )
+        self.assertFalse(await crud.defer_payment(allowance, now, now))
+        current = await crud.get_allowance(allowance.id)
+        self.assertIsNone(current.pending_payment_hash)
+        self.assertEqual(current.next_payment_date, allowance.next_payment_date)
+        self.assertEqual(current.retry_count, 1)
+        self.assertFalse(await crud.claim_payment(current, "early-retry"))
+        self.assertFalse(await crud.claim_payment(allowance, "stale-retry"))
+        await crud.finish_payment_attempt(current, None, False)
+        stopped = await crud.get_allowance(allowance.id)
+        self.assertIsNone(stopped.retry_after)
+        self.assertEqual(stopped.retry_count, 0)
+
+    async def test_future_occurrence_cannot_be_claimed(self):
+        allowance = await self.history_fixture()
+        await crud.finish_payment_attempt(
+            allowance, datetime(2090, 1, 1, tzinfo=timezone.utc)
+        )
+        current = await crud.get_allowance(allowance.id)
+        self.assertFalse(await crud.claim_payment(current, "too-early"))
+
+    async def test_paused_claims_are_selected_for_reconciliation(self):
+        allowance = await self.history_fixture()
+        await crud.deactivate_allowance(allowance.id)
+        records = await crud.get_all_active_allowances()
+        self.assertEqual([r.id for r in records], [allowance.id])
+
+    async def test_wallet_quota_and_timezone_persist(self):
+        allowance = await self.history_fixture()
+        data = CreateAllowanceData(**allowance.dict())
+        data.timezone_name = "Europe/London"
+        with patch.object(crud, "MAX_ALLOWANCES_PER_WALLET", 1):
+            with self.assertRaises(crud.AllowanceLimitError):
+                await crud.create_allowance(data)
+            data.wallet = "other-wallet"
+            created = await crud.create_allowance(data)
+        self.assertEqual(
+            (await crud.get_allowance(created.id)).timezone_name, "Europe/London"
+        )
+
+    async def test_concurrent_creates_cannot_exceed_wallet_quota(self):
+        original = await self.history_fixture()
+        values = {**original.dict(), "wallet": "quota-wallet"}
+        with patch.object(crud, "MAX_ALLOWANCES_PER_WALLET", 1):
+            results = await asyncio.gather(
+                crud.create_allowance(CreateAllowanceData(**values)),
+                crud.create_allowance(CreateAllowanceData(**values)),
+                return_exceptions=True,
+            )
+        self.assertEqual(
+            sum(isinstance(r, crud.AllowanceLimitError) for r in results), 1
+        )
+        self.assertEqual(len(await crud.get_allowances("quota-wallet")), 1)
+
+    async def test_edit_resets_retry_state_without_releasing_a_pending_claim(self):
+        allowance = await self.history_fixture()
+        now = datetime.now(timezone.utc)
+        await crud.defer_payment(allowance, now, now)
+        current = await crud.get_allowance(allowance.id)
+        data = CreateAllowanceData(**current.dict())
+        data.active = False
+        paused = await crud.update_allowance(data)
+        self.assertIsNone(paused.retry_deadline)
+        self.assertIsNone(paused.retry_after)
+        self.assertEqual(paused.retry_count, 0)
+        data = CreateAllowanceData(**paused.dict())
+        data.active = True
+        active = await crud.update_allowance(data)
+        self.assertTrue(await crud.claim_payment(active, "pending"))
+        active = await crud.get_allowance(active.id)
+        data = CreateAllowanceData(**active.dict())
+        data.name = "Edited while pending"
+        edited = await crud.update_allowance(data)
+        self.assertEqual(edited.pending_payment_hash, "pending")
+
+    async def test_scheduler_uses_host_defaults_for_legacy_nulls(self):
+        allowance = await self.history_fixture()
+        await self.database.execute(
+            f"UPDATE {self.database.references_schema}maintable "
+            "SET currency = NULL, active = NULL WHERE id = :id",
+            {"id": allowance.id},
+        )
+        rows = await crud.get_all_active_allowances()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].currency, "sats")
+        self.assertTrue(rows[0].active)
+
+    async def test_malformed_sqlite_timestamp_does_not_block_valid_rows(self):
+        if self.database.type != SQLITE:
+            self.skipTest("PostgreSQL enforces timestamp column types")
+        first = await self.history_fixture()
+        second = await self.history_fixture()
+        await self.database.execute(
+            "UPDATE maintable SET created_at = '2024-01-01 00:00:00' WHERE id = :id",
+            {"id": first.id},
+        )
+        self.assertEqual(
+            [row.id for row in await crud.get_all_active_allowances()], [second.id]
+        )
+
+    async def test_sqlite_timestamp_migration_normalizes_valid_dates(self):
+        if self.database.type != SQLITE:
+            self.skipTest("SQLite dynamic storage types only")
+        with tempfile.TemporaryDirectory(prefix="allowance-legacy-") as folder:
+            with patch.object(settings, "lnbits_data_folder", folder):
+                legacy = crud.AllowanceDatabase("ext_legacy")
+            try:
+                await legacy.execute(
+                    "CREATE TABLE maintable (id TEXT PRIMARY KEY, "
+                    "start_datetime TIMESTAMP, next_payment_date TIMESTAMP)"
+                )
+                samples = {
+                    "text": "2026-01-01 09:00:00",
+                    "offset": "2026-01-01T10:00:00+01:00",
+                    "invalid": "not-a-date",
+                    "integer": 1767258000,
+                    "fraction": 1767258000.75,
+                }
+                for key, value in samples.items():
+                    await legacy.execute(
+                        "INSERT INTO maintable VALUES (:id, :date, :date)",
+                        {"id": key, "date": value},
+                    )
+                await migrations.m007_retry_and_local_schedule(legacy)
+                rows = {
+                    row["id"]: dict(row)
+                    for row in await legacy.fetchall("SELECT * FROM maintable")
+                }
+                for field in ("start_datetime", "next_payment_date"):
+                    self.assertEqual(rows["text"][field], samples["integer"])
+                    self.assertEqual(rows["offset"][field], samples["integer"])
+                    self.assertEqual(rows["invalid"][field], samples["invalid"])
+                    self.assertEqual(rows["integer"][field], samples["integer"])
+                    self.assertEqual(rows["fraction"][field], int(samples["fraction"]))
+            finally:
+                await legacy.engine.dispose()

@@ -125,3 +125,42 @@ async def m006_operational_history(db):
             f"INSERT INTO {db.references_schema}scheduler_health "
             "(id, state) VALUES ('worker', 'starting') ON CONFLICT (id) DO NOTHING"
         )
+
+
+async def m007_retry_and_local_schedule(db):
+    from lnbits.db import POSTGRES, SQLITE
+
+    from .crud import transaction
+
+    async with transaction(db) as atomic:
+        await atomic.execute(
+            f"CREATE TABLE {db.references_schema}wallet_limits "
+            "(wallet TEXT PRIMARY KEY)"
+        )
+        for definition in (
+            "timezone_name TEXT NOT NULL DEFAULT 'UTC'",
+            "retry_count INTEGER NOT NULL DEFAULT 0",
+            "retry_after TIMESTAMP",
+            "retry_deadline TIMESTAMP",
+        ):
+            await atomic.execute(
+                f"ALTER TABLE {db.references_schema}maintable ADD COLUMN {definition}"
+            )
+        for column in ("start_datetime", "next_payment_date"):
+            expression = (
+                f"date_trunc('second', {column})"
+                if db.type == POSTGRES
+                else f"CAST({column} AS INTEGER)"
+            )
+            condition = f" WHERE typeof({column}) = 'real'" if db.type == SQLITE else ""
+            await atomic.execute(
+                f"UPDATE {db.references_schema}maintable "
+                f"SET {column} = {expression}{condition}"
+            )
+            if db.type == SQLITE:
+                await atomic.execute(
+                    f"UPDATE {db.references_schema}maintable "
+                    f"SET {column} = CAST(strftime('%s', {column}) AS INTEGER) "
+                    f"WHERE typeof({column}) = 'text' "
+                    f"AND strftime('%s', {column}) IS NOT NULL"
+                )

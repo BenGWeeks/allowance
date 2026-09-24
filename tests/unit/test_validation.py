@@ -38,6 +38,11 @@ class ValidationTests(unittest.IsolatedAsyncioTestCase):
     async def test_invalid_updates_never_write(self):
         for data in [
             {"amount": 0},
+            {"amount": 0.00001, "currency": "USD"},
+            {"amount": 100000000},
+            {"currency": "XYZ"},
+            {"lightning_address": "not-an-address"},
+            {"timezone_name": "Invalid/Zone"},
             {"amount": "NaN"},
             {"amount": True},
             {"amount": 0.5},
@@ -146,3 +151,81 @@ class ValidationTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertEqual(response.status_code, 422)
                 save.assert_not_awaited()
+
+    async def test_legacy_invalid_recipient_or_currency_can_be_paused(self):
+        self.allowance.currency = "XYZ"
+        self.allowance.lightning_address = "legacy-invalid"
+        with patch.object(
+            views_api, "get_allowance", AsyncMock(return_value=self.allowance)
+        ), patch.object(
+            views_api, "update_allowance", AsyncMock(return_value=self.allowance)
+        ) as save:
+            response = await self.client.put(
+                "/api/v1/allowance/test", json={"revision": 0, "active": False}
+            )
+            self.assertEqual(response.status_code, 200)
+            save.assert_awaited_once()
+
+    async def test_invalid_url_syntax_is_a_validation_error(self):
+        with patch.object(
+            views_api, "get_allowance", AsyncMock(return_value=self.allowance)
+        ), patch.object(views_api, "update_allowance", AsyncMock()) as save:
+            response = await self.client.put(
+                "/api/v1/allowance/test",
+                json={"revision": 0, "lightning_address": "user@[x"},
+            )
+            self.assertEqual(response.status_code, 422)
+            save.assert_not_awaited()
+
+    def test_create_rejects_unknown_timezone(self):
+        with self.assertRaises(ValidationError):
+            AllowanceCreateRequest(
+                name="Test",
+                amount=1,
+                lightning_address="user@example.invalid",
+                start_datetime="2090-01-01T00:00:00Z",
+                timezone_name="Invalid/Zone",
+            )
+
+    async def test_ui_shaped_pause_allows_unchanged_legacy_payment_values(self):
+        self.allowance.currency = "XYZ"
+        self.allowance.lightning_address = "legacy-invalid"
+        payload = {
+            "revision": 0,
+            "name": "Renamed",
+            "amount": self.allowance.amount,
+            "currency": self.allowance.currency,
+            "lightning_address": self.allowance.lightning_address,
+            "wallet": self.allowance.wallet,
+            "active": False,
+            "memo": "",
+        }
+        with patch.object(
+            views_api, "get_allowance", AsyncMock(return_value=self.allowance)
+        ), patch.object(
+            views_api, "update_allowance", AsyncMock(return_value=self.allowance)
+        ) as save:
+            result = await self.client.put("/api/v1/allowance/test", json=payload)
+            self.assertEqual(result.status_code, 200)
+            save.assert_awaited_once()
+        self.allowance.active = False
+        with patch.object(
+            views_api, "get_allowance", AsyncMock(return_value=self.allowance)
+        ), patch.object(views_api, "update_allowance", AsyncMock()) as save:
+            result = await self.client.put(
+                "/api/v1/allowance/test", json={**payload, "active": True}
+            )
+            self.assertEqual(result.status_code, 422)
+            save.assert_not_awaited()
+
+    async def test_timezone_lookup_os_error_is_a_validation_error(self):
+        with patch(
+            "lnbits.extensions.allowance.models.ZoneInfo",
+            side_effect=IsADirectoryError("Europe"),
+        ), patch.object(views_api, "update_allowance", AsyncMock()) as save:
+            response = await self.client.put(
+                "/api/v1/allowance/test",
+                json={"revision": 0, "timezone_name": "Europe"},
+            )
+            self.assertEqual(response.status_code, 422)
+            save.assert_not_awaited()

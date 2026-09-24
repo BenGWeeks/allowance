@@ -140,16 +140,38 @@ allowance/
 
 ### Recurrence timing
 
-Schedules keep the UTC time and original day from `start_datetime`. Monthly dates
-clamp in shorter months (January 31 → February 28/29 → March 31); yearly February
-29 schedules return to February 29 in leap years. Local display times can change
-with daylight saving time. The worker polls every 60 seconds, so execution may be
-late, but that delay no longer shifts future occurrences.
+New schedules retain the browser's IANA timezone. Daily, weekly, monthly and yearly
+payments follow that local calendar; hourly and minutely intervals use elapsed time.
+Monthly dates clamp in shorter months (January 31 → February 28/29 → March 31).
+At a spring DST gap the payment moves forward by the gap; an autumn repeated time
+occurs once, at its first occurrence. Existing schedules retain UTC on upgrade.
+The worker polls every 60 seconds; polling delay does not shift the schedule.
 
-After downtime or reactivation, an overdue allowance gets one attempt; missed
-periods are skipped. Failed attempts also advance to the next scheduled period,
-as before. Editing metadata does not reset the schedule. Existing drifted dates
-are realigned after the next due attempt; this change does not replay old payments.
+After downtime or reactivation, an overdue allowance gets one attempt; older missed
+periods are skipped. Confirmed unsent attempts retry after 1, 2, 4, 8, 16, 32 and
+then 60 minutes, until the next occurrence or 24 hours after the first failure,
+whichever comes first. Confirmed terminal outgoing failures advance the schedule.
+Unknown outcomes retain their invoice identity and never request another invoice.
+When a retry window expires, the following occurrence keeps its own payment attempt.
+Editing an allowance resets its unsent retry backoff without releasing a pending claim.
+Paused or expired claims are still checked for settlement without sending payments.
+
+Only the invocation that called LNbits may release a claim after an exception,
+and only after a global payment lookup confirms there is no outgoing record.
+Claims left by cancellation, a crash or a database lookup failure require operator
+investigation. Age alone cannot prove that a suspended sender will not resume.
+Stop the extension and verify the invoice hash against LNbits and the funding
+source before repairing such a claim; never clear it merely to retry a payment.
+
+The scheduler polls independently of payment completion, with one in-flight
+worker per wallet and up to eight overall. Each worker takes at most five rows;
+wallets and rows rotate between turns so a backlog cannot monopolize scheduling.
+Free slots are refilled immediately; unchanged pending rows are checked at most
+once a minute. New due work is fetched at least once per minute.
+Claimed payments have no extension-imposed cancelling timeout. New creation is limited to 100 allowances per wallet;
+existing records are retained. Invalid stored rows are logged and skipped so they
+cannot stop other users' payments. Operators must repair those rows separately.
+The manual `/trigger` endpoint and unused public template routes have been removed.
 
 ### LNbits compatibility
 

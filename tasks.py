@@ -1,13 +1,15 @@
 import asyncio
-from datetime import datetime, timezone
+import hashlib
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
+from time import monotonic
 from typing import Any
 from urllib.parse import quote
 
 from lnbits.bolt11 import decode as decode_invoice
 from lnbits.core.crud import get_standalone_payment
 from lnbits.core.services import pay_invoice
-from lnbits.core.services.payments import check_transaction_status
-from lnbits.exceptions import PaymentError
+from lnbits.core.services.payments import check_payment_status
 from lnbits.utils.exchange_rates import fiat_amount_as_satoshis
 from lnurl import decode as lnurl_decode
 from loguru import logger
@@ -15,6 +17,7 @@ from loguru import logger
 from .crud import (
     claim_payment,
     deactivate_allowance,
+    defer_payment,
     finish_payment_attempt,
     get_all_active_allowances,
     get_allowance,
@@ -27,18 +30,26 @@ from .safe_http import get_public_json, validate_url
 from .schedule import next_occurrence
 
 
-async def resolve_lightning_address(
-    lightning_address: str,
-) -> tuple[str, dict[str, Any]]:
+def lightning_address_url(lightning_address: str) -> str:
     if "@" not in lightning_address and lightning_address.lower().startswith("lnurl"):
         url = str(lnurl_decode(lightning_address))
     else:
-        if lightning_address.count("@") != 1:
+        if lightning_address.count("@") != 1 or any(
+            c.isspace() for c in lightning_address
+        ):
             raise ValueError("Invalid Lightning address")
         user, domain = lightning_address.split("@")
-        if not user or not domain or any(char in domain for char in "/?#\\"):
+        if not user or not domain or any(char in domain for char in "/?#\\[]"):
             raise ValueError("Invalid Lightning address")
         url = f"https://{domain}/.well-known/lnurlp/{quote(user, safe='')}"
+    validate_url(url)
+    return url
+
+
+async def resolve_lightning_address(
+    lightning_address: str,
+) -> tuple[str, dict[str, Any]]:
+    url = lightning_address_url(lightning_address)
     data = await get_public_json(url)
     minimum, maximum = data.get("minSendable"), data.get("maxSendable")
     if (
@@ -78,8 +89,7 @@ async def execute_lightning_address_payment(  # noqa: C901
     allowance: Allowance,
 ) -> bool | None:
     """
-    Execute payment to Lightning address
-    Return True for success, False for terminal failure, None while unresolved.
+    Return True/False for a terminal result, None while pending or retrying.
     """
 
     current = await get_allowance(allowance.id)
@@ -90,6 +100,13 @@ async def execute_lightning_address_payment(  # noqa: C901
         return await reconcile_payment(allowance)
     if current.revision != allowance.revision or not current.active:
         return None
+    now = datetime.now(timezone.utc)
+    if current.next_payment_date > now or (
+        current.retry_after and current.retry_after > now
+    ):
+        return None
+    if current.retry_deadline and now >= current.retry_deadline:
+        return False
 
     try:
         amount_sats = allowance.amount
@@ -135,7 +152,7 @@ async def execute_lightning_address_payment(  # noqa: C901
 
         memo = ""
         if comment_allowed > 0:
-            desired_memo = allowance.memo or f"#allowance: {allowance.name}"
+            desired_memo = allowance.memo or ""
             memo = desired_memo[:comment_allowed]
 
         payment_request = await get_invoice_from_lnurl(
@@ -147,7 +164,17 @@ async def execute_lightning_address_payment(  # noqa: C901
         invoice = decode_invoice(payment_request)
         if invoice.amount_msat != amount_msats:
             raise ValueError("Invoice amount does not match the requested amount")
+        if (
+            invoice.description_hash
+            != hashlib.sha256(lnurl_data["metadata"].encode()).hexdigest()
+        ):
+            raise ValueError("Invoice metadata hash mismatch")
+        if invoice.has_expired():
+            raise ValueError("Invoice expired")
         payment_hash = invoice.payment_hash
+        previous = await get_standalone_payment(payment_hash)
+        if previous and (previous.amount < 0 or previous.success):
+            raise ValueError("Invoice was already used")
         if not await claim_payment(allowance, payment_hash):
             return None
         allowance.pending_payment_hash = payment_hash
@@ -163,9 +190,12 @@ async def execute_lightning_address_payment(  # noqa: C901
                 "allowance_name": allowance.name,
                 "lightning_address": allowance.lightning_address,
                 "scheduled": True,
+                "scheduled_at": int(allowance.next_payment_date.timestamp()),
             },
         )
 
+        if not owns_payment(allowance, payment_result):
+            raise ValueError("Invoice belongs to a different payment attempt")
         if payment_result.success:
             await update_allowance_success(
                 allowance, int(datetime.now(timezone.utc).timestamp())
@@ -183,42 +213,66 @@ async def execute_lightning_address_payment(  # noqa: C901
             )
             return None if payment_result.pending else False
 
-    except PaymentError as e:
-
+    except Exception:
+        logger.error("Allowance payment attempt did not complete")
         await update_allowance_error(
             allowance,
-            (
-                "Payment rejected"
-                if e.status == "failed"
-                else "Payment outcome unresolved"
-            ),
+            "Payment attempt failed; retrying if confirmed unsent",
             int(datetime.now(timezone.utc).timestamp()),
         )
-        return False if e.status == "failed" else None
-    except Exception:
-        error_msg = "Payment processing failed; check payment status before retrying"
-        logger.error("Allowance operation: execute_lightning_address_payment")
-        await update_allowance_error(
-            allowance, error_msg, int(datetime.now(timezone.utc).timestamp())
+        if allowance.pending_payment_hash:
+            try:
+                # Global lookup includes shared wallets and cannot hide an outgoing row.
+                payment = await get_standalone_payment(allowance.pending_payment_hash)
+            except Exception:
+                return None
+            if payment and owns_payment(allowance, payment):
+                return await reconcile_payment(allowance)
+        return await retry_unsent_payment(allowance)
+
+
+async def retry_unsent_payment(allowance: Allowance) -> bool | None:
+    now = datetime.now(timezone.utc)
+    deadline = allowance.retry_deadline
+    if deadline is None:
+        deadline = now + timedelta(hours=24)
+        following = next_occurrence(
+            allowance.start_datetime,
+            allowance.frequency_type,
+            now,
+            allowance.timezone_name,
         )
-        return None if allowance.pending_payment_hash else False
+        if following is not None:
+            deadline = min(deadline, following)
+    if now >= deadline:
+        return False
+    delay = min(3600, 60 * 2 ** min(allowance.retry_count, 6))
+    retry_at = min(deadline, now + timedelta(seconds=delay))
+    await defer_payment(allowance, retry_at, deadline)
+    return None
+
+
+def owns_payment(allowance: Allowance, payment) -> bool:
+    extra = payment.extra or {}
+    return (
+        payment.amount < 0
+        and extra.get("allowance_id") == allowance.id
+        and extra.get("scheduled_at", int(allowance.next_payment_date.timestamp()))
+        == int(allowance.next_payment_date.timestamp())
+    )
 
 
 async def reconcile_payment(allowance: Allowance, refresh: bool = False) -> bool | None:
-    """Inspect an existing claim only; never request or send a new invoice."""
+    """Inspect only the outgoing record belonging to this allowance occurrence."""
     if not allowance.pending_payment_hash:
         return None
     try:
-        payment = await get_standalone_payment(
-            allowance.pending_payment_hash, wallet_id=allowance.wallet
-        )
-        if payment is None:
+        payment = await get_standalone_payment(allowance.pending_payment_hash)
+        if payment is None or not owns_payment(allowance, payment):
             return None
         status = payment
         if payment.pending and refresh:
-            status = await check_transaction_status(
-                allowance.wallet, allowance.pending_payment_hash
-            )
+            status = await check_payment_status(payment)
     except Exception:
         logger.warning("Could not inspect allowance payment status")
         return None
@@ -232,100 +286,160 @@ async def reconcile_payment(allowance: Allowance, refresh: bool = False) -> bool
     return None if updated is False else False
 
 
-def ensure_timezone_aware(dt):
-    """Helper to ensure datetime is timezone aware"""
-    if dt and dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
+async def process_allowance(allowance: Allowance, current_time: datetime):
+    if allowance.pending_payment_hash:
+        success = await reconcile_payment(allowance, refresh=True)
+    else:
+        if not allowance.active or current_time < allowance.start_datetime:
+            return
+        if allowance.end_datetime and current_time > allowance.end_datetime:
+            await deactivate_allowance(allowance.id, revision=allowance.revision)
+            return
+        if current_time < allowance.next_payment_date:
+            return
+        if allowance.retry_after and current_time < allowance.retry_after:
+            return
+        success = await execute_lightning_address_payment(allowance)
+    if success is None:
+        return
+    after = datetime.now(timezone.utc)
+    if not success and allowance.retry_deadline and after >= allowance.retry_deadline:
+        after = allowance.retry_deadline - timedelta(seconds=1)
+    next_date = next_occurrence(
+        allowance.start_datetime,
+        allowance.frequency_type,
+        after,
+        allowance.timezone_name,
+    )
+    await finish_payment_attempt(allowance, next_date, success)
 
 
-async def check_and_process_allowances():  # noqa: C901
-    """
-    Background task to check and process scheduled allowance payments.
-    Runs every 60 seconds (1 minute minimum frequency).
-    """
+class AllowanceWorkers:
+    def __init__(self):
+        self.running: dict[str, asyncio.Task] = {}
+        self.last_wallet: str | None = None
+        self.last_allowance: dict[str, str] = {}
+        self.last_checked: dict[str, tuple[datetime, tuple]] = {}
+        self.completed_in_poll = False
 
-    while True:
-        cycle_failed = False
-        try:
-            await record_scheduler_heartbeat("running")
+    @staticmethod
+    def observation(allowance):
+        return (
+            allowance.revision,
+            allowance.next_payment_date,
+            allowance.pending_payment_hash,
+        )
 
-            allowances = await get_all_active_allowances()
-            current_time = datetime.now(timezone.utc)
+    def collect(self) -> bool:
+        failed = False
+        for wallet, task in list(self.running.items()):
+            if task.done():
+                self.completed_in_poll = True
+                del self.running[wallet]
+                if task.cancelled() or task.exception():
+                    failed = True
+                    logger.error("Allowance operation: process_allowance")
+        return failed
 
-            for allowance in allowances:
-                try:
-
-                    if (
-                        hasattr(allowance, "start_datetime")
-                        and allowance.start_datetime
-                    ):
-                        start_datetime = ensure_timezone_aware(allowance.start_datetime)
-                        if current_time < start_datetime:
-                            continue
-
-                    if hasattr(allowance, "end_datetime") and allowance.end_datetime:
-                        end_datetime = ensure_timezone_aware(allowance.end_datetime)
-                        if current_time > end_datetime:
-                            await deactivate_allowance(
-                                allowance.id, revision=allowance.revision
-                            )
-                            continue
-
-                    next_payment_date = ensure_timezone_aware(
-                        allowance.next_payment_date
+    async def poll(self, allowances: list[Allowance], now: datetime) -> bool:
+        self.completed_in_poll = False
+        failed = self.collect()
+        ids = {a.id for a in allowances}
+        self.last_checked = {
+            key: value for key, value in self.last_checked.items() if key in ids
+        }
+        wallets = defaultdict(list)
+        for allowance in allowances:
+            checked = self.last_checked.get(allowance.id)
+            if (
+                checked
+                and checked[1] == self.observation(allowance)
+                and now < checked[0] + timedelta(seconds=60)
+            ):
+                continue
+            if allowance.pending_payment_hash or (
+                allowance.active
+                and (
+                    (allowance.end_datetime and allowance.end_datetime < now)
+                    or (
+                        allowance.next_payment_date <= now
+                        and (not allowance.retry_after or allowance.retry_after <= now)
                     )
+                )
+            ):
+                wallets[allowance.wallet].append(allowance)
+        order = list(wallets)
+        if self.last_wallet in order:
+            offset = order.index(self.last_wallet) + 1
+            order = order[offset:] + order[:offset]
+        for wallet in order:
+            if len(self.running) >= 8:
+                break
+            if wallet in self.running:
+                continue
+            records = wallets[wallet]
+            previous = self.last_allowance.get(wallet)
+            ids = [a.id for a in records]
+            if previous in ids:
+                offset = ids.index(previous) + 1
+                records = records[offset:] + records[:offset]
+            self.running[wallet] = asyncio.create_task(
+                self.process_wallet(wallet, records[:5], now)
+            )
+            self.last_wallet = wallet
+        if self.running:
+            await asyncio.wait(self.running.values(), timeout=0)
+        return self.collect() or failed
 
-                    if current_time >= next_payment_date:
+    async def process_wallet(self, wallet, records, now):
+        for allowance in records:
+            self.last_allowance[wallet] = allowance.id
+            self.last_checked[allowance.id] = (now, self.observation(allowance))
+            await process_allowance(allowance, now)
 
-                        try:
+    async def close(self):
+        for task in self.running.values():
+            task.cancel()
+        await asyncio.gather(*self.running.values(), return_exceptions=True)
+        self.running.clear()
 
-                            next_occurrence(
-                                allowance.start_datetime,
-                                allowance.frequency_type,
-                                current_time,
-                            )
-                            success = await execute_lightning_address_payment(allowance)
 
-                            if success is None:
-
-                                continue
-
-                            next_date = next_occurrence(
-                                allowance.start_datetime,
-                                allowance.frequency_type,
-                                datetime.now(timezone.utc),
-                            )
-
-                            if next_date is None:
-
-                                await finish_payment_attempt(allowance, None, success)
-                                continue
-                            await finish_payment_attempt(allowance, next_date, success)
-                            allowance.next_payment_date = next_date
-
-                            if not success:
-                                logger.error(
-                                    "Allowance operation: check_and_process_allowances"
-                                )
-
-                        except Exception:
-                            cycle_failed = True
-                            logger.error(
-                                "Allowance operation: check_and_process_allowances"
-                            )
-
-                except Exception:
-                    cycle_failed = True
-                    logger.error("Allowance operation: check_and_process_allowances")
-
-        except Exception:
-            cycle_failed = True
-            logger.error("Allowance operation: check_and_process_allowances")
-
-        try:
-            await record_scheduler_heartbeat("error" if cycle_failed else "healthy")
-        except Exception:
-            logger.error("Could not record allowance scheduler heartbeat")
-
-        await asyncio.sleep(60)
+async def check_and_process_allowances():
+    workers = AllowanceWorkers()
+    next_poll = monotonic()
+    try:
+        while True:
+            workers.completed_in_poll = False
+            cycle_failed = workers.collect()
+            now = monotonic()
+            if now >= next_poll:
+                next_poll += (int((now - next_poll) // 60) + 1) * 60
+            try:
+                await record_scheduler_heartbeat("running")
+                allowances = await get_all_active_allowances()
+                cycle_failed = (
+                    await workers.poll(allowances, datetime.now(timezone.utc))
+                    or cycle_failed
+                )
+            except Exception:
+                cycle_failed = True
+                logger.error("Allowance operation: check_and_process_allowances")
+            try:
+                await record_scheduler_heartbeat("error" if cycle_failed else "healthy")
+            except Exception:
+                logger.error("Could not record allowance scheduler heartbeat")
+            timeout = max(0, next_poll - monotonic())
+            if cycle_failed:
+                await asyncio.sleep(60)
+            elif workers.completed_in_poll:
+                await asyncio.sleep(0)
+            elif workers.running:
+                await asyncio.wait(
+                    workers.running.values(),
+                    timeout=timeout,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+            else:
+                await asyncio.sleep(timeout)
+    finally:
+        await workers.close()

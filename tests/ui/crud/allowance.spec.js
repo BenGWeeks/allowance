@@ -51,6 +51,7 @@ test('create, edit, reload and delete a monthly allowance through the UI', async
     expect(original.active).toBe(false);
     expect(original.memo).toBe('');
     expect(original.frequency_type).toBe('monthly');
+    expect(original.timezone_name).toBeTruthy();
     await expect(page.getByRole('row').filter({hasText: name})).toBeVisible();
     await page.screenshot({path: testInfo.outputPath('created.png'), fullPage: true});
 
@@ -62,6 +63,7 @@ test('create, edit, reload and delete a monthly allowance through the UI', async
     await page.getByRole('dialog').getByRole('button', {name: 'Close', exact: true}).click();
     await row.getByRole('button', {name: 'Edit allowance', exact: true}).click();
     await expect(dialog.getByLabel('Start date & time *', {exact: true})).toBeDisabled();
+    await expect(dialog.locator('.q-select').filter({hasText: 'Wallet to send funds from *'})).toHaveClass(/disabled/);
     await expect(dialog.locator('.q-select').filter({hasText: 'Frequency *'})).toHaveClass(/disabled/);
     await dialog.getByLabel('Allowance description *', {exact: true}).fill(updatedName);
     await dialog.getByLabel('Amount *', {exact: true}).fill(config.editAmount);
