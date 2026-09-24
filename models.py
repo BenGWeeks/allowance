@@ -1,6 +1,8 @@
 import math
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Literal, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, StrictBool, conint, constr, root_validator, validator
 
@@ -15,6 +17,7 @@ class CreateAllowanceData(BaseModel):
     currency: str = "sats"
     start_datetime: datetime
     frequency_type: str
+    timezone_name: str = "UTC"
     next_payment_date: datetime
     memo: str
     active: bool = True
@@ -47,6 +50,7 @@ class Allowance(BaseModel):
     currency: str = "sats"
     start_datetime: datetime
     frequency_type: str
+    timezone_name: str = "UTC"
     next_payment_date: datetime
     memo: Optional[str] = ""
     active: bool = True
@@ -55,6 +59,9 @@ class Allowance(BaseModel):
     total: Optional[float] = 0
     created_at: Optional[datetime] = None
     pending_payment_hash: Optional[str] = None
+    retry_count: int = 0
+    retry_after: Optional[datetime] = None
+    retry_deadline: Optional[datetime] = None
     last_error: Optional[str] = None
     last_error_time: Optional[datetime] = None
     last_success_time: Optional[datetime] = None
@@ -66,6 +73,8 @@ class Allowance(BaseModel):
         "created_at",
         "last_error_time",
         "last_success_time",
+        "retry_after",
+        "retry_deadline",
     )
     def timestamps_are_utc(cls, value):  # noqa: N805
         if value is not None and value.tzinfo is None:
@@ -105,6 +114,7 @@ class AllowanceUpdateRequest(BaseModel):
     start_datetime: Optional[datetime] = None
     end_datetime: Optional[datetime] = None
     frequency_type: Optional[Frequency] = None
+    timezone_name: Optional[constr(strict=True, max_length=100)] = None
 
     class Config:
         extra = "forbid"
@@ -121,6 +131,19 @@ class AllowanceUpdateRequest(BaseModel):
     def valid_amount(cls, value):  # noqa: N805
         if type(value) not in (int, float) or not math.isfinite(value) or value <= 0:
             raise ValueError("amount must be a finite positive number")
+        amount = Decimal(str(value))
+        if amount > Decimal("99999999.9999") or amount != amount.quantize(
+            Decimal("0.0001")
+        ):
+            raise ValueError("amount must fit 8 integer and 4 decimal places")
+        return value
+
+    @validator("timezone_name")
+    def valid_timezone(cls, value):  # noqa: N805
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError("Unknown IANA timezone") from exc
         return value
 
     @validator("start_datetime", "end_datetime", pre=True)
@@ -141,6 +164,7 @@ class AllowanceUpdateRequest(BaseModel):
 
 
 class AllowanceCreateRequest(AllowanceUpdateRequest):
+    timezone_name: constr(strict=True, max_length=100) = "UTC"
     revision: Optional[conint(strict=True, ge=0)] = None
     name: constr(strict=True, strip_whitespace=True, min_length=1, max_length=200)
     lightning_address: constr(

@@ -296,6 +296,7 @@
           filled
           dense
           v-model="formDialog.data.wallet"
+          :disable="!!formDialog.data.id"
           :options="g.user.wallets"
           option-label="name"
           option-value="id"
@@ -365,6 +366,8 @@
           filled
           dense
           v-model="formDialog.data.frequency_type"
+          :hint="'Schedule timezone: ' + (formDialog.data.timezone_name || 'UTC')"
+          persistent-hint
           :options="frequencyOptions"
           label="Frequency *"
           option-label="label"
@@ -373,7 +376,6 @@
           map-options
           :rules="[val => !!val || 'Frequency is required']"
           :disable="!!formDialog.data.id"
-          :hint="formDialog.data.id ? 'Frequency cannot be changed after creation' : 'How often payments should be sent'"
         ></q-select>
         
         <div v-if="formDialog.data.frequency_type == 'per_second'" class="q-pa-sm bg-yellow-1 text-dark rounded-borders">
@@ -488,7 +490,7 @@
             color="positive"
             :disable="isEndDateInPast"
           >
-            <q-tooltip>Enable or disable this allowance</q-tooltip>
+            <q-tooltip>Enable or disable this allowance. Reactivating an overdue schedule makes one payment; older missed periods are skipped.</q-tooltip>
           </q-toggle>
         </div>
 

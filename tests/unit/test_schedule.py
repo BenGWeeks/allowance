@@ -83,6 +83,40 @@ class RecurrenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             next_occurrence(dt("2026-01-01"), "invalid", dt("2026-01-01"))
 
+    def test_monthly_preserves_local_day_in_london(self):
+        start = dt("2026-06-30T23:30:00")
+        self.assertEqual(
+            next_occurrence(start, "monthly", start, "Europe/London"),
+            dt("2026-07-31T23:30:00"),
+        )
+        self.assertEqual(
+            next_occurrence(start, "monthly", dt("2026-11-15"), "Europe/London"),
+            dt("2026-12-01T00:30:00"),
+        )
+
+    def test_daily_preserves_local_time_across_dst(self):
+        start = dt("2026-03-28T09:00:00")
+        self.assertEqual(
+            next_occurrence(start, "daily", start, "Europe/London"),
+            dt("2026-03-29T08:00:00"),
+        )
+
+    def test_nonexistent_local_time_rolls_forward_and_fold_occurs_once(self):
+        start = dt("2026-03-28T01:30:00")
+        spring = next_occurrence(start, "daily", start, "Europe/London")
+        self.assertEqual(spring, dt("2026-03-29T01:30:00"))
+        self.assertEqual(
+            next_occurrence(start, "daily", spring, "Europe/London"),
+            dt("2026-03-30T00:30:00"),
+        )
+        start = dt("2026-10-24T00:30:00")
+        autumn = next_occurrence(start, "daily", start, "Europe/London")
+        self.assertEqual(autumn, dt("2026-10-25T00:30:00"))
+        self.assertEqual(
+            next_occurrence(start, "daily", autumn, "Europe/London"),
+            dt("2026-10-26T01:30:00"),
+        )
+
 
 class WorkerTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

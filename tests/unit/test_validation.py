@@ -38,6 +38,11 @@ class ValidationTests(unittest.IsolatedAsyncioTestCase):
     async def test_invalid_updates_never_write(self):
         for data in [
             {"amount": 0},
+            {"amount": 0.00001, "currency": "USD"},
+            {"amount": 100000000},
+            {"currency": "XYZ"},
+            {"lightning_address": "not-an-address"},
+            {"timezone_name": "Invalid/Zone"},
             {"amount": "NaN"},
             {"amount": True},
             {"amount": 0.5},

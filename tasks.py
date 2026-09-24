@@ -1,5 +1,7 @@
 import asyncio
-from datetime import datetime, timezone
+import hashlib
+from collections import defaultdict, deque
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import quote
 
@@ -7,7 +9,6 @@ from lnbits.bolt11 import decode as decode_invoice
 from lnbits.core.crud import get_standalone_payment
 from lnbits.core.services import pay_invoice
 from lnbits.core.services.payments import check_transaction_status
-from lnbits.exceptions import PaymentError
 from lnbits.utils.exchange_rates import fiat_amount_as_satoshis
 from lnurl import decode as lnurl_decode
 from loguru import logger
@@ -15,6 +16,7 @@ from loguru import logger
 from .crud import (
     claim_payment,
     deactivate_allowance,
+    defer_payment,
     finish_payment_attempt,
     get_all_active_allowances,
     get_allowance,
@@ -27,18 +29,26 @@ from .safe_http import get_public_json, validate_url
 from .schedule import next_occurrence
 
 
-async def resolve_lightning_address(
-    lightning_address: str,
-) -> tuple[str, dict[str, Any]]:
+def lightning_address_url(lightning_address: str) -> str:
     if "@" not in lightning_address and lightning_address.lower().startswith("lnurl"):
         url = str(lnurl_decode(lightning_address))
     else:
-        if lightning_address.count("@") != 1:
+        if lightning_address.count("@") != 1 or any(
+            c.isspace() for c in lightning_address
+        ):
             raise ValueError("Invalid Lightning address")
         user, domain = lightning_address.split("@")
         if not user or not domain or any(char in domain for char in "/?#\\"):
             raise ValueError("Invalid Lightning address")
         url = f"https://{domain}/.well-known/lnurlp/{quote(user, safe='')}"
+    validate_url(url)
+    return url
+
+
+async def resolve_lightning_address(
+    lightning_address: str,
+) -> tuple[str, dict[str, Any]]:
+    url = lightning_address_url(lightning_address)
     data = await get_public_json(url)
     minimum, maximum = data.get("minSendable"), data.get("maxSendable")
     if (
@@ -78,8 +88,7 @@ async def execute_lightning_address_payment(  # noqa: C901
     allowance: Allowance,
 ) -> bool | None:
     """
-    Execute payment to Lightning address
-    Return True for success, False for terminal failure, None while unresolved.
+    Return True/False for a terminal result, None while pending or retrying.
     """
 
     current = await get_allowance(allowance.id)
@@ -90,6 +99,13 @@ async def execute_lightning_address_payment(  # noqa: C901
         return await reconcile_payment(allowance)
     if current.revision != allowance.revision or not current.active:
         return None
+    now = datetime.now(timezone.utc)
+    if current.next_payment_date > now or (
+        current.retry_after and current.retry_after > now
+    ):
+        return None
+    if current.retry_deadline and now >= current.retry_deadline:
+        return False
 
     try:
         amount_sats = allowance.amount
@@ -135,7 +151,7 @@ async def execute_lightning_address_payment(  # noqa: C901
 
         memo = ""
         if comment_allowed > 0:
-            desired_memo = allowance.memo or f"#allowance: {allowance.name}"
+            desired_memo = allowance.memo or ""
             memo = desired_memo[:comment_allowed]
 
         payment_request = await get_invoice_from_lnurl(
@@ -147,7 +163,17 @@ async def execute_lightning_address_payment(  # noqa: C901
         invoice = decode_invoice(payment_request)
         if invoice.amount_msat != amount_msats:
             raise ValueError("Invoice amount does not match the requested amount")
+        if (
+            invoice.description_hash
+            != hashlib.sha256(lnurl_data["metadata"].encode()).hexdigest()
+        ):
+            raise ValueError("Invoice metadata hash mismatch")
+        if invoice.has_expired():
+            raise ValueError("Invoice expired")
         payment_hash = invoice.payment_hash
+        previous = await get_standalone_payment(payment_hash)
+        if previous and (previous.amount < 0 or previous.success):
+            raise ValueError("Invoice was already used")
         if not await claim_payment(allowance, payment_hash):
             return None
         allowance.pending_payment_hash = payment_hash
@@ -163,6 +189,7 @@ async def execute_lightning_address_payment(  # noqa: C901
                 "allowance_name": allowance.name,
                 "lightning_address": allowance.lightning_address,
                 "scheduled": True,
+                "scheduled_at": int(allowance.next_payment_date.timestamp()),
             },
         )
 
@@ -183,25 +210,43 @@ async def execute_lightning_address_payment(  # noqa: C901
             )
             return None if payment_result.pending else False
 
-    except PaymentError as e:
-
+    except Exception:
+        logger.error("Allowance payment attempt did not complete")
         await update_allowance_error(
             allowance,
-            (
-                "Payment rejected"
-                if e.status == "failed"
-                else "Payment outcome unresolved"
-            ),
+            "Payment attempt failed; retrying if confirmed unsent",
             int(datetime.now(timezone.utc).timestamp()),
         )
-        return False if e.status == "failed" else None
-    except Exception:
-        error_msg = "Payment processing failed; check payment status before retrying"
-        logger.error("Allowance operation: execute_lightning_address_payment")
-        await update_allowance_error(
-            allowance, error_msg, int(datetime.now(timezone.utc).timestamp())
+        if allowance.pending_payment_hash:
+            try:
+                # Global lookup includes shared wallets and cannot hide an outgoing row.
+                payment = await get_standalone_payment(allowance.pending_payment_hash)
+            except Exception:
+                return None
+            if payment and payment.amount < 0:
+                return await reconcile_payment(allowance)
+        return await retry_unsent_payment(allowance)
+
+
+async def retry_unsent_payment(allowance: Allowance) -> bool | None:
+    now = datetime.now(timezone.utc)
+    deadline = allowance.retry_deadline
+    if deadline is None:
+        deadline = now + timedelta(hours=24)
+        following = next_occurrence(
+            allowance.start_datetime,
+            allowance.frequency_type,
+            now,
+            allowance.timezone_name,
         )
-        return None if allowance.pending_payment_hash else False
+        if following is not None:
+            deadline = min(deadline, following)
+    if now >= deadline:
+        return False
+    delay = min(3600, 60 * 2 ** min(allowance.retry_count, 6))
+    retry_at = min(deadline, now + timedelta(seconds=delay))
+    await defer_payment(allowance, retry_at, deadline)
+    return None
 
 
 async def reconcile_payment(allowance: Allowance, refresh: bool = False) -> bool | None:
@@ -232,100 +277,77 @@ async def reconcile_payment(allowance: Allowance, refresh: bool = False) -> bool
     return None if updated is False else False
 
 
-def ensure_timezone_aware(dt):
-    """Helper to ensure datetime is timezone aware"""
-    if dt and dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
+async def process_allowance(allowance: Allowance, current_time: datetime):
+    if allowance.pending_payment_hash:
+        success = await reconcile_payment(allowance, refresh=True)
+    else:
+        if not allowance.active or current_time < allowance.start_datetime:
+            return
+        if allowance.end_datetime and current_time > allowance.end_datetime:
+            await deactivate_allowance(allowance.id, revision=allowance.revision)
+            return
+        if current_time < allowance.next_payment_date:
+            return
+        if allowance.retry_after and current_time < allowance.retry_after:
+            return
+        success = await execute_lightning_address_payment(allowance)
+    if success is None:
+        return
+    next_date = next_occurrence(
+        allowance.start_datetime,
+        allowance.frequency_type,
+        datetime.now(timezone.utc),
+        allowance.timezone_name,
+    )
+    await finish_payment_attempt(allowance, next_date, success)
 
 
-async def check_and_process_allowances():  # noqa: C901
-    """
-    Background task to check and process scheduled allowance payments.
-    Runs every 60 seconds (1 minute minimum frequency).
-    """
+async def process_cycle(allowances: list[Allowance], current_time: datetime) -> bool:
+    """Round-robin wallets with at most one in-flight attempt each and eight total."""
+    wallets = defaultdict(deque)
+    for allowance in allowances:
+        if (
+            (allowance.end_datetime and allowance.end_datetime < current_time)
+            or allowance.pending_payment_hash
+            or (
+                allowance.active
+                and allowance.next_payment_date <= current_time
+                and (not allowance.retry_after or allowance.retry_after <= current_time)
+            )
+        ):
+            wallets[allowance.wallet].append(allowance)
+    queue = deque(wallets.values())
+    failed = False
 
+    async def worker():
+        nonlocal failed
+        while queue:
+            records = queue.popleft()
+            allowance = records.popleft()
+            try:
+                await asyncio.wait_for(process_allowance(allowance, current_time), 30)
+            except Exception:
+                failed = True
+                logger.error("Allowance operation: process_allowance")
+            if records:
+                queue.append(records)
+
+    await asyncio.gather(*(worker() for _ in range(min(8, len(queue)))))
+    return failed
+
+
+async def check_and_process_allowances():
     while True:
         cycle_failed = False
         try:
             await record_scheduler_heartbeat("running")
-
             allowances = await get_all_active_allowances()
-            current_time = datetime.now(timezone.utc)
-
-            for allowance in allowances:
-                try:
-
-                    if (
-                        hasattr(allowance, "start_datetime")
-                        and allowance.start_datetime
-                    ):
-                        start_datetime = ensure_timezone_aware(allowance.start_datetime)
-                        if current_time < start_datetime:
-                            continue
-
-                    if hasattr(allowance, "end_datetime") and allowance.end_datetime:
-                        end_datetime = ensure_timezone_aware(allowance.end_datetime)
-                        if current_time > end_datetime:
-                            await deactivate_allowance(
-                                allowance.id, revision=allowance.revision
-                            )
-                            continue
-
-                    next_payment_date = ensure_timezone_aware(
-                        allowance.next_payment_date
-                    )
-
-                    if current_time >= next_payment_date:
-
-                        try:
-
-                            next_occurrence(
-                                allowance.start_datetime,
-                                allowance.frequency_type,
-                                current_time,
-                            )
-                            success = await execute_lightning_address_payment(allowance)
-
-                            if success is None:
-
-                                continue
-
-                            next_date = next_occurrence(
-                                allowance.start_datetime,
-                                allowance.frequency_type,
-                                datetime.now(timezone.utc),
-                            )
-
-                            if next_date is None:
-
-                                await finish_payment_attempt(allowance, None, success)
-                                continue
-                            await finish_payment_attempt(allowance, next_date, success)
-                            allowance.next_payment_date = next_date
-
-                            if not success:
-                                logger.error(
-                                    "Allowance operation: check_and_process_allowances"
-                                )
-
-                        except Exception:
-                            cycle_failed = True
-                            logger.error(
-                                "Allowance operation: check_and_process_allowances"
-                            )
-
-                except Exception:
-                    cycle_failed = True
-                    logger.error("Allowance operation: check_and_process_allowances")
-
+            cycle_failed = await process_cycle(allowances, datetime.now(timezone.utc))
         except Exception:
             cycle_failed = True
             logger.error("Allowance operation: check_and_process_allowances")
-
         try:
             await record_scheduler_heartbeat("error" if cycle_failed else "healthy")
         except Exception:
             logger.error("Could not record allowance scheduler heartbeat")
-
         await asyncio.sleep(60)

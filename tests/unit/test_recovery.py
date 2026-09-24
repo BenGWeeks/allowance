@@ -1,3 +1,4 @@
+import hashlib
 import unittest
 from contextlib import ExitStack
 from datetime import datetime, timezone
@@ -24,40 +25,66 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
             next_payment_date=datetime(2020, 1, 1, tzinfo=timezone.utc),
         )
 
-    async def test_definitive_rejection_is_terminal_but_unknown_is_guarded(self):
-        for exception, expected in [
-            (PaymentError("balance", status="failed"), False),
-            (PaymentError("unknown"), None),
-            (TimeoutError(), None),
-        ]:
-            allowance = self.allowance()
-            with ExitStack() as stack:
-                for name, value in {
-                    "get_allowance": allowance,
-                    "claim_payment": True,
-                    "resolve_lightning_address": ("https://example.invalid", {}),
-                    "get_invoice_from_lnurl": "invoice",
-                    "update_allowance_error": None,
-                }.items():
-                    stack.enter_context(
-                        patch.object(tasks, name, AsyncMock(return_value=value))
-                    )
-                stack.enter_context(
-                    patch.object(
-                        tasks,
-                        "decode_invoice",
-                        return_value=SimpleNamespace(
-                            payment_hash="hash", amount_msat=1000
+    async def test_host_rejections_retry_only_when_no_outgoing_payment_exists(self):
+        for exception in (
+            ValueError("limit"),
+            PaymentError("disabled"),
+            TimeoutError(),
+        ):
+            for stored in (
+                None,
+                SimpleNamespace(amount=-1000, pending=True, success=False),
+            ):
+                allowance = self.allowance()
+                with ExitStack() as stack:
+                    for name, value in {
+                        "get_allowance": allowance,
+                        "claim_payment": True,
+                        "resolve_lightning_address": (
+                            "https://example.invalid",
+                            {"metadata": "[]"},
                         ),
+                        "get_invoice_from_lnurl": "invoice",
+                        "update_allowance_error": None,
+                    }.items():
+                        stack.enter_context(
+                            patch.object(tasks, name, AsyncMock(return_value=value))
+                        )
+                    stack.enter_context(
+                        patch.object(
+                            tasks,
+                            "decode_invoice",
+                            return_value=SimpleNamespace(
+                                payment_hash="hash",
+                                amount_msat=1000,
+                                description_hash=hashlib.sha256(b"[]").hexdigest(),
+                                has_expired=lambda: False,
+                            ),
+                        )
                     )
-                )
-                stack.enter_context(
-                    patch.object(tasks, "pay_invoice", AsyncMock(side_effect=exception))
-                )
-                self.assertIs(
-                    await tasks.execute_lightning_address_payment(allowance), expected
-                )
-                self.assertEqual(allowance.pending_payment_hash, "hash")
+                    lookup = stack.enter_context(
+                        patch.object(
+                            tasks,
+                            "get_standalone_payment",
+                            AsyncMock(side_effect=[None, stored, stored]),
+                        )
+                    )
+                    stack.enter_context(
+                        patch.object(
+                            tasks, "pay_invoice", AsyncMock(side_effect=exception)
+                        )
+                    )
+                    defer = stack.enter_context(
+                        patch.object(
+                            tasks, "defer_payment", AsyncMock(return_value=True)
+                        )
+                    )
+                    self.assertIsNone(
+                        await tasks.execute_lightning_address_payment(allowance)
+                    )
+                    self.assertEqual(defer.await_count, int(stored is None))
+                    self.assertEqual(lookup.await_args_list[1].args, ("hash",))
+                    self.assertEqual(lookup.await_args_list[1].kwargs, {})
 
     async def test_paused_claim_can_be_checked_without_sending(self):
         allowance = self.allowance()
@@ -104,9 +131,13 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
             with ExitStack() as stack:
                 for name, value in {
                     "get_allowance": allowance,
-                    "resolve_lightning_address": ("https://example.invalid", {}),
+                    "resolve_lightning_address": (
+                        "https://example.invalid",
+                        {"metadata": "[]"},
+                    ),
                     "get_invoice_from_lnurl": "invoice",
                     "update_allowance_error": None,
+                    "defer_payment": True,
                 }.items():
                     stack.enter_context(
                         patch.object(tasks, name, AsyncMock(return_value=value))
@@ -116,7 +147,10 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                         tasks,
                         "decode_invoice",
                         return_value=SimpleNamespace(
-                            payment_hash="hash", amount_msat=amount
+                            description_hash=hashlib.sha256(b"[]").hexdigest(),
+                            has_expired=lambda: False,
+                            payment_hash="hash",
+                            amount_msat=amount,
                         ),
                     )
                 )
@@ -127,7 +161,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                     patch.object(tasks, "pay_invoice", AsyncMock())
                 )
                 self.assertIs(
-                    await tasks.execute_lightning_address_payment(allowance), False
+                    await tasks.execute_lightning_address_payment(allowance), None
                 )
                 claim.assert_not_awaited()
                 pay.assert_not_awaited()

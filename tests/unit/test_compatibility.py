@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import unittest
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -64,10 +65,15 @@ class CompatibilityTests(unittest.IsolatedAsyncioTestCase):
                 ), patch.object(
                     tasks, "claim_payment", AsyncMock(return_value=True)
                 ), patch.object(
+                    tasks, "get_standalone_payment", AsyncMock(return_value=None)
+                ), patch.object(
                     tasks,
                     "decode_invoice",
                     return_value=SimpleNamespace(
-                        payment_hash="hash", amount_msat=2000000
+                        description_hash=hashlib.sha256(b"[]").hexdigest(),
+                        has_expired=lambda: False,
+                        payment_hash="hash",
+                        amount_msat=2000000,
                     ),
                 ), patch.object(
                     tasks, "fiat_amount_as_satoshis", AsyncMock(return_value=2000)
@@ -77,7 +83,11 @@ class CompatibilityTests(unittest.IsolatedAsyncioTestCase):
                     AsyncMock(
                         return_value=(
                             "https://example.invalid",
-                            {"minSendable": 1000, "maxSendable": 3000000},
+                            {
+                                "minSendable": 1000,
+                                "maxSendable": 3000000,
+                                "metadata": "[]",
+                            },
                         )
                     ),
                 ), patch.object(

@@ -67,8 +67,16 @@ async def main():
         )
         await crud.db.execute(
             f"UPDATE {crud.db.references_schema}maintable "
-            "SET pending_payment_hash = :hash WHERE id = :id",
-            {"hash": "synthetic-pending-hash", "id": record.id},
+            "SET pending_payment_hash = :hash, "
+            f"start_datetime = {crud.db.timestamp_placeholder('start')}, "
+            f"next_payment_date = {crud.db.timestamp_placeholder('due')} "
+            "WHERE id = :id",
+            {
+                "hash": "synthetic-pending-hash",
+                "id": record.id,
+                "start": date.timestamp() + 0.25,
+                "due": date.timestamp() + 0.75,
+            },
         )
         fixture.write_text(json.dumps({"id": record.id, "date": date.isoformat()}))
         await crud.db.engine.dispose()
@@ -80,7 +88,7 @@ async def main():
     from lnbits.extensions.allowance import crud
 
     version = await get_db_version("allowance")
-    require(version.version == 6, "Expected migrations through m006")
+    require(version.version == 7, "Expected migrations through m007")
     config = json.loads((ext.ext_dir / "config.json").read_text())
     require(config["min_lnbits_version"] == "1.6.0", "Unexpected compatibility floor")
     manifest = Manifest.parse_raw((ext.ext_dir / "manifest.json").read_text())

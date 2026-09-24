@@ -30,7 +30,7 @@ window.app = Vue.createApp({
           }},
           {name: 'lightning_address', align: 'left', label: 'Recipient', field: 'lightning_address', sortable: true},
           {name: 'frequency_type', align: 'left', label: 'Frequency', field: 'frequency_type', sortable: true, sort: (a, b) => {
-            const order = ['minutely', 'hourly', 'daily', 'weekly', 'monthly', 'yearly']
+            const order = ['once', 'minutely', 'hourly', 'daily', 'weekly', 'monthly', 'yearly']
             return order.indexOf(a) - order.indexOf(b)
           }},
           {name: 'next_payment_date', align: 'left', label: 'Next Payment', field: 'next_payment_date', sortable: true,
@@ -57,8 +57,10 @@ window.app = Vue.createApp({
         data: {}
       },
       frequencyOptions: [
+        {label: 'Once', value: 'once'},
         {label: 'Minutely', value: 'minutely'},
         {label: 'Hourly', value: 'hourly'},
+        {label: 'Daily', value: 'daily'},
         {label: 'Weekly', value: 'weekly'},
         {label: 'Monthly', value: 'monthly'},
         {label: 'Yearly', value: 'yearly'}
@@ -139,7 +141,8 @@ window.app = Vue.createApp({
         memo: '',
         wallet: this.g.user.wallets[0].id,
         currency: 'sats',
-        frequency_type: 'weekly', // Default to weekly to help with testing
+        frequency_type: 'weekly',
+        timezone_name: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
         active: true,
         start_datetime: defaultStart
       }
@@ -165,7 +168,7 @@ window.app = Vue.createApp({
       if (!this.formDialog.data.start_datetime) errors.push('Start date & time is required')
 
       if (!this.formDialog.data.id && this.formDialog.data.start_datetime) {
-        const startDate = new Date(this.formDialog.data.start_datetime)
+        const startDate = new Date(this.formDialog.data.start_datetime.replace(' ', 'T'))
         const now = new Date()
         const oneMinuteFromNow = new Date(now.getTime() + 60 * 1000)
         if (startDate < oneMinuteFromNow) {
@@ -174,15 +177,15 @@ window.app = Vue.createApp({
       }
 
       if (this.formDialog.data.end_datetime && this.formDialog.data.start_datetime) {
-        const startDate = new Date(this.formDialog.data.start_datetime)
-        const endDate = new Date(this.formDialog.data.end_datetime)
+        const startDate = new Date(this.formDialog.data.start_datetime.replace(' ', 'T'))
+        const endDate = new Date(this.formDialog.data.end_datetime.replace(' ', 'T'))
         if (endDate <= startDate) {
           errors.push('End date must be after start date')
         }
       }
 
       if (this.formDialog.data.active && this.formDialog.data.end_datetime) {
-        const endDate = new Date(this.formDialog.data.end_datetime)
+        const endDate = new Date(this.formDialog.data.end_datetime.replace(' ', 'T'))
         const now = new Date()
         if (endDate < now) {
           errors.push('Cannot activate allowance: end date is in the past')
@@ -224,20 +227,21 @@ window.app = Vue.createApp({
         id: data.id,
         revision: data.revision,
         name: data.name,  // Keep name field as expected by backend
-        memo: data.memo,
+        memo: data.memo ?? '',
         wallet: data.wallet,
         lightning_address: data.lightning_address,
         amount: amount,  // Store the original amount (0.02 for GBP, 10 for sats)
         currency: data.currency || 'sats',
         active: Boolean(data.active),  // Ensure boolean type
-        end_datetime: data.end_datetime ? new Date(data.end_datetime).toISOString() : null
+        end_datetime: data.end_datetime ? new Date(data.end_datetime.replace(' ', 'T')).toISOString() : null
       }
 
       // Only include start_datetime and frequency_type when creating (not updating)
       // These fields are locked after creation
       if (!data.id) {
         backendData.frequency_type = data.frequency_type
-        backendData.start_datetime = data.start_datetime ? new Date(data.start_datetime).toISOString() : new Date().toISOString()
+        backendData.timezone_name = data.timezone_name
+        backendData.start_datetime = data.start_datetime ? new Date(data.start_datetime.replace(' ', 'T')).toISOString() : new Date().toISOString()
       }
 
       if (backendData.id) {
@@ -324,7 +328,8 @@ window.app = Vue.createApp({
         frequency_type: clonedData.frequency_type,
         start_datetime: clonedData.start_datetime, // Add missing start_datetime
         next_payment_date: clonedData.next_payment_date,
-        memo: clonedData.memo,
+        memo: clonedData.memo ?? '',
+        timezone_name: clonedData.timezone_name || 'UTC',
         end_datetime: clonedData.end_datetime
       }
 
@@ -332,7 +337,7 @@ window.app = Vue.createApp({
       // Quasar QDate/QTime needs "YYYY-MM-DD HH:mm" format in local time
       if (this.formDialog.data.start_datetime) {
         if (typeof this.formDialog.data.start_datetime === 'string') {
-          const utcDate = new Date(this.formDialog.data.start_datetime)
+          const utcDate = new Date(this.formDialog.data.start_datetime.replace(' ', 'T'))
           this.formDialog.data.start_datetime = this.toQuasarDatetimeString(utcDate)
 
         }
@@ -340,7 +345,7 @@ window.app = Vue.createApp({
 
       if (this.formDialog.data.end_datetime) {
         if (typeof this.formDialog.data.end_datetime === 'string') {
-          const utcDate = new Date(this.formDialog.data.end_datetime)
+          const utcDate = new Date(this.formDialog.data.end_datetime.replace(' ', 'T'))
           this.formDialog.data.end_datetime = this.toQuasarDatetimeString(utcDate)
 
         }
@@ -512,7 +517,7 @@ window.app = Vue.createApp({
       })
     },
     calculateNextPaymentDate(startDate, frequencyType) {
-      const date = new Date(startDate)
+      const date = new Date(startDate.replace(' ', 'T'))
 
       switch (frequencyType) {
         case 'minutely':
@@ -584,7 +589,7 @@ window.app = Vue.createApp({
       if (!this.formDialog.data.end_datetime || this.formDialog.data.end_datetime === '') {
         return false
       }
-      const endDate = new Date(this.formDialog.data.end_datetime)
+      const endDate = new Date(this.formDialog.data.end_datetime.replace(' ', 'T'))
       const now = new Date()
       return endDate < now
     },
@@ -605,7 +610,7 @@ window.app = Vue.createApp({
     },
     'formDialog.data.end_datetime': function(newVal) {
       if (newVal && newVal.trim() !== '') {
-        const endDate = new Date(newVal)
+        const endDate = new Date(newVal.replace(' ', 'T'))
         const now = new Date()
         if (endDate < now) {
 

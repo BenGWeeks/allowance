@@ -47,6 +47,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         await migrations.m004_pending_payment(self.database)
         await migrations.m005_allowance_revision(self.database)
         await migrations.m006_operational_history(self.database)
+        await migrations.m007_retry_and_local_schedule(self.database)
 
     async def asyncTearDown(self):
         if self.database.type == POSTGRES:
@@ -333,3 +334,64 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
             await migrations.m006_operational_history(connection)
         self.assertEqual(await crud.get_scheduler_health(), before)
         self.assertEqual(len(await crud.get_payment_history(allowance.id)), 1)
+
+    async def test_invalid_stored_amount_does_not_block_other_allowances(self):
+        valid = await self.history_fixture()
+        other = CreateAllowanceData(**valid.dict())
+        other.id = None
+        bad = await crud.create_allowance(other)
+        await self.database.execute(
+            f"UPDATE {self.database.references_schema}maintable "
+            "SET amount = :amount WHERE id = :id",
+            {"amount": 0.00001 if self.database.type == POSTGRES else 0, "id": bad.id},
+        )
+        self.assertEqual(
+            [row.id for row in await crud.get_all_active_allowances()], [valid.id]
+        )
+
+    async def test_retry_keeps_due_date_and_fences_stale_attempts(self):
+        allowance = await self.history_fixture()
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        self.assertTrue(
+            await crud.defer_payment(
+                allowance, now + timedelta(minutes=1), now + timedelta(hours=1)
+            )
+        )
+        self.assertFalse(await crud.defer_payment(allowance, now, now))
+        current = await crud.get_allowance(allowance.id)
+        self.assertIsNone(current.pending_payment_hash)
+        self.assertEqual(current.next_payment_date, allowance.next_payment_date)
+        self.assertEqual(current.retry_count, 1)
+        self.assertFalse(await crud.claim_payment(current, "early-retry"))
+        self.assertFalse(await crud.claim_payment(allowance, "stale-retry"))
+        await crud.finish_payment_attempt(current, None, False)
+        stopped = await crud.get_allowance(allowance.id)
+        self.assertIsNone(stopped.retry_after)
+        self.assertEqual(stopped.retry_count, 0)
+
+    async def test_future_occurrence_cannot_be_claimed(self):
+        allowance = await self.history_fixture()
+        await crud.finish_payment_attempt(
+            allowance, datetime(2090, 1, 1, tzinfo=timezone.utc)
+        )
+        current = await crud.get_allowance(allowance.id)
+        self.assertFalse(await crud.claim_payment(current, "too-early"))
+
+    async def test_paused_claims_are_selected_for_reconciliation(self):
+        allowance = await self.history_fixture()
+        await crud.deactivate_allowance(allowance.id)
+        records = await crud.get_all_active_allowances()
+        self.assertEqual([r.id for r in records], [allowance.id])
+
+    async def test_wallet_quota_and_timezone_persist(self):
+        allowance = await self.history_fixture()
+        data = CreateAllowanceData(**allowance.dict())
+        data.timezone_name = "Europe/London"
+        with patch.object(crud, "MAX_ALLOWANCES_PER_WALLET", 1):
+            with self.assertRaises(crud.AllowanceLimitError):
+                await crud.create_allowance(data)
+            data.wallet = "other-wallet"
+            created = await crud.create_allowance(data)
+        self.assertEqual(
+            (await crud.get_allowance(created.id)).timezone_name, "Europe/London"
+        )
