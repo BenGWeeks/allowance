@@ -122,7 +122,7 @@ async def main():
         )
     await install(candidate)
     require(
-        (await get_db_version("allowance")).version == 6,
+        (await get_db_version("allowance")).version == 7,
         "Reinstallation changed migration version",
     )
     print(f"PASS: native {mode} installation and reinstallation")
