@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional, Union
 
-from lnbits.db import POSTGRES, SQLITE, Connection, Database
+from lnbits.db import POSTGRES, SQLITE, Connection, Database, dict_to_model
 from lnbits.helpers import urlsafe_short_hash
 from loguru import logger
 from pydantic import ValidationError
@@ -175,6 +175,7 @@ async def update_allowance(data: CreateAllowanceData) -> Allowance:
         f"UPDATE {db.references_schema}maintable SET "
         "name = :name, lightning_address = :lightning_address, "
         "amount = :amount, currency = :currency, memo = :memo, active = :active, "
+        "retry_after = NULL, retry_deadline = NULL, retry_count = 0, "
         f"end_datetime = {db.timestamp_placeholder('end')}, revision = revision + 1 "
         "WHERE id = :id AND revision = :revision",
         {
@@ -253,9 +254,11 @@ async def get_all_active_allowances() -> list[Allowance]:
     allowances = []
     for row in rows:
         try:
-            allowances.append(Allowance(**dict(row)))
+            allowances.append(dict_to_model(dict(row), Allowance))
         except (ValidationError, ValueError):
-            logger.error("Skipping invalid allowance row; operator repair required")
+            logger.error(
+                "Skipping invalid allowance row {}; operator repair required", row["id"]
+            )
     return allowances
 
 

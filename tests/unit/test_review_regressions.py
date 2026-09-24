@@ -2,7 +2,7 @@ import asyncio
 import hashlib
 import unittest
 from contextlib import ExitStack
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -42,7 +42,12 @@ class ReviewRegressions(unittest.IsolatedAsyncioTestCase):
             "update_allowance_error": True,
             "update_allowance_success": True,
             "defer_payment": True,
-            "pay_invoice": SimpleNamespace(success=True, pending=False),
+            "pay_invoice": SimpleNamespace(
+                amount=-1000,
+                extra={"allowance_id": allowance.id},
+                success=True,
+                pending=False,
+            ),
         }.items():
             mocks[name] = stack.enter_context(
                 patch.object(tasks, name, AsyncMock(return_value=value))
@@ -157,14 +162,14 @@ class ReviewRegressions(unittest.IsolatedAsyncioTestCase):
         rows = [self.allowance(id=str(i), wallet="slow") for i in range(20)]
         rows.append(self.allowance(wallet="fast"))
         with patch.object(tasks, "process_allowance", process):
-            cycle = asyncio.create_task(
-                tasks.process_cycle(rows, datetime.now(timezone.utc))
-            )
+            workers = tasks.AllowanceWorkers()
+            await workers.poll(rows, datetime.now(timezone.utc))
             try:
                 await asyncio.wait_for(fast.wait(), 0.5)
             finally:
                 blocker.set()
-                self.assertFalse(await cycle)
+                await asyncio.gather(*workers.running.values())
+                await workers.close()
         self.assertLessEqual(maximum, 8)
 
     async def test_removed_template_and_trigger_routes_return_not_found(self):
@@ -184,3 +189,123 @@ class ReviewRegressions(unittest.IsolatedAsyncioTestCase):
                 (await client.post("/api/v1/allowance/private-id/trigger")).status_code,
                 404,
             )
+
+    async def test_failed_global_lookup_does_not_release_a_claim(self):
+        allowance = self.allowance()
+        with ExitStack() as stack:
+            mocks, _ = self.prepare(stack, allowance)
+            mocks["pay_invoice"].side_effect = ValueError("host rejection")
+            mocks["get_standalone_payment"].side_effect = [None, TimeoutError()]
+            self.assertIsNone(await tasks.execute_lightning_address_payment(allowance))
+            mocks["defer_payment"].assert_not_awaited()
+            self.assertEqual(allowance.pending_payment_hash, "hash")
+
+    async def test_polling_continues_while_another_wallet_is_blocked(self):
+        now = datetime.now(timezone.utc)
+        slow_release = asyncio.Event()
+        fast_paid = asyncio.Event()
+        future = self.allowance(
+            id="future", wallet="fast", next_payment_date=now + timedelta(minutes=2)
+        )
+        slow = [self.allowance(id=str(i), wallet="slow") for i in range(100)]
+
+        async def process(allowance, _now):
+            if allowance.wallet == "slow":
+                await slow_release.wait()
+            else:
+                fast_paid.set()
+
+        workers = tasks.AllowanceWorkers()
+        with patch.object(tasks, "process_allowance", process):
+            try:
+                await workers.poll([*slow, future], now)
+                self.assertFalse(fast_paid.is_set())
+                await workers.poll([*slow, future], now + timedelta(minutes=2))
+                await asyncio.wait_for(fast_paid.wait(), 0.5)
+                self.assertFalse(workers.running["slow"].done())
+            finally:
+                slow_release.set()
+                await workers.close()
+
+    async def test_retry_expiry_preserves_the_following_due_occurrence(self):
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        due = now - timedelta(days=1)
+        allowance = self.allowance(
+            start_datetime=due,
+            next_payment_date=due,
+            frequency_type="daily",
+            retry_deadline=now,
+        )
+        with patch.object(
+            tasks, "execute_lightning_address_payment", AsyncMock(return_value=False)
+        ), patch.object(tasks, "finish_payment_attempt", AsyncMock()) as finish:
+            await tasks.process_allowance(allowance, now)
+            finish.assert_awaited_once_with(allowance, now, False)
+
+    async def test_other_wallet_invoice_claim_is_released_by_its_own_caller(self):
+        allowance = self.allowance()
+        with ExitStack() as stack:
+            mocks, _ = self.prepare(stack, allowance)
+            mocks["pay_invoice"].side_effect = ValueError("already paid")
+            other = SimpleNamespace(
+                amount=-1000, pending=True, extra={"allowance_id": "other"}
+            )
+            mocks["get_standalone_payment"].side_effect = [None, other]
+            self.assertIsNone(await tasks.execute_lightning_address_payment(allowance))
+            mocks["defer_payment"].assert_awaited_once()
+
+    async def test_claimed_calls_are_not_wrapped_in_cancelling_timeouts(self):
+        now = datetime.now(timezone.utc)
+        gate = asyncio.Event()
+        started = asyncio.Event()
+        rows = [self.allowance(id=str(i), wallet=str(i)) for i in range(9)]
+        paid = []
+        lock = asyncio.Lock()
+
+        async def process(allowance, _now):
+            async with lock:
+                started.set()
+                await gate.wait()
+                paid.append(allowance.id)
+
+        workers = tasks.AllowanceWorkers()
+        with patch.object(tasks, "process_allowance", process), patch.object(
+            tasks.asyncio,
+            "wait_for",
+            side_effect=AssertionError("Do not cancel claimed calls"),
+        ):
+            try:
+                await workers.poll(rows, now)
+                await started.wait()
+                await workers.poll(rows, now + timedelta(seconds=35))
+                self.assertEqual(len(workers.running), 8)
+                self.assertTrue(
+                    all(not t.cancelled() for t in workers.running.values())
+                )
+                gate.set()
+                await asyncio.gather(*workers.running.values())
+                await workers.poll([rows[-1]], now + timedelta(minutes=1))
+                await asyncio.gather(*workers.running.values())
+                self.assertCountEqual(paid, [str(i) for i in range(9)])
+            finally:
+                await workers.close()
+
+    async def test_real_signed_invoice_metadata_and_expiry_are_compatible(self):
+        from lnbits.wallets.fake import FakeWallet
+
+        response = await FakeWallet().create_invoice(
+            amount=1, description_hash=hashlib.sha256(b"[]").digest()
+        )
+        decode = tasks.decode_invoice
+        decoded = decode(response.payment_request)
+        self.assertEqual(decoded.description_hash, hashlib.sha256(b"[]").hexdigest())
+        self.assertFalse(decoded.has_expired())
+        allowance = self.allowance()
+        with ExitStack() as stack:
+            mocks, _ = self.prepare(stack, allowance)
+            stack.enter_context(
+                patch.object(tasks, "decode_invoice", side_effect=decode)
+            )
+            mocks["get_invoice_from_lnurl"].return_value = response.payment_request
+            self.assertTrue(await tasks.execute_lightning_address_payment(allowance))
+            mocks["pay_invoice"].assert_awaited_once()

@@ -152,6 +152,8 @@ periods are skipped. Confirmed unsent attempts retry after 1, 2, 4, 8, 16, 32 an
 then 60 minutes, until the next occurrence or 24 hours after the first failure,
 whichever comes first. Confirmed terminal outgoing failures advance the schedule.
 Unknown outcomes retain their invoice identity and never request another invoice.
+When a retry window expires, the following occurrence keeps its own payment attempt.
+Editing an allowance resets its unsent retry backoff without releasing a pending claim.
 Paused or expired claims are still checked for settlement without sending payments.
 
 Only the invocation that called LNbits may release a claim after an exception,
@@ -161,8 +163,10 @@ investigation. Age alone cannot prove that a suspended sender will not resume.
 Stop the extension and verify the invoice hash against LNbits and the funding
 source before repairing such a claim; never clear it merely to retry a payment.
 
-The scheduler processes wallets in rounds, with one in-flight attempt per wallet
-and up to eight overall. New creation is limited to 100 allowances per wallet;
+The scheduler polls independently of payment completion, with one in-flight
+worker per wallet and up to eight overall. Each worker takes at most five rows;
+wallets and rows rotate between polls so a backlog cannot monopolize scheduling.
+Claimed payments have no extension-imposed cancelling timeout. New creation is limited to 100 allowances per wallet;
 existing records are retained. Invalid stored rows are logged and skipped so they
 cannot stop other users' payments. Operators must repair those rows separately.
 The manual `/trigger` endpoint and unused public template routes have been removed.

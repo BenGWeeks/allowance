@@ -151,3 +151,38 @@ class ValidationTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertEqual(response.status_code, 422)
                 save.assert_not_awaited()
+
+    async def test_legacy_invalid_recipient_or_currency_can_be_paused(self):
+        self.allowance.currency = "XYZ"
+        self.allowance.lightning_address = "legacy-invalid"
+        with patch.object(
+            views_api, "get_allowance", AsyncMock(return_value=self.allowance)
+        ), patch.object(
+            views_api, "update_allowance", AsyncMock(return_value=self.allowance)
+        ) as save:
+            response = await self.client.put(
+                "/api/v1/allowance/test", json={"revision": 0, "active": False}
+            )
+            self.assertEqual(response.status_code, 200)
+            save.assert_awaited_once()
+
+    async def test_invalid_url_syntax_is_a_validation_error(self):
+        with patch.object(
+            views_api, "get_allowance", AsyncMock(return_value=self.allowance)
+        ), patch.object(views_api, "update_allowance", AsyncMock()) as save:
+            response = await self.client.put(
+                "/api/v1/allowance/test",
+                json={"revision": 0, "lightning_address": "user@[x"},
+            )
+            self.assertEqual(response.status_code, 422)
+            save.assert_not_awaited()
+
+    def test_create_rejects_unknown_timezone(self):
+        with self.assertRaises(ValidationError):
+            AllowanceCreateRequest(
+                name="Test",
+                amount=1,
+                lightning_address="user@example.invalid",
+                start_datetime="2090-01-01T00:00:00Z",
+                timezone_name="Invalid/Zone",
+            )

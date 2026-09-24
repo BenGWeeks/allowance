@@ -98,7 +98,12 @@ class CompatibilityTests(unittest.IsolatedAsyncioTestCase):
                     tasks,
                     "pay_invoice",
                     AsyncMock(
-                        return_value=SimpleNamespace(success=success, pending=pending)
+                        return_value=SimpleNamespace(
+                            amount=-2000000,
+                            extra={"allowance_id": allowance.id},
+                            success=success,
+                            pending=pending,
+                        )
                     ),
                 ) as pay, patch.object(
                     tasks, "update_allowance_success", AsyncMock()
@@ -162,9 +167,33 @@ class CompatibilityTests(unittest.IsolatedAsyncioTestCase):
         )
         for result, expected in [
             (None, None),
-            (SimpleNamespace(pending=True, success=False), None),
-            (SimpleNamespace(pending=False, success=True), True),
-            (SimpleNamespace(pending=False, success=False), False),
+            (
+                SimpleNamespace(
+                    amount=-1000,
+                    extra={"allowance_id": allowance.id},
+                    pending=True,
+                    success=False,
+                ),
+                None,
+            ),
+            (
+                SimpleNamespace(
+                    amount=-1000,
+                    extra={"allowance_id": allowance.id},
+                    pending=False,
+                    success=True,
+                ),
+                True,
+            ),
+            (
+                SimpleNamespace(
+                    amount=-1000,
+                    extra={"allowance_id": allowance.id},
+                    pending=False,
+                    success=False,
+                ),
+                False,
+            ),
         ]:
             with patch.object(
                 tasks, "get_allowance", AsyncMock(return_value=allowance)
@@ -182,6 +211,6 @@ class CompatibilityTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIs(
                     await tasks.execute_lightning_address_payment(allowance), expected
                 )
-                lookup.assert_awaited_once_with("hash", wallet_id="wallet")
+                lookup.assert_awaited_once_with("hash")
                 resolve.assert_not_awaited()
                 pay.assert_not_awaited()

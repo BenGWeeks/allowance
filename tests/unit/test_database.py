@@ -1,3 +1,4 @@
+import asyncio
 import os
 import tempfile
 import unittest
@@ -395,3 +396,50 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             (await crud.get_allowance(created.id)).timezone_name, "Europe/London"
         )
+
+    async def test_concurrent_creates_cannot_exceed_wallet_quota(self):
+        original = await self.history_fixture()
+        values = {**original.dict(), "wallet": "quota-wallet"}
+        with patch.object(crud, "MAX_ALLOWANCES_PER_WALLET", 1):
+            results = await asyncio.gather(
+                crud.create_allowance(CreateAllowanceData(**values)),
+                crud.create_allowance(CreateAllowanceData(**values)),
+                return_exceptions=True,
+            )
+        self.assertEqual(
+            sum(isinstance(r, crud.AllowanceLimitError) for r in results), 1
+        )
+        self.assertEqual(len(await crud.get_allowances("quota-wallet")), 1)
+
+    async def test_edit_resets_retry_state_without_releasing_a_pending_claim(self):
+        allowance = await self.history_fixture()
+        now = datetime.now(timezone.utc)
+        await crud.defer_payment(allowance, now, now)
+        current = await crud.get_allowance(allowance.id)
+        data = CreateAllowanceData(**current.dict())
+        data.active = False
+        paused = await crud.update_allowance(data)
+        self.assertIsNone(paused.retry_deadline)
+        self.assertIsNone(paused.retry_after)
+        self.assertEqual(paused.retry_count, 0)
+        data = CreateAllowanceData(**paused.dict())
+        data.active = True
+        active = await crud.update_allowance(data)
+        self.assertTrue(await crud.claim_payment(active, "pending"))
+        active = await crud.get_allowance(active.id)
+        data = CreateAllowanceData(**active.dict())
+        data.name = "Edited while pending"
+        edited = await crud.update_allowance(data)
+        self.assertEqual(edited.pending_payment_hash, "pending")
+
+    async def test_scheduler_uses_host_defaults_for_legacy_nulls(self):
+        allowance = await self.history_fixture()
+        await self.database.execute(
+            f"UPDATE {self.database.references_schema}maintable "
+            "SET currency = NULL, active = NULL WHERE id = :id",
+            {"id": allowance.id},
+        )
+        rows = await crud.get_all_active_allowances()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].currency, "sats")
+        self.assertTrue(rows[0].active)

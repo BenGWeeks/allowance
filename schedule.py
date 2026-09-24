@@ -23,7 +23,7 @@ def next_occurrence(
     """
     start = start.replace(tzinfo=timezone.utc) if start.tzinfo is None else start
     after = after.replace(tzinfo=timezone.utc) if after.tzinfo is None else after
-    zone = ZoneInfo(timezone_name)
+    zone = timezone.utc if timezone_name == "UTC" else ZoneInfo(timezone_name)
     after_utc = after.astimezone(timezone.utc)
     start, after = start.astimezone(zone), after.astimezone(zone)
     if frequency not in (*_INTERVALS, "monthly", "yearly", "once"):

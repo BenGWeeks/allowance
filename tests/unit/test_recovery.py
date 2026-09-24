@@ -33,7 +33,12 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         ):
             for stored in (
                 None,
-                SimpleNamespace(amount=-1000, pending=True, success=False),
+                SimpleNamespace(
+                    amount=-1000,
+                    extra={"allowance_id": "test"},
+                    pending=True,
+                    success=False,
+                ),
             ):
                 allowance = self.allowance()
                 with ExitStack() as stack:
@@ -92,13 +97,29 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         allowance.pending_payment_hash = "hash"
         for status, expected in [
             (None, None),
-            (SimpleNamespace(pending=True, success=False), None),
-            (SimpleNamespace(pending=False, success=True), True),
+            (
+                SimpleNamespace(
+                    amount=-1000,
+                    extra={"allowance_id": allowance.id},
+                    pending=True,
+                    success=False,
+                ),
+                None,
+            ),
+            (
+                SimpleNamespace(
+                    amount=-1000,
+                    extra={"allowance_id": allowance.id},
+                    pending=False,
+                    success=True,
+                ),
+                True,
+            ),
         ]:
             with patch.object(
                 tasks, "get_standalone_payment", AsyncMock(return_value=status)
             ), patch.object(
-                tasks, "check_transaction_status", AsyncMock(return_value=status)
+                tasks, "check_payment_status", AsyncMock(return_value=status)
             ), patch.object(
                 tasks, "pay_invoice", AsyncMock()
             ) as pay, patch.object(
@@ -173,7 +194,14 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
             with patch.object(
                 tasks,
                 "get_standalone_payment",
-                AsyncMock(return_value=SimpleNamespace(pending=False, success=success)),
+                AsyncMock(
+                    return_value=SimpleNamespace(
+                        amount=-1000,
+                        extra={"allowance_id": allowance.id},
+                        pending=False,
+                        success=success,
+                    )
+                ),
             ), patch.object(
                 tasks, "update_allowance_success", AsyncMock(return_value=False)
             ), patch.object(
@@ -182,15 +210,20 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIsNone(await tasks.reconcile_payment(allowance))
 
     async def test_status_lookup_failures_preserve_pending_claim(self):
-        for failing_call in ("get_standalone_payment", "check_transaction_status"):
+        for failing_call in ("get_standalone_payment", "check_payment_status"):
             allowance = self.allowance()
             allowance.pending_payment_hash = "pending-hash"
             before = allowance.dict()
-            pending = SimpleNamespace(pending=True, success=False)
+            pending = SimpleNamespace(
+                amount=-1000,
+                extra={"allowance_id": allowance.id},
+                pending=True,
+                success=False,
+            )
             with patch.object(
                 tasks, "get_standalone_payment", AsyncMock(return_value=pending)
             ), patch.object(
-                tasks, "check_transaction_status", AsyncMock(return_value=pending)
+                tasks, "check_payment_status", AsyncMock(return_value=pending)
             ), patch.object(
                 tasks, failing_call, AsyncMock(side_effect=TimeoutError())
             ), patch.object(

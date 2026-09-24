@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 
 from fastapi import APIRouter, Depends, Query
+from httpx import InvalidURL
 from lnbits.core.crud import get_user
 from lnbits.core.models import Wallet, WalletTypeInfo
 from lnbits.decorators import (
@@ -146,19 +147,26 @@ async def api_allowance(
     return data
 
 
-def validate_schedule_input(data: dict, *, activating: bool = True):
+def validate_schedule_input(
+    data: dict, *, activating: bool = True, changed: set | None = None
+):
     """Validate dates together, including existing fields on a partial update."""
     from lnbits.utils.exchange_rates import allowed_currencies
 
+    changed = (
+        {"amount", "currency", "lightning_address"} if changed is None else changed
+    )
     currency = data.get("currency", "sats")
     if (
-        currency not in ("sats", "satoshis")
+        "currency" in changed
+        and currency not in ("sats", "satoshis")
         and currency.upper() not in allowed_currencies()
     ):
         raise HTTPException(422, "Unsupported currency")
     try:
-        lightning_address_url(data["lightning_address"])
-    except (ValueError, TypeError):
+        if "lightning_address" in changed:
+            lightning_address_url(data["lightning_address"])
+    except (ValueError, TypeError, InvalidURL):
         raise HTTPException(422, "Invalid Lightning address or LNURL") from None
     end = data.get("end_datetime")
     if end is not None and end < data["start_datetime"]:
@@ -173,7 +181,8 @@ def validate_schedule_input(data: dict, *, activating: bool = True):
             422, "Cannot activate an allowance whose end date has passed"
         )
     if (
-        data.get("currency", "sats") in ("sats", "satoshis")
+        changed.intersection({"amount", "currency"})
+        and data.get("currency", "sats") in ("sats", "satoshis")
         and not float(data["amount"]).is_integer()
     ):
         raise HTTPException(422, "Satoshi amounts must be whole numbers")
@@ -202,7 +211,9 @@ async def api_allowance_update(
     if merged.get("total") is None:
         merged["total"] = 0
     validate_schedule_input(
-        merged, activating=not allowance.active or changes.get("active") is True
+        merged,
+        activating=not allowance.active or changes.get("active") is True,
+        changed=set(changes),
     )
     try:
         updated = await update_allowance(CreateAllowanceData(**merged))
