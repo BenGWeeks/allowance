@@ -142,7 +142,7 @@ class AllowanceUpdateRequest(BaseModel):
     def valid_timezone(cls, value):  # noqa: N805
         try:
             ZoneInfo(value)
-        except (ZoneInfoNotFoundError, ValueError) as exc:
+        except (ZoneInfoNotFoundError, ValueError, OSError) as exc:
             raise ValueError("Unknown IANA timezone") from exc
         return value
 

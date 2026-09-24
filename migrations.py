@@ -128,7 +128,7 @@ async def m006_operational_history(db):
 
 
 async def m007_retry_and_local_schedule(db):
-    from lnbits.db import POSTGRES
+    from lnbits.db import POSTGRES, SQLITE
 
     from .crud import transaction
 
@@ -152,6 +152,8 @@ async def m007_retry_and_local_schedule(db):
                 if db.type == POSTGRES
                 else f"CAST({column} AS INTEGER)"
             )
+            condition = f" WHERE typeof({column}) = 'real'" if db.type == SQLITE else ""
             await atomic.execute(
-                f"UPDATE {db.references_schema}maintable SET {column} = {expression}"
+                f"UPDATE {db.references_schema}maintable "
+                f"SET {column} = {expression}{condition}"
             )

@@ -456,3 +456,36 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             [row.id for row in await crud.get_all_active_allowances()], [second.id]
         )
+
+    async def test_sqlite_timestamp_migration_preserves_text_and_integer_values(self):
+        if self.database.type != SQLITE:
+            self.skipTest("SQLite dynamic storage types only")
+        with tempfile.TemporaryDirectory(prefix="allowance-legacy-") as folder:
+            with patch.object(settings, "lnbits_data_folder", folder):
+                legacy = crud.AllowanceDatabase("ext_legacy")
+            try:
+                await legacy.execute(
+                    "CREATE TABLE maintable (id TEXT PRIMARY KEY, "
+                    "start_datetime TIMESTAMP, next_payment_date TIMESTAMP)"
+                )
+                samples = {
+                    "text": "2026-01-01 09:00:00",
+                    "integer": 1767258000,
+                    "fraction": 1767258000.75,
+                }
+                for key, value in samples.items():
+                    await legacy.execute(
+                        "INSERT INTO maintable VALUES (:id, :date, :date)",
+                        {"id": key, "date": value},
+                    )
+                await migrations.m007_retry_and_local_schedule(legacy)
+                rows = {
+                    row["id"]: dict(row)
+                    for row in await legacy.fetchall("SELECT * FROM maintable")
+                }
+                for field in ("start_datetime", "next_payment_date"):
+                    self.assertEqual(rows["text"][field], samples["text"])
+                    self.assertEqual(rows["integer"][field], samples["integer"])
+                    self.assertEqual(rows["fraction"][field], int(samples["fraction"]))
+            finally:
+                await legacy.engine.dispose()

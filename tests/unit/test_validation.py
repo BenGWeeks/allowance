@@ -217,3 +217,15 @@ class ValidationTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertEqual(result.status_code, 422)
             save.assert_not_awaited()
+
+    async def test_timezone_lookup_os_error_is_a_validation_error(self):
+        with patch(
+            "lnbits.extensions.allowance.models.ZoneInfo",
+            side_effect=IsADirectoryError("Europe"),
+        ), patch.object(views_api, "update_allowance", AsyncMock()) as save:
+            response = await self.client.put(
+                "/api/v1/allowance/test",
+                json={"revision": 0, "timezone_name": "Europe"},
+            )
+            self.assertEqual(response.status_code, 422)
+            save.assert_not_awaited()
