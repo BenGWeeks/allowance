@@ -104,7 +104,8 @@ class PublicNetworkBackend(httpcore.AnyIOBackend):
             host, port, family=socket.AF_INET, type=socket.SOCK_STREAM
         )
         addresses = list(dict.fromkeys(result[4][0] for result in results))
-        approved = self.trusted.get(host, set()) if port == 443 else set()
+        hostname = host.removesuffix(".").lower()
+        approved = self.trusted.get(hostname, set()) if port == 443 else set()
         if not addresses or not all(
             public_address(address) or address in approved for address in addresses
         ):
