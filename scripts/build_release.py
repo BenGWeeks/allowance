@@ -14,6 +14,7 @@ REQUIRED = {
     "crud.py",
     "migrations.py",
     "models.py",
+    "payment_retry.py",
     "safe_http.py",
     "schedule.py",
     "tasks.py",

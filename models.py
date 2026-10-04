@@ -62,6 +62,7 @@ class Allowance(BaseModel):
     retry_count: int = 0
     retry_after: Optional[datetime] = None
     retry_deadline: Optional[datetime] = None
+    retry_resume_date: Optional[datetime] = None
     last_error: Optional[str] = None
     last_error_time: Optional[datetime] = None
     last_success_time: Optional[datetime] = None
@@ -75,6 +76,7 @@ class Allowance(BaseModel):
         "last_success_time",
         "retry_after",
         "retry_deadline",
+        "retry_resume_date",
     )
     def timestamps_are_utc(cls, value):  # noqa: N805
         if value is not None and value.tzinfo is None:
@@ -176,3 +178,9 @@ class AllowanceCreateRequest(AllowanceUpdateRequest):
     active: StrictBool = True
     start_datetime: datetime
     frequency_type: Frequency = "daily"
+
+
+class PaymentRetryRequest(BaseModel):
+    revision: int
+    scheduled_at: int
+    confirmed: Literal[True]

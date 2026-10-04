@@ -116,7 +116,16 @@ def payment_diagnostic(stage: str, error: Exception) -> tuple[str, str]:
     if str(error) in known_errors:
         return known_errors[str(error)], str(error) + "."
     if isinstance(error, (TimeoutError, asyncio.TimeoutError)):
-        return "timeout", "The payment operation timed out; settlement must be checked."
+        if stage == "payment_submission":
+            return (
+                "timeout",
+                "The payment operation timed out; settlement must be checked.",
+            )
+        return (
+            "timeout",
+            _PAYMENT_STAGES[stage]
+            + " The request timed out before payment submission.",
+        )
     return stage + "_failed", _PAYMENT_STAGES[stage]
 
 
@@ -274,6 +283,14 @@ async def execute_lightning_address_payment(  # noqa: C901
                 return None
             if payment and owns_payment(allowance, payment):
                 return await reconcile_payment(allowance)
+            await update_allowance_error(
+                allowance,
+                "Payment outcome is unknown. Check status before retrying.",
+                int(datetime.now(timezone.utc).timestamp()),
+                stage="payment_submission",
+                code="outcome_unknown",
+            )
+            return None
         return await retry_unsent_payment(allowance)
 
 
@@ -339,7 +356,12 @@ async def process_allowance(allowance: Allowance, current_time: datetime):
         if not allowance.active or current_time < allowance.start_datetime:
             return
         if allowance.end_datetime and current_time > allowance.end_datetime:
-            await deactivate_allowance(allowance.id, revision=allowance.revision)
+            if allowance.retry_resume_date:
+                await finish_payment_attempt(
+                    allowance, allowance.retry_resume_date, False
+                )
+            else:
+                await deactivate_allowance(allowance.id, revision=allowance.revision)
             return
         if current_time < allowance.next_payment_date:
             return

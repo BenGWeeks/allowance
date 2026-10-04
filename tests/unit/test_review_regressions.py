@@ -242,7 +242,7 @@ class ReviewRegressions(unittest.IsolatedAsyncioTestCase):
             await tasks.process_allowance(allowance, now)
             finish.assert_awaited_once_with(allowance, now, False)
 
-    async def test_other_wallet_invoice_claim_is_released_by_its_own_caller(self):
+    async def test_other_wallet_invoice_claim_remains_protected(self):
         allowance = self.allowance()
         with ExitStack() as stack:
             mocks, _ = self.prepare(stack, allowance)
@@ -252,7 +252,7 @@ class ReviewRegressions(unittest.IsolatedAsyncioTestCase):
             )
             mocks["get_standalone_payment"].side_effect = [None, other]
             self.assertIsNone(await tasks.execute_lightning_address_payment(allowance))
-            mocks["defer_payment"].assert_awaited_once()
+            mocks["defer_payment"].assert_not_awaited()
 
     async def test_claimed_calls_are_not_wrapped_in_cancelling_timeouts(self):
         now = datetime.now(timezone.utc)
@@ -470,3 +470,19 @@ class ReviewRegressions(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(asyncio.CancelledError):
                 await tasks.check_and_process_allowances()
         self.assertEqual(sleeps, [60, 60])
+
+    async def test_missing_or_foreign_record_after_submission_keeps_claim(self):
+        for record in (
+            None,
+            SimpleNamespace(amount=-1000, extra={"allowance_id": "other"}),
+        ):
+            allowance = self.allowance()
+            with ExitStack() as stack:
+                mocks, _ = self.prepare(stack, allowance)
+                mocks["pay_invoice"].side_effect = TimeoutError()
+                mocks["get_standalone_payment"].side_effect = [None, record]
+                self.assertIsNone(
+                    await tasks.execute_lightning_address_payment(allowance)
+                )
+                mocks["defer_payment"].assert_not_awaited()
+                self.assertEqual(allowance.pending_payment_hash, "hash")

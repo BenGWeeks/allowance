@@ -8,16 +8,14 @@ window.app = Vue.createApp({
       userLocale: navigator.language || 'en-GB',
       allowances: [],
       healthWarning: '',
+      retryRequestBusy: false,
       healthTimer: null,
-      historyDialog: {show: false, rows: [], logs: [], allowance: null, loading: false, error: false},
-      logColumns: [
-        {name: 'time', label: 'Time', field: row => this.formatDatetime(new Date(row.recorded_at * 1000).toISOString()), align: 'left'},
-        {name: 'message', label: 'Details', field: 'message', align: 'left'}
-      ],
+      historyDialog: {show: false, rows: [], selectedId: null, allowance: null, loading: false, error: false},
       historyColumns: [
-        {name: 'scheduled', label: 'Scheduled', field: row => this.formatDatetime(new Date(row.scheduled_at * 1000).toISOString()), align: 'left'},
-        {name: 'completed', label: 'Completed', field: row => this.formatDatetime(new Date(row.completed_at * 1000).toISOString()), align: 'left'},
-        {name: 'outcome', label: 'Outcome', field: 'outcome', align: 'left'}
+        {name: 'scheduled', label: 'Scheduled payment', field: row => this.formatDatetime(new Date(row.scheduled_at * 1000).toISOString()), align: 'left'},
+        {name: 'amount', label: 'Amount', field: row => row.details ? `${row.details.amount} ${row.details.currency || 'sats'}` : 'Not recorded', align: 'right'},
+        {name: 'status', label: 'Status', field: 'outcome', align: 'left'},
+        {name: 'actions', label: '', field: 'id', align: 'right'}
       ],
       currencies: [],
       fiatRates: {},
@@ -37,7 +35,7 @@ window.app = Vue.createApp({
             const order = ['once', 'minutely', 'hourly', 'daily', 'weekly', 'monthly', 'yearly']
             return order.indexOf(a) - order.indexOf(b)
           }},
-          {name: 'next_payment_date', align: 'left', label: 'Next Payment', field: 'next_payment_date', sortable: true,
+          {name: 'next_payment_date', align: 'left', label: 'Next Payment', field: row => row.retry_resume_date || row.next_payment_date, sortable: true,
             sort: (a, b) => (Date.parse(a) || 0) - (Date.parse(b) || 0)},
           {name: 'last_success_time', align: 'left', label: 'Last Success', field: 'last_success_time', sortable: true},
           {name: 'status', align: 'center', label: 'Status', field: 'active', sortable: true, sort: (a, b, rowA, rowB) => {
@@ -89,20 +87,19 @@ window.app = Vue.createApp({
         this.healthWarning = 'Allowance status is unavailable. The extension may be disabled or unreachable.'
       }
     },
-    async showHistory(row) {
+    async showHistory(row, selectedId = null) {
       const wallet = this.g.user.wallets.find(wallet => wallet.id === row.wallet)
       if (!wallet) return
-      this.historyDialog = {show: true, rows: [], logs: [], allowance: row, loading: true, error: false}
+      const previousRows = this.historyDialog.allowance?.id === row.id ? this.historyDialog.rows : []
+      this.historyDialog = {show: true, rows: previousRows, selectedId, allowance: row, loading: true, error: false}
       const dialog = this.historyDialog
       try {
-        const [history, logs, current] = await Promise.all([
-          LNbits.api.request('GET', `/allowance/api/v1/allowance/${row.id}/history`, wallet.inkey),
-          LNbits.api.request('GET', `/allowance/api/v1/allowance/${row.id}/logs`, wallet.inkey),
+        const [history, current] = await Promise.all([
+          LNbits.api.request('GET', `/allowance/api/v1/allowance/${row.id}/occurrences`, wallet.inkey),
           LNbits.api.request('GET', `/allowance/api/v1/allowance/${row.id}`, wallet.inkey)
         ])
         if (this.historyDialog !== dialog || !dialog.show) return
         this.historyDialog.rows = history.data
-        this.historyDialog.logs = logs.data
         this.historyDialog.allowance = current.data
       } catch (error) {
         if (this.historyDialog !== dialog || !dialog.show) return
@@ -111,6 +108,61 @@ window.app = Vue.createApp({
       } finally {
         if (this.historyDialog === dialog) dialog.loading = false
       }
+    },
+    paymentState(row) {
+      if (row.pending_payment_hash) return 'Awaiting payment confirmation'
+      if (!row.active) return 'Paused or finished'
+      if (row.retry_after && row.retry_deadline && Date.parse(row.retry_deadline) > Date.now()) {
+        return Date.parse(row.retry_after) > Date.now()
+          ? `Retry scheduled for ${this.formatDatetime(row.retry_after)}` : 'Retry queued'
+      }
+      if (row.retry_after) return 'Automatic retries ended'
+      if (row.last_error) return 'Scheduled · last payment failed'
+      return 'Scheduled'
+    },
+    occurrenceState(row) {
+      if (row.current) return this.paymentState(this.historyDialog.allowance)
+      return {succeeded: 'Paid', failed: 'Failed — automatic retries ended', skipped: 'Skipped'}[row.outcome] || row.outcome
+    },
+    compactOccurrenceState(row) {
+      const label = this.occurrenceState(row)
+      if (label.startsWith('Retry scheduled for')) return 'Retry scheduled'
+      if (row.outcome === 'failed') return 'Failed'
+      return label
+    },
+    occurrenceColor(row) {
+      const label = this.compactOccurrenceState(row)
+      if (row.outcome === 'succeeded') return 'positive'
+      if (row.outcome === 'failed' || label === 'Automatic retries ended') return 'negative'
+      if (label.startsWith('Retry') || label === 'Awaiting payment confirmation') return 'warning'
+      return 'grey'
+    },
+    confirmRetry(row) {
+      const allowance = this.historyDialog.allowance
+      if (!row.can_retry || !row.details || this.retryRequestBusy) return
+      const scheduled = this.formatDatetime(new Date(row.scheduled_at * 1000).toISOString())
+      Quasar.Dialog.create({
+        title: 'Retry this payment?',
+        message: `Pay ${row.details.amount} ${row.details.currency || 'sats'} to ${row.details.lightning_address} for the payment scheduled ${scheduled}? This explicitly retries this one payment. The regular schedule is preserved; other missed payments stay skipped. Fiat amounts use the rate at retry time.`,
+        cancel: true, persistent: true, ok: {label: 'Retry this payment', color: 'primary'}
+      }).onOk(async () => {
+        const wallet = this.g.user.wallets.find(wallet => wallet.id === allowance.wallet)
+        if (!wallet || this.retryRequestBusy) return
+        this.retryRequestBusy = true
+        try {
+          const response = await LNbits.api.request('POST', `/allowance/api/v1/allowance/${allowance.id}/retry`, wallet.adminkey, {
+            scheduled_at: row.scheduled_at, revision: allowance.revision, confirmed: true
+          })
+          Quasar.Notify.create({type: 'positive', message: response.data.message})
+          this.getAllowances()
+          await this.showHistory(allowance, row.id)
+        } catch (error) {
+          LNbits.utils.notifyApiError(error)
+          await this.showHistory(allowance, row.id)
+        } finally {
+          this.retryRequestBusy = false
+        }
+      })
     },
     getAllowances() {
       this.loadHealth()
@@ -322,7 +374,7 @@ window.app = Vue.createApp({
         .then(response => {
           Quasar.Notify.create({type: response.data.pending ? 'warning' : response.data.success === false ? 'negative' : 'positive', message: response.data.message})
           this.getAllowances()
-          if (this.historyDialog.show && this.historyDialog.allowance?.id === row.id) return this.showHistory(row)
+          if (this.historyDialog.show && this.historyDialog.allowance?.id === row.id) return this.showHistory(row, this.historyDialog.selectedId)
         })
         .catch(LNbits.utils.notifyApiError)
     },
@@ -605,6 +657,9 @@ window.app = Vue.createApp({
     }
   },
   computed: {
+    selectedHistoryPayment() {
+      return this.historyDialog.rows.find(row => row.id === this.historyDialog.selectedId) || null
+    },
     isEndDateInPast() {
       if (!this.formDialog.data.end_datetime || this.formDialog.data.end_datetime === '') {
         return false

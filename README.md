@@ -325,6 +325,38 @@ failure, stale heartbeat or an unreachable server. Configure your monitor to ale
 on nonzero exits. The script performs no writes or payments and never prints the key.
 HTTPS is required except for loopback development URLs; redirects are rejected.
 
+### Retrying a specific payment
+
+Open **Payment history** for a compact list of scheduled payments. Choose
+**Details** to see one payment’s retained attempts, failure reason and next action. Status distinguishes **Retry scheduled**,
+**Retry queued**, **Awaiting payment confirmation**, **Paid**, and ended retries.
+**Check payment status** only reconciles an existing claim; it never resends.
+
+**Retry this payment** requires an explicit confirmation showing the amount,
+currency, recipient and original scheduled time. Fiat conversions use the rate at
+retry time. The request queues one eligible occurrence for the worker; it does not
+send synchronously. Duplicate requests and stale confirmations are rejected.
+
+A current confirmed-unsent failure can be brought forward within its existing retry
+window. An older failed occurrence can be retried only when it was never submitted,
+its saved payment details still match, the allowance is active, and no current
+payment is due or unresolved. Older records without saved details cannot be retried
+through this action. Paid, skipped and uncertain payments are never eligible.
+
+An older retry temporarily occupies the worker's current occurrence while retaining
+the regular next-payment date. Completion restores that date, or skips elapsed
+periods to the next anchored date. It never queues other missed payments. Its retry
+window ends at the earlier of 24 hours or the regular next-payment date. Pause/resume
+remains available, but payment details cannot change while an older retry is active.
+A payment already submitted cannot be cancelled by pausing.
+
+The owning wallet's admin key is required for
+`POST /allowance/api/v1/allowance/{id}/retry` with `scheduled_at` (epoch seconds),
+`revision`, and `confirmed: true`. Success returns 202; changed or ineligible state
+returns 409. The wallet-scoped `/occurrences` endpoint provides eligibility reasons,
+saved details and retained diagnostic events. Migration m009 adds saved details for
+new outcomes; it does not invent snapshots for legacy history.
+
 ### Upgrading to 1.1.1
 
 Version 1.1.1 fixes the migration import error when upgrading from 1.0.6 through
