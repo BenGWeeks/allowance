@@ -1,3 +1,5 @@
+NOTE: This document records the original design requirements. It is not the current user guide or a claim that every acceptance criterion is implemented. See the README, FAQs and testing guide for supported behavior.
+
 = Allowance Extension Requirements
 :toc:
 :toc-placement: preamble

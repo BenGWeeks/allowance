@@ -4,11 +4,7 @@
 
 ![Allowance Extension Banner](static/image/banner_cropped.png)
 
-> **Note**: This extension was developed as a test of using Claude Code to build an LNBits extension, demonstrating AI-assisted development of Bitcoin Lightning applications.
-
-## Introduction
-
-This is an LNBits extension that allows you to setup recurring payments from your LNBits wallet to any Lightning address or LNURL-pay endpoint. Perfect for allowances, pocket money, subscriptions, and regular transfers. This enables scheduled payments to external services and Lightning addresses, not just wallet-to-wallet transfers within the same LNBits instance.
+Allowance schedules recurring Lightning payments from an LNbits wallet to a Lightning address or LNURL-pay endpoint. It supports amounts in sats or fiat, anchored schedules and payment diagnostics.
 
 ### Screenshots
 
@@ -18,125 +14,39 @@ This is an LNBits extension that allows you to setup recurring payments from you
 
 ### Installation
 
-Install and enable the "Allowance" extension either through the official LNbits manifest (**not yet vetted**) or by adding https://raw.githubusercontent.com/BenGWeeks/allowance/main/extensions.json to `Server` / `Extension Sources`.
+Requires LNbits 1.6.0 or later in the tested 1.6.x series. Allowance is not yet vetted for the official registry. Add this custom source under Server → Extension Sources:
 
-### Development
+`https://raw.githubusercontent.com/BenGWeeks/allowance/main/extensions.json`
 
-For development, we use Docker Compose to run LNBits:
-
-1. Clone this repository
-2. Start LNBits using Docker Compose:
-   ```bash
-   docker-compose up -d
-   ```
-3. Access the development instance at `http://localhost:5002`
-4. Enable the Allowance extension through the Extensions menu
-
-The Docker Compose configuration automatically mounts the current directory into the container, so changes to the code are reflected immediately.
-
-> Note: LNBits cannot be installed on Windows.
+Install the latest stable Allowance release, activate it on the server and enable it for your user. Before upgrading, back up the LNbits databases and extension files, deactivate Allowance, install the release, restart LNbits and check scheduler health. See [installation](docs/installation.adoc) and [release preparation](docs/releasing.md).
 
 ### Features
 
-- ⚡ **Recurring Payments to Lightning Addresses**: Set up automated payments to any Lightning address or LNURL-pay endpoint
-- 📅 **Flexible Payment Schedules**: Choose from minutely, hourly, daily, weekly, monthly, or yearly payment frequencies
-- 💱 **Multi-Currency Support**: Pay in Bitcoin (sats) or fiat currencies (USD, EUR, GBP, etc.) with automatic conversion at payment time
-- 🎯 **Decimal Precision**: Support for precise amounts like 0.02 GBP or 0.30 USD for small regular payments
-- 📊 **Payment History Tracking**: All payments appear in your LNBits wallet history with clear allowance names
-- ⏰ **Automatic Start and End Dates**: Schedule when payments should begin and end, with automatic deactivation when expired
-- 🎛️ **Easy Management**: Create, edit, activate/deactivate, and delete allowances through a simple interface
+- Minutely, hourly, daily, weekly, monthly and yearly schedules anchored to their original start and timezone.
+- Sats or fiat amounts, converted through LNbits' configured rate providers at payment time.
+- Per-occurrence payment history and bounded diagnostic logs.
+- Bounded retries, pending-payment reconciliation and explicit payment of eligible failed or skipped occurrences.
+- Wallet ownership checks and a public HTTPS policy for recipient endpoints.
 
-### Testing
+### Development and testing
 
-The extension includes comprehensive test suites for both API and UI testing. For detailed testing procedures, see **[Testing Guide](docs/testing.adoc)**.
+The repository Compose file provides FakeWallet instances on ports 5002 and 5003. Its image uses the moving `latest` tag; select a tested stable LNbits image before starting it. Use separate development data and wallets.
 
-**Quick start:**
 ```bash
-# Run all tests
-./tests/run_all_tests.sh
-
-# Run API tests only
-./tests/run_api_tests.sh
-
-# Run UI tests only
-./tests/run_ui_crud_tests.sh
+docker compose up -d lnbits-dev
 ```
 
-**Note**: Create `.env.local` with test credentials before running tests. See [Testing Guide](docs/testing.adoc) for complete setup instructions.
+The development service mounts this repository as the extension source. Restart LNbits after Python changes; a file update alone does not reload running modules. The native installer cannot replace the root of this bind mount, so test archive installation in the disposable installation checks.
+
+Use the [testing guide](docs/testing.adoc) for offline regressions, PostgreSQL, native installation and Playwright tests. The older API and Node scripts are manual tools, not the CI regression suite; some can create active allowances or send payments.
 
 ### Documentation
 
-Comprehensive documentation is available in the `docs/` directory:
-
-- **[Installation Guide](docs/installation.adoc)** - Step-by-step installation instructions
-- **[FAQs](docs/faqs.adoc)** - Frequently asked questions and answers
-- **[Testing Guide](docs/testing.adoc)** - Detailed testing procedures
-- **[Troubleshooting Guide](docs/troubleshooting.adoc)** - Common issues and solutions
-
-### Code Quality
-
-Before committing, run code formatting and linting:
-
-```bash
-# Format Python files (REQUIRED for CI)
-black .
-
-# Run type checking
-mypy --ignore-missing-imports *.py
-
-# Run linting
-ruff check .
-```
-
-**Important**: CI will fail if code is not formatted with Black.
-
-### Repository Structure
-
-```
-allowance/
-├── .github/workflows/       # CI/CD pipeline configuration
-│   └── api-unit-tests.yml # GitHub Actions workflow
-├── docs/                    # Documentation (AsciiDoc format)
-│   ├── installation.adoc   # Installation guide
-│   ├── faqs.adoc           # Frequently asked questions
-│   ├── testing.adoc        # Testing procedures
-│   └── troubleshooting.adoc # Problem resolution
-├── tests/                   # Comprehensive test suite
-│   ├── unit/               # Offline regression tests
-│   ├── run_unit_tests.py   # Regression runner
-│   ├── api/                # API endpoint tests (Python)
-│   │   ├── check-*.py      # Validation tests
-│   │   ├── create-*.py     # Creation tests
-│   │   ├── read-*.py       # Read operation tests
-│   │   ├── update-*.py     # Update operation tests
-│   │   └── delete-*.py     # Deletion tests
-│   ├── ui/                 # UI automation tests (Playwright)
-│   │   ├── setup/          # Setup and configuration tests
-│   │   ├── crud/           # CRUD operation tests
-│   │   ├── auth-helper.js  # Centralized authentication
-│   │   └── helpers.js      # Shared test utilities
-│   ├── run_all_tests.sh    # Run all tests
-│   ├── run_api_tests.sh    # Run API tests only
-│   └── run_ui_crud_tests.sh # Run UI tests only
-├── static/
-│   └── js/                 # Frontend JavaScript
-│       └── allowance.js    # Vue.js application
-├── templates/allowance/    # HTML templates
-│   └── index.html         # Main extension page
-├── __init__.py            # Extension initialization
-├── config.json            # Extension configuration
-├── crud.py                # Database operations
-├── models.py              # Pydantic data models
-├── tasks.py               # Background task processing
-├── views.py               # Frontend routes
-├── views_api.py           # API endpoints
-├── migrations.py          # Database schema
-├── manifest.json          # Extension manifest
-├── extensions.json        # Extension source manifest
-├── README.md              # This file
-└── CLAUDE.md              # Development notes
-```
-
+- [Installation](docs/installation.adoc)
+- [FAQs](docs/faqs.adoc), also available in the extension beneath Usage Guide
+- [Testing](docs/testing.adoc)
+- [Troubleshooting](docs/troubleshooting.adoc)
+- [Release preparation](docs/releasing.md)
 
 ### Recurrence timing
 
@@ -175,8 +85,7 @@ The manual `/trigger` endpoint and unused public template routes have been remov
 
 ### LNbits compatibility
 
-The Python extension targets LNbits 1.6.x (tested on 1.6.0 and the official
-1.6.1 Docker image), with Python 3.10–3.12. It uses LNbits' task manager, wallet
+The Python extension targets LNbits 1.6.x (tested by CI on 1.6.0, 1.6.1 and the latest stable 1.6.x release), with Python 3.10–3.12. It uses LNbits' task manager, wallet
 authentication wrapper, and configured fiat-rate providers. The 1.6.1 release
 retains internal `1.6.1-rc2` metadata, so the declared minimum is 1.6.0.
 

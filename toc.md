@@ -6,7 +6,7 @@ By installing and using the LNbits extension ("Extension"), you agree to be boun
 
 ## 2. License
 
-The Extension is free and open-source software, released under [specify the FOSS license here, e.g., GPL-3.0, MIT, etc.]. You are permitted to use, copy, modify, and distribute the Extension under the terms of that license.
+The Extension is free and open-source software, released under the license in [LICENSE](https://github.com/BenGWeeks/allowance/blob/main/LICENSE). You are permitted to use, copy, modify, and distribute the Extension under the terms of that license.
 
 ## 3. No Warranty
 
@@ -26,4 +26,4 @@ If any provision of these Terms is held to be invalid or unenforceable, that pro
 
 ## 7. Contact Information
 
-If you have any questions about these Terms, please contact the developer at [developer's contact information].
+If you have any questions about these Terms, please contact the developer at [the project issue tracker](https://github.com/BenGWeeks/allowance/issues).

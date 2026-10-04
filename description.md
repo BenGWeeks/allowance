@@ -1,8 +1,5 @@
-Setup automatic recurring payments to lightning addresses with flexible scheduling and multi-currency support.
+Schedule recurring Lightning payments from an LNbits wallet to a Lightning address or LNURL-pay endpoint. Choose a minutely, hourly, daily, weekly, monthly or yearly schedule, with amounts in sats or fiat converted at payment time.
 
-Features include minutely to yearly payment frequencies, multiple currency options (sats, USD, EUR, GBP), decimal precision for small amounts, and automatic start/end date management. Perfect for pocket money, subscriptions, employee rewards, and regular bitcoin transfers.
+Allowance provides anchored schedules, bounded automatic retries, payment history and diagnostic events. Eligible failed or skipped occurrences can be paid explicitly without changing the regular schedule. Recipient endpoints use a public HTTPS policy; operators with split DNS can configure exact trusted destinations.
 
-Example user cases
-
-- Kids piggy bank (see [Lightning Piggy](https://www.lightningpiggy.com/))
-- Corporate rewards and incentives (see [KnowAll AI](https://www.knowall.ai))
+Requires LNbits 1.6.x. This native Python extension is available through its custom extension source and is not yet vetted for the official registry.

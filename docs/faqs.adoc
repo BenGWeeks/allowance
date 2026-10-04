@@ -1,318 +1,33 @@
-= Frequently Asked Questions
-:toc:
-:toc-placement: preamble
-:toclevels: 2
+= Allowance FAQs
 
-Common questions and answers about the LNBits Allowance extension.
+The current FAQs are available inside Allowance, beneath Usage Guide and above API Info. This guide summarises the same payment and operator behavior.
 
-== General Questions
+== Failed payments and retries
 
-=== What is the Allowance Extension?
+Before submission, failures retry after 1, 2, 4, 8, 16 and 32 minutes, then hourly. Automatic retries stop after 24 hours or at the next regular scheduled time, whichever comes first. A full window allows roughly 29 attempts including the initial attempt; request duration can reduce this. Pending or uncertain submitted payments are checked rather than automatically sent again.
 
-The Allowance extension is a LNBits plugin that enables automated, recurring Bitcoin Lightning payments. It's designed for:
+Schedules do not replay every missed interval. An overdue allowance may make one overdue payment and then advance to its next future anchored date. Several overdue allowances can each attempt a payment; there is no extension-wide combined spending cap. Wallet and server limits still apply.
 
-* Regular allowances (pocket money for children)
-* Subscription payments
-* Dollar cost averaging (DCA) into Bitcoin
-* Scheduled transfers between wallets
-* Recurring donations
+== Failed versus skipped
 
-=== How Does It Work?
+Failed means the occurrence did not complete successfully. Skipped means it was deliberately passed over, for example during recovery without catch-up. An occurrence can fail first and then have its remaining retries skipped. Skipping sends no funds.
 
-. Create an allowance with:
-  - Recipient's Lightning address
-  - Payment amount (in sats or fiat)
-  - Frequency (daily, weekly, monthly, yearly)
-  - Start and end dates
-. The scheduler automatically sends payments at the specified intervals
-. Payments continue until the end date or manual deactivation
+In Payment history, open Details. Eligible failed entries offer Retry this payment; eligible skipped entries offer Pay this skipped occurrence. Confirm the original date, recipient and amount. Only that occurrence is queued and the regular schedule is preserved. Older occurrences require saved details that still match; paused/ended allowances, submitted payments and conflicting queued or due payments prevent the action. The UI explains the reason.
 
-=== Is It Secure?
+Payments sent separately from a wallet appear in wallet history, but are not automatically linked to an allowance. Check wallet history before requesting an occurrence payment you may already have sent.
 
-Yes, the extension follows LNBits security practices:
+== Networking
 
-* Payments only come from your specified wallet
-* API keys required for all operations
-* No external services have access to your funds
-* All transactions are logged and traceable
+Recipients normally require public HTTPS endpoints on port 443. With split DNS, a hostname may resolve to a private IP inside LNbits. The operator can configure exact trusted hostname/private IPv4 pairs through `ALLOWANCE_TRUSTED_LNURL_DESTINATIONS`; see link:../README.md#lnurl-network-policy[network policy]. Container recreation is required to change its environment. HTTPS validation and independent callback checks remain in place.
 
-== Payment Questions
+== Dates, currencies and history
 
-=== What Payment Frequencies Are Supported?
+Schedules are anchored to the original start and configured timezone; the browser displays datetimes in local time. Start, frequency and timezone are fixed after creation. Supported frequencies are minutely, hourly, daily, weekly, monthly and yearly.
 
-The extension supports:
+Fiat uses LNbits' configured rate providers at attempt time. A later retry can therefore use a different sat amount. Choose sats for a fixed sat amount.
 
-* **Daily** - Payments every 24 hours
-* **Weekly** - Payments every 7 days
-* **Monthly** - Same day each month
-* **Yearly** - Same date each year
-* **Minutely** - For testing (every minute)
+History shows the current occurrence and up to 50 completed entries. Up to 200 diagnostic events per allowance are retained. Older releases may not have saved all amounts or attempt details; Not recorded does not mean zero. Refresh and Check payment status never request a new payment.
 
-=== Can I Use Fiat Currencies?
+== Installation and support
 
-Yes! The extension supports:
-
-* Direct sat amounts
-* Fiat currencies (USD, EUR, GBP, etc.)
-* Automatic conversion at payment time
-* Real-time exchange rates
-
-Example: Set $10 USD weekly, and it converts to sats when sending.
-
-=== What Happens If a Payment Fails?
-
-If a payment fails:
-
-. The system logs the error
-. Retries on the next scheduler cycle (every 60 seconds)
-. Continues retrying until successful
-. You can check logs for failure reasons
-
-Common failure reasons:
-* Invalid Lightning address
-* Insufficient wallet balance
-* Recipient's node offline
-
-=== Can I Send to Any Lightning Address?
-
-Yes, the extension supports:
-
-* Lightning addresses (user@domain.com)
-* LNURL-pay strings
-* Any LNURL-compatible service
-
-The recipient must be able to receive the specified amount.
-
-== Configuration Questions
-
-=== How Do I Set Start and End Dates?
-
-* **Start Date**: When payments begin (optional - defaults to immediately)
-* **End Date**: When to stop payments (optional - continues indefinitely)
-
-Both support date and time selection for precise scheduling.
-
-=== Can I Pause an Allowance?
-
-Yes, you can:
-
-. Toggle the "Active" switch to pause
-. Re-enable when ready to resume
-. Edit dates if needed
-
-NOTE: Expired allowances (past end date) cannot be reactivated.
-
-=== Can I Edit an Existing Allowance?
-
-Yes, most fields can be edited:
-
-* Amount and currency
-* End date and time
-* Recipient address
-* Active status (if not expired)
-
-**Note**: The following fields are locked after creation and cannot be changed:
-* Start date and time
-* Payment frequency
-
-**Important**: You cannot reactivate an allowance if the end_datetime is in the past. To restart payments, you must first update the end date to a future date.
-
-Changes take effect immediately after saving.
-
-=== How Do I Delete an Allowance?
-
-Click the delete (trash) icon on any allowance row. This:
-
-* Stops all future payments immediately
-* Cannot be undone
-* Historical payment data is preserved in logs
-
-== Technical Questions
-
-=== What Are the System Requirements?
-
-* LNBits v1.1.0 or higher (tested with v1.2.1)
-* PostgreSQL or SQLite database
-* Docker (recommended) or Python 3.9+
-* Active Lightning node connection
-
-=== How Often Does the Scheduler Run?
-
-The scheduler:
-
-* Checks every 60 seconds
-* Processes all due payments
-* Handles multiple allowances simultaneously
-* Automatically starts with LNBits
-
-=== Where Are Payments Logged?
-
-Payments are logged in:
-
-* LNBits transaction history
-* Docker container logs
-* Payment memo includes `#allowance: {name}`
-
-View logs:
-[source,bash]
-----
-docker logs lnbits | grep allowance
-----
-
-=== Can I Use Multiple Wallets?
-
-Yes, each allowance can:
-
-* Use a different source wallet
-* Have different API keys
-* Run independently
-
-Select the wallet when creating each allowance.
-
-== Troubleshooting Questions
-
-=== Why Aren't My Payments Sending?
-
-Check these common issues:
-
-. **Allowance is inactive** - Toggle Active to on
-. **Start date not reached** - Verify start_datetime
-. **End date passed** - Expired allowances stop automatically
-. **Insufficient balance** - Check wallet funds
-. **Invalid address** - Test Lightning address manually
-
-=== Why Do Dates Look Wrong?
-
-This is usually a timezone display issue:
-
-* Dates are stored in UTC
-* Displayed in your local timezone
-* Actual payment times are correct
-
-The system handles timezone conversion automatically.
-
-=== Why Can't I Reactivate an Expired Allowance?
-
-For safety, expired allowances cannot be reactivated. Instead:
-
-. Update the end date to a future date
-. Then toggle Active to on
-. Or create a new allowance
-
-=== What Does "Minutely" Frequency Do?
-
-Minutely is for testing only:
-
-* Sends payments every minute
-* Useful for verifying configuration
-* Not recommended for production use
-
-== API Questions
-
-=== How Do I Use the API?
-
-The extension provides REST endpoints:
-
-[source,bash]
-----
-# Get allowances
-curl -H "X-Api-Key: YOUR_KEY" \
-  https://your-lnbits/allowance/api/v1/allowance
-
-# Create allowance
-curl -X POST -H "X-Api-Key: YOUR_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Test","lightning_address":"user@domain.com",...}' \
-  https://your-lnbits/allowance/api/v1/allowance
-----
-
-=== What API Endpoints Are Available?
-
-* `GET /api/v1/allowance` - List allowances
-* `POST /api/v1/allowance` - Create allowance
-* `PUT /api/v1/allowance/{id}` - Update allowance
-* `DELETE /api/v1/allowance/{id}` - Delete allowance
-
-=== Do I Need Special Permissions?
-
-* **Read operations**: Invoice key (read-only)
-* **Write operations**: Admin key (full access)
-
-Find keys in LNBits: Wallet → API info
-
-== Currency Questions
-
-=== Which Fiat Currencies Are Supported?
-
-All major currencies including:
-
-* USD, EUR, GBP, CAD, AUD
-* JPY, CNY, INR
-* 150+ total currencies
-
-Exchange rates update automatically.
-
-=== How Are Exchange Rates Calculated?
-
-* Rates fetched from CoinGecko API
-* Updated every few minutes
-* Conversion happens at payment time
-* Uses current market rates
-
-=== Can I Set Custom Exchange Rates?
-
-No, the extension uses real-time market rates only. For fixed sat amounts, use sats as the currency instead of fiat.
-
-== Migration Questions
-
-=== Can I Import Existing Allowances?
-
-Currently, manual entry is required. Future versions may support:
-
-* CSV import
-* Bulk creation API
-* Migration tools
-
-=== How Do I Backup My Allowances?
-
-. Export via API to JSON
-. Backup the PostgreSQL database
-. Use the CSV export button in the UI
-
-=== Can I Move Allowances Between Wallets?
-
-Not directly, but you can:
-
-. Document current settings
-. Create new allowances in the target wallet
-. Delete old allowances
-
-== Support Questions
-
-=== Where Can I Get Help?
-
-* Check the link:troubleshooting.adoc[Troubleshooting Guide]
-* Visit https://github.com/BenGWeeks/allowance[GitHub repository]
-* Join the LNBits Telegram group
-* Create an issue on GitHub
-
-=== How Do I Report Bugs?
-
-. Check if already reported on GitHub Issues
-. Collect error details and logs
-. Create detailed issue with:
-  - Steps to reproduce
-  - Error messages
-  - LNBits version
-  - Browser/OS info
-
-=== Can I Contribute?
-
-Yes! Contributions welcome:
-
-* Report bugs and suggest features
-* Improve documentation
-* Submit pull requests
-* Share your use cases
-
-See link:../CONTRIBUTING.md[Contributing Guide] for details.
+See link:installation.adoc[installation] for LNbits version requirements and safe upgrades, and link:troubleshooting.adoc[troubleshooting] for errors and missing history. Report bugs at https://github.com/BenGWeeks/allowance/issues with redacted diagnostics.
