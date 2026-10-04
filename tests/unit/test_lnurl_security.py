@@ -300,3 +300,19 @@ class TrustedNetworkTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaisesRegex(ValueError, "Invalid trusted LNURL"):
                     await safe_http.get_public_json("https://recipient.example/pay")
                 connect.assert_not_awaited()
+
+    async def test_fully_qualified_trusted_hostname_uses_exact_exception(self):
+        stream = Stream(b'{"ok":true}')
+        with patch.object(
+            asyncio.get_running_loop(),
+            "getaddrinfo",
+            AsyncMock(return_value=[(socket.AF_INET, 1, 6, "", ("192.168.1.89", 443))]),
+        ), patch.object(
+            httpcore.AnyIOBackend, "connect_tcp", AsyncMock(return_value=stream)
+        ) as connect:
+            self.assertEqual(
+                await safe_http.get_public_json("https://recipient.example./pay"),
+                {"ok": True},
+            )
+        self.assertEqual(connect.await_args.args[0], "192.168.1.89")
+        self.assertEqual(stream.hostname, "recipient.example.")
