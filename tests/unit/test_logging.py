@@ -106,3 +106,17 @@ class LoggingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(code, "private_address")
         self.assertNotIn("recipient", message)
         self.assertNotIn("192.168.1.89", message)
+
+    def test_timeout_guidance_distinguishes_before_and_after_submission(self):
+        from lnbits.extensions.allowance import tasks
+
+        for stage in tasks._PAYMENT_STAGES:
+            with self.subTest(stage=stage):
+                code, message = tasks.payment_diagnostic(stage, TimeoutError("SECRET"))
+                self.assertEqual(code, "timeout")
+                self.assertNotIn("SECRET", message)
+                if stage == "payment_submission":
+                    self.assertIn("settlement must be checked", message)
+                else:
+                    self.assertIn("before payment submission", message)
+                    self.assertNotIn("settlement", message)

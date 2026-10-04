@@ -116,7 +116,16 @@ def payment_diagnostic(stage: str, error: Exception) -> tuple[str, str]:
     if str(error) in known_errors:
         return known_errors[str(error)], str(error) + "."
     if isinstance(error, (TimeoutError, asyncio.TimeoutError)):
-        return "timeout", "The payment operation timed out; settlement must be checked."
+        if stage == "payment_submission":
+            return (
+                "timeout",
+                "The payment operation timed out; settlement must be checked.",
+            )
+        return (
+            "timeout",
+            _PAYMENT_STAGES[stage]
+            + " The request timed out before payment submission.",
+        )
     return stage + "_failed", _PAYMENT_STAGES[stage]
 
 
