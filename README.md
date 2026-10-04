@@ -38,7 +38,7 @@ docker compose up -d lnbits-dev
 
 The development service mounts this repository as the extension source. Restart LNbits after Python changes; a file update alone does not reload running modules. The native installer cannot replace the root of this bind mount, so test archive installation in the disposable installation checks.
 
-Use the [testing guide](docs/testing.adoc) for offline regressions, PostgreSQL, native installation and Playwright tests. The older API and Node scripts are manual tools, not the CI regression suite; some can create active allowances or send payments.
+Use the [testing guide](docs/testing.adoc) for offline regressions, PostgreSQL, native installation and Playwright tests. The browser scripts use the Playwright runner. Older API scripts are manual tools; some can create active allowances or send payments.
 
 ### Documentation
 
@@ -114,7 +114,7 @@ docker run --rm --network none \
   /app/lnbits/extensions/allowance/tests/run_unit_tests.py
 ```
 
-The historical network/API/browser scripts remain available for manual dev
+The historical network/API scripts remain available for manual dev
 testing. CI covers SQLite and PostgreSQL; browser tests run explicitly on dev. Configure the
 `Allowance checks passed` as the required branch-protection check. It aggregates
 all matrix, PostgreSQL and quality jobs under a stable name.
@@ -128,15 +128,17 @@ as well as the default branch and `develop`, once the app has repository access.
 
 ### Dev browser verification
 
-The Playwright lifecycle test creates an **inactive** monthly allowance, edits its
-name, amount and memo, reloads to verify persistence and unchanged schedule dates,
-then deletes it through the UI. API assertions confirm each result; cleanup only
+The Playwright lifecycle tests cover all seven frequencies, including minutely and
+hourly. Each creates an **inactive** allowance, edits its name, amount and memo,
+reloads to verify persistence and unchanged schedule dates, then deletes it through the UI.
+API assertions confirm each result; cleanup only
 removes the record created by that run. It does not test Lightning settlement.
 
 Set `TEST_LNBITS_URL`, `LNBITS_ADMIN_USERNAME`, `LNBITS_ADMIN_PASSWORD` and
 `RECEIVING_WALLET_NAME`, `PAYLINK_EMAIL`, `ALLOWANCE_TEST_CREATE_AMOUNT` and `ALLOWANCE_TEST_EDIT_AMOUNT`
 (positive integer sats) in the ignored root `.env.local` or environment. Use an initialized
-dev instance with Allowance enabled and a wallet. Use a test recipient ending in
+dev instance with Allowance and Pay Links installed and enabled, and a wallet.
+Use a test recipient ending in
 `.invalid` for this inactive CRUD test.
 
 ```bash
@@ -147,6 +149,12 @@ npx playwright install chromium
 export ALLOWANCE_UI_TEST_CONFIRM="$(node -p 'require("./ui/auth-helper").getConfig().baseUrl')"
 npx playwright test --project=chromium
 ```
+
+The standalone browser commands now select scenarios from this same suite. Setup
+commands verify an initialized account, wallet and installed extensions; they do
+not provision or upgrade the server. Pay link commands create and delete their
+own disposable fixture. Cleanup commands never delete other test runs' records.
+See the [testing guide](docs/testing.adoc) for command mappings.
 
 Screenshots and the HTML report are stored locally in ignored test output folders.
 Do not publish artifacts containing account information. Browser tests are run

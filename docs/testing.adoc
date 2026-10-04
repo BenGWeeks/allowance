@@ -52,11 +52,44 @@ For mutation tests, explicitly set `ALLOWANCE_UI_TEST_CONFIRM` to exactly `TEST_
 ./tests/node_modules/.bin/playwright test --config tests/playwright.config.js --workers=1
 ----
 
-The Playwright spec files test creation, editing, persistence, deletion, authorization and payment-history behavior. Diagnostic fixtures intercept payment APIs with synthetic responses. UI tests are run separately from offline CI and require their own development instance. Never point them at a live funding wallet.
+The Playwright spec files test all seven frequencies through creation, editing, persistence and deletion, plus account/wallet prerequisites, currency options, Pay Links integration and payment-history behavior. Allowances stay inactive; these browser tests do not prove recurring payment execution or Lightning settlement. Install and enable Allowance and Pay Links for the configured account before running the full suite. Diagnostic fixtures intercept payment APIs with synthetic responses. UI tests are run separately from offline CI and require their own development instance. Never point them at a live funding wallet.
+
+== Standalone browser commands
+
+The existing `tests/ui/crud/*.js` and `tests/ui/setup/*.js` commands select tests
+from the same Playwright suite. They propagate its exit status and close their
+browsers through the runner. Run them from any working directory.
+
+[cols="1,2",options="header"]
+|===
+|Command |Scenario
+|`create-allowance`, `read-allowances`, `update-allowance`, `delete-allowance`, `delete-all-test-allowances`
+|Complete monthly create/edit/reload/delete lifecycle, including cleanup of only this run's record.
+|`create-minutely-allowance`, `create-hourly-allowance`
+|The same lifecycle at the named frequency, with an inactive allowance.
+|`create-admin-account`, `create-receiving-wallet`
+|Verify the initialized account and configured wallet. These commands no longer provision persistent accounts or wallets.
+|`install-extension`, `install-allowance-extension`, `enable-allowance`
+|Verify that Allowance is installed, accessible and has a healthy scheduler. Native installation/upgrade coverage remains in `tests/run_release_tests.sh`.
+|`check-currencies`, `validate-allowance-page`
+|Verify the creation dialog and available currency options.
+|`install-paylinks-extension`, `enable-paylinks`
+|Verify that Pay Links is installed, enabled and accessible with the configured wallet.
+|`create-paylink`, `delete-paylink`
+|Create a uniquely named pay link, verify persistence, delete it and verify its absence. Never remove a pre-existing link.
+|===
+
+`bash tests/run_ui_tests.sh` runs every browser scenario.
+`bash tests/run_ui_crud_tests.sh` runs only Allowance CRUD and diagnostic scenarios.
+Both fail when assertions, configuration or prerequisites fail. There are no automatic
+mutation retries and no text matching of success messages. Missing onboarding,
+extensions or wallets fails explicitly; initialize a dedicated development instance
+before testing. CI checks syntax and test discovery; authenticated browser execution
+remains a separate dev check.
 
 == Manual tools
 
-`tests/api/` and the older standalone scripts in `tests/ui/` include operational tools that create active allowances, perform cleanup or inspect payments. They are not equivalent to the offline regression runner, and `tests/run_all_tests.sh` does not run every CI check. Inspect a tool and its configured destination before running it. Do not run bulk cleanup against shared development or production data.
+`tests/api/` includes operational tools that create active allowances, perform cleanup or inspect payments. They are not equivalent to the offline regression runner, and `tests/run_all_tests.sh` does not run every CI check. Inspect a tool and its configured destination before running it. Do not run bulk cleanup against shared development or production data.
 
 == Release validation
 

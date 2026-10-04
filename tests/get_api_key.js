@@ -70,9 +70,7 @@ async function getAdminApiKey(page = null) {
     if (matches.length !== 1) throw new Error("Expected exactly one wallet matching RECEIVING_WALLET_NAME");
     const adminWallet = matches[0];
     const adminKey = adminWallet.adminkey;
-    const walletId = adminWallet.id;
     
-    console.log(`✅ Found admin wallet: ${walletId}`);
     
     // Only dispose if we created our own context
     if (!page && apiContext.dispose) {
