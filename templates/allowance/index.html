@@ -57,7 +57,7 @@
               <div v-text="formatDatetime(new Date(selectedHistoryPayment.scheduled_at * 1000).toISOString())"></div>
               <div class="q-mt-sm"><q-badge :color="occurrenceColor(selectedHistoryPayment)" :text-color="occurrenceColor(selectedHistoryPayment) === 'warning' ? 'black' : 'white'" :label="compactOccurrenceState(selectedHistoryPayment)"></q-badge></div>
               <div v-if="selectedHistoryPayment.current && compactOccurrenceState(selectedHistoryPayment) === 'Retry scheduled'" class="text-caption q-mt-xs">Next attempt: <span v-text="formatDatetime(historyDialog.allowance.retry_after)"></span></div>
-              <div v-if="selectedHistoryPayment.completed_at" class="text-caption q-mt-xs">Completed: <span v-text="formatDatetime(new Date(selectedHistoryPayment.completed_at * 1000).toISOString())"></span></div>
+              <div v-if="selectedHistoryPayment.completed_at" class="text-caption q-mt-xs"><span v-text="selectedHistoryPayment.outcome === 'skipped' ? 'Skipped:' : 'Completed:'"></span> <span v-text="formatDatetime(new Date(selectedHistoryPayment.completed_at * 1000).toISOString())"></span></div>
             </div>
             <div class="col-12 col-sm-6" style="overflow-wrap: anywhere">
               <template v-if="selectedHistoryPayment.details">

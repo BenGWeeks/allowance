@@ -80,6 +80,7 @@ test(`payment diagnostics ${skipped ? 'pay skipped occurrence' : 'retry failure'
   await dialog.locator('[data-cy="payment-history-card"]').screenshot({animations: 'disabled', path: testInfo.outputPath('history-overview.png')});
   await dialog.getByRole('button', {name: /^Details for/}).click();
   await expect(dialog.getByText('private_address', {exact: false})).toBeVisible();
+  if (skipped) await expect(dialog.getByText(/^Skipped:/)).toBeVisible();
   await expect(dialog.getByRole('button', {name: action, exact: true})).toHaveClass(/q-btn--unelevated/);
   await expect(dialog.getByRole('button', {name: 'Close', exact: true})).toHaveClass(/text-grey/);
   await expect(dialog.getByRole('button', {name: 'Check payment status', exact: true})).toBeDisabled();
