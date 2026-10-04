@@ -1,347 +1,38 @@
-= Installation Guide
-:toc:
-:toc-placement: preamble
-:toclevels: 3
+= Installing Allowance
 
-Complete guide for installing and configuring the LNBits Allowance extension.
+== Requirements
 
-== Prerequisites
+Allowance requires LNbits 1.6.0 or later in the tested 1.6.x series, SQLite or PostgreSQL, and a configured LNbits funding source. Use the Python version supported by your LNbits release. This is a native Python extension with server access, not a sandboxed WASM extension.
 
-Before installing the Allowance extension, ensure you have:
+== Install
 
-* LNBits v1.1.0 or higher installed and running (tested with v1.2.1)
-* Admin access to your LNBits instance
-* PostgreSQL or SQLite database configured
-* Docker (recommended) or Python 3.9+ environment
-* Git installed on your system
+. Add `https://raw.githubusercontent.com/BenGWeeks/allowance/main/extensions.json` under Server → Extension Sources.
+. Install the latest stable Allowance release from Extensions.
+. Activate it on the server and enable it for your user.
+. Open Allowance and select a source wallet you own when creating an allowance.
 
-== Installation Methods
+Allowance is not yet vetted for the official LNbits registry. The custom source lists released archives and their SHA256 hashes.
 
-=== Method 1: Docker Installation (Recommended)
+== Upgrade
 
-This is the recommended method for most users.
+. Back up the LNbits databases and installed extension files. Record activation and next-payment dates.
+. Check for pending or uncertain payments before maintenance; reconcile these before proceeding.
+. Deactivate Allowance, install the new release, then restart LNbits to load its Python modules.
+. Restore activation and check the scheduler, history and next-payment dates.
+. Hard-refresh the browser if it still shows the previous interface.
 
-==== Step 1: Clone the Repository
+An overdue allowance may attempt one payment when scheduling resumes. An upgrade does not replay every missed interval. If missed occurrences should be skipped, the operator must handle that before reactivating the scheduler. The UI has no bulk skip control.
 
-[source,bash]
-----
-cd /opt/lnbits  # Or your LNBits directory
-git clone https://github.com/BenGWeeks/allowance.git extensions/allowance
-----
+Environment changes require recreating the container; restarting alone does not load new Docker environment values. Preserve data volumes and extension installation files when recreating it.
 
-==== Step 2: Update Docker Compose
+== Recipient networking
 
-Add the volume mount to your `docker-compose.yml`:
+Recipients must use HTTPS on port 443 and resolve to allowed public addresses. Split DNS can resolve an otherwise public hostname to a private IP inside the LNbits container. The operator can configure exact trusted hostname/private IPv4 pairs using `ALLOWANCE_TRUSTED_LNURL_DESTINATIONS`. See link:../README.md#lnurl-network-policy[the network policy] for accepted addresses, certificate checks and callback handling. Verify HTTPS metadata without requesting an invoice before enabling payments.
 
-[source,yaml]
-----
-services:
-  lnbits:
-    image: lnbits/lnbits:latest
-    volumes:
-      - ./extensions/allowance:/app/lnbits/extensions/allowance
-      # ... other volumes
-----
+== Development
 
-==== Step 3: Restart Container
+See link:../README.md#development-and-testing[development setup] and link:testing.adoc[testing]. The source bind mount is intended for development; use disposable containers to test native archive installation.
 
-[source,bash]
-----
-docker-compose restart lnbits
-----
+== Failed 1.1.0 installation
 
-==== Step 4: Enable the Extension
-
-. Login to LNBits as admin
-. Navigate to Extensions page
-. Find "Allowance" in the list
-. Click "Enable"
-
-=== Method 2: Manual Installation
-
-For non-Docker installations.
-
-==== Step 1: Clone into Extensions Directory
-
-[source,bash]
-----
-cd /path/to/lnbits
-git clone https://github.com/BenGWeeks/allowance.git lnbits/extensions/allowance
-----
-
-==== Step 2: Install Dependencies
-
-The extension uses only LNBits core dependencies, no additional packages required.
-
-==== Step 3: Restart LNBits
-
-[source,bash]
-----
-# If using systemd
-sudo systemctl restart lnbits
-
-# If running directly
-# Ctrl+C to stop, then restart
-poetry run lnbits
-----
-
-==== Step 4: Enable the Extension
-
-Same as Docker method - enable through the LNBits UI.
-
-=== Method 3: Development Installation
-
-For developers wanting to modify the extension.
-
-==== Step 1: Fork and Clone
-
-[source,bash]
-----
-# Fork on GitHub first, then:
-git clone https://github.com/YOUR-USERNAME/allowance.git
-cd allowance
-----
-
-==== Step 2: Create Development Environment
-
-[source,bash]
-----
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install development dependencies
-pip install black mypy ruff pytest playwright
-----
-
-==== Step 3: Link to LNBits
-
-[source,bash]
-----
-# Symlink to LNBits extensions directory
-ln -s $(pwd) /path/to/lnbits/lnbits/extensions/allowance
-----
-
-==== Step 4: Run in Development Mode
-
-[source,bash]
-----
-# Set environment variables
-export LNBITS_DEBUG=true
-export LNBITS_EXTENSIONS_DEFAULT_INSTALL="allowance"
-
-# Run LNBits
-poetry run lnbits
-----
-
-== Configuration
-
-=== Database Setup
-
-The extension automatically creates required tables on first run.
-
-For PostgreSQL:
-[source,sql]
-----
--- Tables created automatically:
--- ext_allowance.maintable
-----
-
-For SQLite:
-[source,sql]
-----
--- Tables created in lnbits.db
--- ext_allowance_maintable
-----
-
-=== Environment Variables
-
-Optional configuration in `.env`:
-
-[source,bash]
-----
-# Enable debug logging
-LNBITS_DEBUG=true
-
-# Auto-enable extension
-LNBITS_EXTENSIONS_DEFAULT_INSTALL="allowance"
-
-# Database (if not default)
-LNBITS_DATABASE_URL="postgresql://user:pass@localhost/lnbits"
-----
-
-=== Extension Settings
-
-Configure through the UI after installation:
-
-. Navigate to the Allowance extension
-. No additional configuration required
-. Start creating allowances immediately
-
-== Verification
-
-=== Check Installation
-
-Verify the extension is installed correctly:
-
-[source,bash]
-----
-# Check files exist
-ls -la extensions/allowance/
-# Should show: __init__.py, config.json, manifest.json, etc.
-
-# Check container logs
-docker logs lnbits 2>&1 | grep -i allowance
-# Should show: "Started allowance payment scheduler"
-----
-
-=== Test Basic Functionality
-
-. Create a test allowance:
-  - Use a small amount (1 sat)
-  - Set to "Minutely" frequency
-  - Use your own Lightning address
-
-. Monitor payments:
-[source,bash]
-----
-docker logs -f lnbits | grep allowance
-----
-
-. Verify in transaction history
-
-== Upgrading
-
-=== Update to Latest Version
-
-[source,bash]
-----
-cd extensions/allowance
-git pull origin main
-docker-compose restart lnbits
-----
-
-=== Migrate from Older Versions
-
-Database migrations run automatically. Check migration status:
-
-[source,bash]
-----
-docker exec lnbits psql -U lnbits -d lnbits \
-  -c "SELECT * FROM dbversions WHERE ext = 'allowance';"
-----
-
-== Uninstallation
-
-=== Disable the Extension
-
-. Navigate to Extensions page
-. Click "Disable" for Allowance
-. Data is preserved for re-enabling
-
-=== Complete Removal
-
-WARNING: This deletes all allowance data!
-
-[source,bash]
-----
-# Stop LNBits
-docker-compose stop lnbits
-
-# Remove extension files
-rm -rf extensions/allowance
-
-# Remove from docker-compose.yml
-# Edit and remove the volume mount
-
-# Clean database (optional)
-docker exec lnbits psql -U lnbits -d lnbits \
-  -c "DROP TABLE IF EXISTS ext_allowance.maintable;"
-
-# Restart
-docker-compose up -d lnbits
-----
-
-== Troubleshooting Installation
-
-=== Extension Not Appearing
-
-If the extension doesn't show up:
-
-. Check file permissions:
-[source,bash]
-----
-chmod -R 755 extensions/allowance
-----
-
-. Verify file structure:
-[source,bash]
-----
-ls extensions/allowance/__init__.py
-ls extensions/allowance/config.json
-----
-
-. Restart and check logs:
-[source,bash]
-----
-docker-compose restart lnbits
-docker logs lnbits 2>&1 | grep -i error
-----
-
-=== Database Errors
-
-If you see migration errors:
-
-. Check database connection:
-[source,bash]
-----
-docker exec lnbits psql -U lnbits -d lnbits -c "SELECT 1;"
-----
-
-. Manually run migrations:
-[source,bash]
-----
-# Restart container to trigger migrations
-docker-compose restart lnbits
-----
-
-. Check migration status:
-[source,bash]
-----
-docker exec lnbits psql -U lnbits -d lnbits \
-  -c "SELECT * FROM dbversions;"
-----
-
-=== Permission Denied Errors
-
-If you see permission errors:
-
-[source,bash]
-----
-# Fix ownership
-sudo chown -R $(whoami):$(whoami) extensions/allowance
-
-# Fix permissions
-chmod -R 755 extensions/allowance
-----
-
-== Next Steps
-
-After successful installation:
-
-. Read the link:../README.md[User Guide]
-. Review link:faqs.adoc[Frequently Asked Questions]
-. Set up your first allowance
-. Configure link:testing.adoc[Testing] if needed
-
-== Support
-
-If you encounter issues:
-
-. Check link:troubleshooting.adoc[Troubleshooting Guide]
-. Search https://github.com/BenGWeeks/allowance/issues[GitHub Issues]
-. Create a new issue with:
-  - Installation method used
-  - Error messages
-  - LNBits version
-  - Environment details
+Do not install the withdrawn 1.1.0 release. Restore the previous extension files and restart LNbits before installing a repaired stable release. Consult link:../README.md[the README recovery guidance] and preserve the database; uninstalling or deleting it is not a migration repair.
