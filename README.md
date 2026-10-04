@@ -341,7 +341,7 @@ A current confirmed-unsent failure can be brought forward within its existing re
 window. An older failed occurrence can be retried only when it was never submitted,
 its saved payment details still match, the allowance is active, and no current
 payment is due or unresolved. Older records without saved details cannot be retried
-through this action. Paid, skipped and uncertain payments are never eligible.
+through this action. Paid and uncertain submitted payments are never eligible.
 
 An older retry temporarily occupies the worker's current occurrence while retaining
 the regular next-payment date. Completion restores that date, or skips elapsed
