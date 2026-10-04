@@ -3,7 +3,9 @@ const {login, getConfig} = require('../auth-helper');
 
 test.use({serviceWorkers: 'block', timezoneId: 'Europe/London', viewport: {width: 1500, height: 1100}});
 
-test('payment diagnostics explain failures and keep action sizes consistent', async ({page}, testInfo) => {
+for (const skipped of [false, true]) {
+const action = skipped ? 'Pay this skipped occurrence' : 'Retry this payment';
+test(`payment diagnostics ${skipped ? 'pay skipped occurrence' : 'retry failure'} safely`, async ({page}, testInfo) => {
   await login(page);
   const wallet = {id: 'synthetic-wallet', name: 'Test wallet', adminkey: 'synthetic-key', inkey: 'synthetic-key'};
   const record = {
@@ -15,6 +17,12 @@ test('payment diagnostics explain failures and keep action sizes consistent', as
     last_error: 'LNURL host resolves to a private or otherwise disallowed address. Blocked by the public-address policy; contact the server operator.',
     last_error_time: '2026-10-04T10:00:00Z', retry_after: new Date(Date.now() + 3600000).toISOString(), retry_deadline: new Date(Date.now() + 86400000).toISOString()
   };
+  if (skipped) {
+    record.next_payment_date = new Date(Date.now() + 7 * 86400000).toISOString();
+    record.retry_after = null;
+    record.retry_deadline = null;
+    record.last_error = null;
+  }
   let logRequests = 0;
   let retryRequests = 0;
   await page.route('**/allowance/api/v1/**', async route => {
@@ -32,7 +40,7 @@ test('payment diagnostics explain failures and keep action sizes consistent', as
     else if (path.endsWith('/allowance')) body = [record];
     else if (path.endsWith('/occurrences')) {
       logRequests++;
-      body = [{id: 'attempt', scheduled_at: 1791064800, completed_at: null, outcome: 'current', current: true,
+      body = [{id: 'attempt', scheduled_at: 1791064800, completed_at: null, outcome: skipped && retryRequests === 0 ? 'skipped' : 'current', current: !skipped || retryRequests > 0,
         can_retry: retryRequests === 0, retry_block_reason: retryRequests ? 'An attempt is already queued.' : null,
         details: {amount: 100, currency: 'sats', lightning_address: record.lightning_address},
         events: [{id: 'log', recorded_at: 1791108000, scheduled_at: 1791064800,
@@ -71,7 +79,7 @@ test('payment diagnostics explain failures and keep action sizes consistent', as
   await dialog.locator('[data-cy="payment-history-card"]').screenshot({animations: 'disabled', path: testInfo.outputPath('history-overview.png')});
   await dialog.getByRole('button', {name: /^Details for/}).click();
   await expect(dialog.getByText('private_address', {exact: false})).toBeVisible();
-  await expect(dialog.getByRole('button', {name: 'Retry this payment', exact: true})).toHaveClass(/q-btn--unelevated/);
+  await expect(dialog.getByRole('button', {name: action, exact: true})).toHaveClass(/q-btn--unelevated/);
   await expect(dialog.getByRole('button', {name: 'Close', exact: true})).toHaveClass(/text-grey/);
   await expect(dialog.getByRole('button', {name: 'Check payment status', exact: true})).toBeDisabled();
   await dialog.getByRole('button', {name: 'Refresh history', exact: true}).click();
@@ -79,15 +87,15 @@ test('payment diagnostics explain failures and keep action sizes consistent', as
   await expect(dialog.getByRole('button', {name: 'Refresh history', exact: true})).toBeEnabled();
   await page.mouse.move(0, 0);
   await dialog.locator('[data-cy="payment-history-card"]').screenshot({animations: 'disabled', path: testInfo.outputPath('payment-diagnostics.png')});
-  await dialog.getByRole('button', {name: 'Retry this payment', exact: true}).click();
-  const confirmation = page.getByRole('dialog').filter({hasText: 'Retry this payment?'});
+  await dialog.getByRole('button', {name: action, exact: true}).click();
+  const confirmation = page.getByRole('dialog').filter({hasText: action + '?'});
   await expect(confirmation.getByText(/Pay 100 sats to recipient@example.invalid/)).toBeVisible();
   await confirmation.getByRole('button', {name: 'Cancel', exact: true}).click();
   await expect(confirmation).not.toBeVisible();
   expect(retryRequests).toBe(0);
-  await dialog.getByRole('button', {name: 'Retry this payment', exact: true}).click();
+  await dialog.getByRole('button', {name: action, exact: true}).click();
   await confirmation.locator('.q-card').screenshot({animations: 'disabled', path: testInfo.outputPath('retry-confirmation.png')});
-  await confirmation.getByRole('button', {name: 'Retry this payment', exact: true}).click();
+  await confirmation.getByRole('button', {name: action, exact: true}).click();
   await expect.poll(() => retryRequests).toBe(1);
   await expect(confirmation).not.toBeVisible();
   await expect(dialog.getByRole('button', {name: 'Retry this payment', exact: true})).toBeDisabled();
@@ -110,3 +118,5 @@ test('payment diagnostics explain failures and keep action sizes consistent', as
   await expect(dialog.getByLabel('Allowance description *', {exact: true})).toHaveValue(record.name);
   await dialog.getByRole('button', {name: 'Cancel', exact: true}).click();
 });
+
+}

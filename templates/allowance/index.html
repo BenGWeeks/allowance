@@ -87,7 +87,7 @@
         <q-separator></q-separator>
         <q-card-actions class="q-pa-lg" style="gap: 8px">
           <template v-if="selectedHistoryPayment">
-            <q-btn padding="xs md" unelevated color="primary" label="Retry this payment" :disable="!selectedHistoryPayment.can_retry || retryRequestBusy || historyDialog.loading || historyDialog.error" :loading="retryRequestBusy" @click="confirmRetry(selectedHistoryPayment)"></q-btn>
+            <q-btn padding="xs md" unelevated color="primary" :label="occurrenceActionLabel(selectedHistoryPayment)" :disable="!selectedHistoryPayment.can_retry || retryRequestBusy || historyDialog.loading || historyDialog.error" :loading="retryRequestBusy" @click="confirmRetry(selectedHistoryPayment)"></q-btn>
             <span>
               <q-btn padding="xs md" flat color="primary" label="Check payment status" :disable="!selectedHistoryPayment.current || !historyDialog.allowance?.pending_payment_hash || historyDialog.loading || retryRequestBusy" @click="reconcileAllowance(historyDialog.allowance)"></q-btn>
               <q-tooltip v-text="selectedHistoryPayment.current && historyDialog.allowance?.pending_payment_hash ? 'Checks an existing payment; does not send another one.' : 'No pending payment to check.'"></q-tooltip>

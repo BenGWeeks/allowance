@@ -377,3 +377,22 @@ pending payment hashes. Back up the databases before recovery or upgrading.
 
 See the [release guide](docs/releasing.md) for archive validation, draft releases,
 restart-based upgrade checks and submitting to the LNbits extension registry.
+
+
+### Paying a skipped occurrence
+
+A skipped occurrence was deliberately passed over, such as when an operator resumes
+an interrupted schedule without catching up. A blocked or unsuccessful payment is
+a failure; it can subsequently be skipped during recovery. Skipping sends no funds.
+
+In Payment history, open Details for a skipped occurrence and choose **Pay this
+skipped occurrence**. Confirm the saved recipient and amount. The worker queues
+that one payment, records the request and result against the original occurrence,
+and preserves the regular schedule. Fiat amounts use the rate at payment time.
+Failed entries continue to show **Retry this payment**.
+
+Both actions require unchanged saved payment details, no submitted or uncertain
+payment, and an active allowance with no other due payment or older retry in
+progress. Older entries without saved details cannot be paid through this action.
+Payments made separately through the LNbits wallet are not linked automatically;
+check wallet history before confirming if you may already have paid manually.

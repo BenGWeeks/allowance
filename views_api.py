@@ -560,5 +560,10 @@ async def api_retry_occurrence(
     except AllowanceConflictError as exc:
         raise HTTPException(409, str(exc)) from None
     return {
-        "message": "Retry queued for this payment. The regular schedule is preserved."
+        "message": (
+            "Payment queued for this skipped occurrence. "
+            "The regular schedule is preserved."
+            if occurrence.get("outcome") == "skipped"
+            else "Retry queued for this payment. The regular schedule is preserved."
+        )
     }
