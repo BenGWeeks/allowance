@@ -17,32 +17,45 @@
           <q-banner v-if="historyDialog.allowance.last_error" class="bg-warning text-black q-mt-sm">
             <div v-text="historyDialog.allowance.last_error"></div>
             <div v-if="historyDialog.allowance.last_error_time" class="text-caption">Last error: <span v-text="formatDatetime(historyDialog.allowance.last_error_time)"></span></div>
-            <div v-if="historyDialog.allowance.retry_after" class="text-caption">Next retry: <span v-text="formatDatetime(historyDialog.allowance.retry_after)"></span></div>
+            <div v-if="historyDialog.allowance.active && historyDialog.allowance.retry_after && Date.parse(historyDialog.allowance.retry_deadline) > Date.now()" class="text-caption">Next retry: <span v-text="formatDatetime(historyDialog.allowance.retry_after)"></span></div>
           </q-banner>
         </q-card-section>
         <q-card-section class="q-pt-none">
-          <div class="text-subtitle1 q-mb-sm">Payment outcomes</div>
-          <q-table :rows="historyDialog.rows" :columns="historyColumns" :loading="historyDialog.loading" row-key="id" no-data-label="No recorded payments yet" ></q-table>
-          <div class="text-caption q-mt-sm">Latest 50 completed attempts since history was enabled. Earlier payments remain in the LNbits wallet history.</div>
-          <div class="text-subtitle1 q-mt-lg q-mb-sm">Diagnostic log</div>
-          <q-table :rows="historyDialog.logs" :columns="logColumns" :loading="historyDialog.loading" row-key="id" :pagination="{rowsPerPage: 5}" no-data-label="No diagnostic entries recorded yet">
-            <template v-slot:body-cell-message="props">
-              <q-td :props="props" style="white-space: normal; min-width: 200px">
-                <div v-text="props.row.message"></div>
-                <div class="text-caption text-grey">Stage: <span v-text="props.row.stage.replaceAll('_', ' ')"></span> · Code: <span v-text="props.row.code"></span></div>
-                <div class="text-caption">Scheduled: <span v-text="formatDatetime(new Date(props.row.scheduled_at * 1000).toISOString())"></span></div>
-                <div v-if="props.row.retry_at" class="text-caption">Retry at: <span v-text="formatDatetime(new Date(props.row.retry_at * 1000).toISOString())"></span></div>
-              </q-td>
+          <div v-if="historyDialog.loading">Loading payment history…</div>
+          <div v-else-if="!historyDialog.rows.length">No recorded payments yet</div>
+          <q-expansion-item v-for="payment in historyDialog.rows" :key="payment.id" :default-opened="!!payment.current" class="q-mb-sm" expand-separator>
+            <template v-slot:header>
+              <q-item-section>
+                <q-item-label v-text="formatDatetime(new Date(payment.scheduled_at * 1000).toISOString())"></q-item-label>
+                <q-item-label caption v-text="occurrenceState(payment)"></q-item-label>
+              </q-item-section>
             </template>
-          </q-table>
-          <div class="text-caption q-mt-sm">Latest 50 entries; up to 200 are retained per allowance. Details are recorded from this update onward; older failures cannot be reconstructed.</div>
+            <q-card-section class="q-pt-none">
+              <div v-if="payment.details"><span v-text="payment.details.amount"></span> <span v-text="payment.details.currency || 'sats'"></span> → <span v-text="payment.details.lightning_address"></span></div>
+              <div v-else class="text-caption">Original payment details were not recorded.</div>
+              <div v-if="payment.completed_at" class="text-caption">Completed: <span v-text="formatDatetime(new Date(payment.completed_at * 1000).toISOString())"></span></div>
+              <q-list separator class="q-my-sm">
+                <q-item v-for="event in payment.events" :key="event.id">
+                  <q-item-section>
+                    <q-item-label v-text="event.message"></q-item-label>
+                    <q-item-label caption><span v-text="formatDatetime(new Date(event.recorded_at * 1000).toISOString())"></span> · <span v-text="event.code"></span></q-item-label>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+              <div v-if="!payment.events.length" class="text-caption">No retained attempt details for this payment.</div>
+              <q-btn flat icon="replay" label="Retry this payment" :disable="!payment.can_retry || retryRequestBusy || historyDialog.loading" @click="confirmRetry(payment)"></q-btn>
+              <div v-if="payment.retry_block_reason" class="text-caption" v-text="payment.retry_block_reason"></div>
+            </q-card-section>
+          </q-expansion-item>
+          <div class="text-caption q-mt-sm">Latest 50 completed payments plus the current occurrence. Up to 200 diagnostic events are retained. Older attempt details may be unavailable.</div>
         </q-card-section>
-        <q-card-section v-if="historyDialog.allowance && !historyDialog.allowance.pending_payment_hash" class="text-caption q-pt-none">
-          No pending invoice to check. Payment retries run automatically at the scheduled retry time.
+        <q-card-section v-if="historyDialog.allowance" class="text-caption q-pt-none">
+          <span v-text="paymentState(historyDialog.allowance)"></span>.
+          Checking payment status never sends another payment.
         </q-card-section>
         <q-card-actions align="right" class="q-gutter-xs">
           <q-btn flat label="Refresh history" icon="refresh" :disable="historyDialog.loading" @click="showHistory(historyDialog.allowance)" ></q-btn>
-          <q-btn flat label="Check payment status" icon="sync" :disable="historyDialog.loading || !historyDialog.allowance?.pending_payment_hash" @click="reconcileAllowance(historyDialog.allowance)" ></q-btn>
+          <q-btn flat label="Check payment status" icon="manage_search" :disable="historyDialog.loading || !historyDialog.allowance?.pending_payment_hash" @click="reconcileAllowance(historyDialog.allowance)" ></q-btn>
           <q-btn flat label="Edit allowance" icon="edit" :disable="historyDialog.loading || !historyDialog.allowance" @click="editFromHistory" ></q-btn>
           <q-btn flat label="Close" v-close-popup ></q-btn>
         </q-card-actions>
@@ -119,8 +132,8 @@
                 ></span>
                 <span v-else-if="col.name == 'status'">
                   <q-badge
-                    :color="props.row.pending_payment_hash ? 'warning' : props.row.active ? (props.row.last_error ? 'negative' : 'positive') : 'grey'"
-                    :label="props.row.pending_payment_hash ? 'Pending' : props.row.active ? (props.row.last_error ? 'Error' : 'Active') : 'Inactive'"
+                    :color="props.row.pending_payment_hash ? 'warning' : props.row.active ? (props.row.retry_after ? 'warning' : props.row.last_error ? 'negative' : 'positive') : 'grey'"
+                    :label="paymentState(props.row)"
                   >
                     <q-tooltip v-if="props.row.pending_payment_hash">Payment outcome unresolved. Check status before sending another payment.</q-tooltip>
                     <q-tooltip v-else-if="props.row.last_error">
@@ -167,7 +180,7 @@
               </q-td>
               <q-td auto-width class="text-no-wrap">
                 <q-btn flat dense size="sm" class="q-mr-xs" icon="history" aria-label="Payment history" @click="showHistory(props.row)"><q-tooltip>Payment history</q-tooltip></q-btn>
-                <q-btn :disable="!props.row.pending_payment_hash" flat dense size="sm" class="q-mr-xs" icon="sync" aria-label="Check payment status" @click="reconcileAllowance(props.row)"><q-tooltip v-text="props.row.pending_payment_hash ? 'Check payment status' : 'No pending invoice to check'"></q-tooltip></q-btn>
+                <q-btn :disable="!props.row.pending_payment_hash" flat dense size="sm" class="q-mr-xs" icon="manage_search" aria-label="Check payment status" @click="reconcileAllowance(props.row)"><q-tooltip v-text="props.row.pending_payment_hash ? 'Check payment status' : 'No pending invoice to check'"></q-tooltip></q-btn>
                 <q-btn
                   flat
                   dense
@@ -178,7 +191,7 @@
                   color="grey"
                   class="q-mr-xs"
                 >
-                  <q-tooltip>Copy ID</q-tooltip>
+                  <q-tooltip>Copy allowance ID</q-tooltip>
                 </q-btn>
                 <q-btn
                   flat

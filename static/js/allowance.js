@@ -8,6 +8,7 @@ window.app = Vue.createApp({
       userLocale: navigator.language || 'en-GB',
       allowances: [],
       healthWarning: '',
+      retryRequestBusy: false,
       healthTimer: null,
       historyDialog: {show: false, rows: [], logs: [], allowance: null, loading: false, error: false},
       logColumns: [
@@ -37,7 +38,7 @@ window.app = Vue.createApp({
             const order = ['once', 'minutely', 'hourly', 'daily', 'weekly', 'monthly', 'yearly']
             return order.indexOf(a) - order.indexOf(b)
           }},
-          {name: 'next_payment_date', align: 'left', label: 'Next Payment', field: 'next_payment_date', sortable: true,
+          {name: 'next_payment_date', align: 'left', label: 'Next Payment', field: row => row.retry_resume_date || row.next_payment_date, sortable: true,
             sort: (a, b) => (Date.parse(a) || 0) - (Date.parse(b) || 0)},
           {name: 'last_success_time', align: 'left', label: 'Last Success', field: 'last_success_time', sortable: true},
           {name: 'status', align: 'center', label: 'Status', field: 'active', sortable: true, sort: (a, b, rowA, rowB) => {
@@ -95,14 +96,13 @@ window.app = Vue.createApp({
       this.historyDialog = {show: true, rows: [], logs: [], allowance: row, loading: true, error: false}
       const dialog = this.historyDialog
       try {
-        const [history, logs, current] = await Promise.all([
-          LNbits.api.request('GET', `/allowance/api/v1/allowance/${row.id}/history`, wallet.inkey),
-          LNbits.api.request('GET', `/allowance/api/v1/allowance/${row.id}/logs`, wallet.inkey),
+        const [history, current] = await Promise.all([
+          LNbits.api.request('GET', `/allowance/api/v1/allowance/${row.id}/occurrences`, wallet.inkey),
           LNbits.api.request('GET', `/allowance/api/v1/allowance/${row.id}`, wallet.inkey)
         ])
         if (this.historyDialog !== dialog || !dialog.show) return
         this.historyDialog.rows = history.data
-        this.historyDialog.logs = logs.data
+        this.historyDialog.logs = []
         this.historyDialog.allowance = current.data
       } catch (error) {
         if (this.historyDialog !== dialog || !dialog.show) return
@@ -111,6 +111,48 @@ window.app = Vue.createApp({
       } finally {
         if (this.historyDialog === dialog) dialog.loading = false
       }
+    },
+    paymentState(row) {
+      if (row.pending_payment_hash) return 'Awaiting payment confirmation'
+      if (!row.active) return 'Paused or finished'
+      if (row.retry_after && row.retry_deadline && Date.parse(row.retry_deadline) > Date.now()) {
+        return Date.parse(row.retry_after) > Date.now()
+          ? `Retry scheduled for ${this.formatDatetime(row.retry_after)}` : 'Retry queued'
+      }
+      if (row.retry_after) return 'Automatic retries ended'
+      if (row.last_error) return 'Scheduled · last payment failed'
+      return 'Scheduled'
+    },
+    occurrenceState(row) {
+      if (row.current) return this.paymentState(this.historyDialog.allowance)
+      return {succeeded: 'Paid', failed: 'Failed — automatic retries ended', skipped: 'Skipped'}[row.outcome] || row.outcome
+    },
+    confirmRetry(row) {
+      const allowance = this.historyDialog.allowance
+      if (!row.can_retry || !row.details || this.retryRequestBusy) return
+      const scheduled = this.formatDatetime(new Date(row.scheduled_at * 1000).toISOString())
+      Quasar.Dialog.create({
+        title: 'Retry this payment?',
+        message: `Pay ${row.details.amount} ${row.details.currency || 'sats'} to ${row.details.lightning_address} for the payment scheduled ${scheduled}? This explicitly retries this one payment. The regular schedule is preserved; other missed payments stay skipped. Fiat amounts use the rate at retry time.`,
+        cancel: true, persistent: true, ok: {label: 'Retry this payment', color: 'primary'}
+      }).onOk(async () => {
+        const wallet = this.g.user.wallets.find(wallet => wallet.id === allowance.wallet)
+        if (!wallet || this.retryRequestBusy) return
+        this.retryRequestBusy = true
+        try {
+          const response = await LNbits.api.request('POST', `/allowance/api/v1/allowance/${allowance.id}/retry`, wallet.adminkey, {
+            scheduled_at: row.scheduled_at, revision: allowance.revision, confirmed: true
+          })
+          Quasar.Notify.create({type: 'positive', message: response.data.message})
+          this.getAllowances()
+          await this.showHistory(allowance)
+        } catch (error) {
+          LNbits.utils.notifyApiError(error)
+          await this.showHistory(allowance)
+        } finally {
+          this.retryRequestBusy = false
+        }
+      })
     },
     getAllowances() {
       this.loadHealth()

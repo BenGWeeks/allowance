@@ -274,6 +274,14 @@ async def execute_lightning_address_payment(  # noqa: C901
                 return None
             if payment and owns_payment(allowance, payment):
                 return await reconcile_payment(allowance)
+            await update_allowance_error(
+                allowance,
+                "Payment outcome is unknown. Check status before retrying.",
+                int(datetime.now(timezone.utc).timestamp()),
+                stage="payment_submission",
+                code="outcome_unknown",
+            )
+            return None
         return await retry_unsent_payment(allowance)
 
 

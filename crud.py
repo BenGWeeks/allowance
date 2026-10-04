@@ -171,13 +171,39 @@ class AllowanceConflictError(Exception):
 
 async def update_allowance(data: CreateAllowanceData) -> Allowance:
     """Update editable fields without overwriting scheduler-owned state."""
+    current = await get_allowance(data.id)
+    if current and current.retry_resume_date:
+        from .payment_retry import payment_snapshot
+
+        if (
+            payment_snapshot(current) != payment_snapshot(data)
+            or current.end_datetime != data.end_datetime
+        ):
+            raise AllowanceConflictError(
+                "Payment details cannot change during an occurrence retry. "
+                "You can still pause or resume this allowance."
+            )
+        result = await db.execute(
+            f"UPDATE {db.references_schema}maintable SET name = :name, "
+            "active = :active, revision = revision + 1 "
+            "WHERE id = :id AND revision = :revision",
+            {
+                "id": data.id,
+                "revision": data.revision,
+                "name": data.name,
+                "active": data.active,
+            },
+        )
+        if result.rowcount != 1:
+            raise AllowanceConflictError("Allowance changed; reload before saving")
+        return await get_allowance(data.id)
     result = await db.execute(
         f"UPDATE {db.references_schema}maintable SET "
         "name = :name, lightning_address = :lightning_address, "
         "amount = :amount, currency = :currency, memo = :memo, active = :active, "
         "retry_after = NULL, retry_deadline = NULL, retry_count = 0, "
         f"end_datetime = {db.timestamp_placeholder('end')}, revision = revision + 1 "
-        "WHERE id = :id AND revision = :revision",
+        "WHERE id = :id AND revision = :revision AND retry_resume_date IS NULL",
         {
             "id": data.id,
             "revision": data.revision,
@@ -372,6 +398,19 @@ async def finish_payment_attempt(
         if allowance.pending_payment_hash
         else "pending_payment_hash IS NULL AND revision = :revision"
     )
+    if allowance.retry_resume_date:
+        now = datetime.now(timezone.utc)
+        if allowance.retry_resume_date > now:
+            next_date = allowance.retry_resume_date
+        else:
+            from .schedule import next_occurrence
+
+            next_date = next_occurrence(
+                allowance.start_datetime,
+                allowance.frequency_type,
+                now,
+                allowance.timezone_name,
+            )
     if next_date is None:
         assignment = "active = false"
     else:
@@ -381,23 +420,29 @@ async def finish_payment_attempt(
         result = await conn.execute(
             f"UPDATE {db.references_schema}maintable SET {assignment}, "
             "pending_payment_hash = NULL, retry_count = 0, retry_after = NULL, "
-            "retry_deadline = NULL, revision = revision + 1 WHERE id = :id "
+            "retry_deadline = NULL, retry_resume_date = NULL, "
+            "revision = revision + 1 WHERE id = :id "
             f"AND {condition} "
             f"AND next_payment_date = {db.timestamp_placeholder('due')}",
             values,
         )
         if result.rowcount == 1 and outcome is not None:
+            from .payment_retry import payment_snapshot
+
             await conn.execute(
                 f"INSERT INTO {db.references_schema}payment_history "
-                "(id, allowance_id, scheduled_at, completed_at, outcome, payment_hash) "
-                "VALUES (:event, :id, :due, :completed, :outcome, :hash) "
-                "ON CONFLICT (id) DO NOTHING",
+                "(id, allowance_id, scheduled_at, completed_at, outcome, "
+                "payment_hash, retry_snapshot) "
+                "VALUES (:event, :id, :due, :completed, :outcome, :hash, :snapshot) "
+                "ON CONFLICT (id) DO UPDATE SET completed_at = excluded.completed_at, "
+                "outcome = excluded.outcome, payment_hash = excluded.payment_hash",
                 {
                     "event": f"{allowance.id}:{values['due']}",
                     "id": allowance.id,
                     "due": values["due"],
                     "completed": int(datetime.now(timezone.utc).timestamp()),
                     "outcome": "succeeded" if outcome else "failed",
+                    "snapshot": payment_snapshot(allowance),
                     "hash": allowance.pending_payment_hash,
                 },
             )

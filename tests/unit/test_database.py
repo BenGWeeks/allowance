@@ -50,6 +50,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         await migrations.m006_operational_history(self.database)
         await migrations.m007_retry_and_local_schedule(self.database)
         await migrations.m008_payment_logs(self.database)
+        await migrations.m009_occurrence_retries(self.database)
 
     async def asyncTearDown(self):
         if self.database.type == POSTGRES:
@@ -590,3 +591,134 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(RuntimeError, "Injected diagnostic"):
                 await crud.update_allowance_error(allowance, "Error", 1)
         self.assertIsNone((await crud.get_allowance(allowance.id)).last_error)
+
+    async def retry_fixture(self):
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        row = await crud.create_allowance(
+            CreateAllowanceData(
+                name="Retry fixture",
+                wallet="test-wallet",
+                amount=25,
+                lightning_address="recipient@example.invalid",
+                memo="",
+                start_datetime=now - timedelta(days=7),
+                next_payment_date=now - timedelta(days=7),
+                frequency_type="weekly",
+            )
+        )
+        return row, now
+
+    async def test_manual_current_retry_is_atomic_and_keeps_due_date(self):
+        from lnbits.extensions.allowance.payment_retry import request_retry
+
+        row, now = await self.retry_fixture()
+        await crud.defer_payment(
+            row, now + timedelta(minutes=20), now + timedelta(hours=1)
+        )
+        row = await crud.get_allowance(row.id)
+        occurrence = {
+            "scheduled_at": int(row.next_payment_date.timestamp()),
+            "current": True,
+        }
+        results = await asyncio.gather(
+            request_retry(row, occurrence, row.revision),
+            request_retry(row, occurrence, row.revision),
+            return_exceptions=True,
+        )
+        self.assertEqual(sum(value is None for value in results), 1)
+        self.assertEqual(
+            sum(isinstance(value, crud.AllowanceConflictError) for value in results), 1
+        )
+        updated = await crud.get_allowance(row.id)
+        self.assertEqual(updated.next_payment_date, row.next_payment_date)
+        self.assertIsNone(updated.pending_payment_hash)
+        self.assertIsNone(updated.retry_resume_date)
+        with self.assertRaises(crud.AllowanceConflictError):
+            await request_retry(updated, occurrence, updated.revision)
+        events = await crud.get_payment_logs(row.id)
+        self.assertEqual(
+            sum(event["code"] == "manual_retry_requested" for event in events), 1
+        )
+
+    async def test_historical_retry_restores_schedule_and_cannot_repeat_paid(self):
+        from lnbits.extensions.allowance.payment_retry import request_retry
+
+        row, now = await self.retry_fixture()
+        following = now + timedelta(days=7)
+        await crud.finish_payment_attempt(row, following, False)
+        history = (await crud.get_payment_history(row.id))[0]
+        current = await crud.get_allowance(row.id)
+        await request_retry(current, history, current.revision)
+        retry = await crud.get_allowance(row.id)
+        self.assertEqual(retry.next_payment_date, row.next_payment_date)
+        self.assertEqual(retry.retry_resume_date, following)
+        with self.assertRaises(crud.AllowanceConflictError):
+            await crud.update_allowance(
+                CreateAllowanceData(**{**retry.dict(), "amount": 50})
+            )
+        await crud.finish_payment_attempt(retry, now + timedelta(days=1), True)
+        restored = await crud.get_allowance(row.id)
+        self.assertEqual(restored.next_payment_date, following)
+        self.assertIsNone(restored.retry_resume_date)
+        history = (await crud.get_payment_history(row.id))[0]
+        self.assertEqual(history["outcome"], "succeeded")
+        with self.assertRaises(crud.AllowanceConflictError):
+            await request_retry(restored, history, restored.revision)
+
+    async def test_manual_retry_rejects_unsafe_or_stale_requests(self):
+        from lnbits.extensions.allowance.payment_retry import request_retry
+
+        row, now = await self.retry_fixture()
+        await crud.finish_payment_attempt(row, now + timedelta(days=7), False)
+        current = await crud.get_allowance(row.id)
+        history = (await crud.get_payment_history(row.id))[0]
+        cases = [
+            (current.copy(update={"active": False}), history),
+            (current.copy(update={"pending_payment_hash": "uncertain"}), history),
+            (current.copy(update={"amount": 50}), history),
+            (current.copy(update={"end_datetime": now}), history),
+            (current, {**history, "retry_snapshot": None}),
+            (current, {**history, "payment_hash": "submitted"}),
+            (current, {**history, "outcome": "succeeded"}),
+            (current, {**history, "outcome": "skipped"}),
+        ]
+        for observed, event in cases:
+            with self.assertRaises(crud.AllowanceConflictError):
+                await request_retry(observed, event, current.revision)
+        with self.assertRaises(crud.AllowanceConflictError):
+            await request_retry(current, history, current.revision - 1)
+        self.assertEqual((await crud.get_allowance(row.id)).revision, current.revision)
+
+    async def test_manual_retry_log_failure_rolls_back_request(self):
+        from lnbits.extensions.allowance.payment_retry import request_retry
+
+        row, now = await self.retry_fixture()
+        await crud.finish_payment_attempt(row, now + timedelta(days=7), False)
+        current = await crud.get_allowance(row.id)
+        event = (await crud.get_payment_history(row.id))[0]
+        with patch.object(
+            crud, "_append_payment_log", side_effect=RuntimeError("test")
+        ):
+            with self.assertRaises(RuntimeError):
+                await request_retry(current, event, current.revision)
+        saved = await crud.get_allowance(row.id)
+        self.assertEqual(saved.next_payment_date, current.next_payment_date)
+        self.assertIsNone(saved.retry_resume_date)
+
+    async def test_historical_retry_can_pause_without_losing_schedule(self):
+        from lnbits.extensions.allowance.payment_retry import request_retry
+
+        row, now = await self.retry_fixture()
+        following = now + timedelta(days=7)
+        await crud.finish_payment_attempt(row, following, False)
+        current = await crud.get_allowance(row.id)
+        event = (await crud.get_payment_history(row.id))[0]
+        await request_retry(current, event, current.revision)
+        retry = await crud.get_allowance(row.id)
+        paused = await crud.update_allowance(
+            CreateAllowanceData(**{**retry.dict(), "active": False})
+        )
+        self.assertFalse(paused.active)
+        self.assertEqual(paused.retry_resume_date, following)
+        self.assertEqual(paused.retry_deadline, retry.retry_deadline)
+        self.assertEqual(paused.next_payment_date, retry.next_payment_date)

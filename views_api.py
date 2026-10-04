@@ -22,7 +22,12 @@ from .crud import (
     get_allowances,
     update_allowance,
 )
-from .models import AllowanceCreateRequest, AllowanceUpdateRequest, CreateAllowanceData
+from .models import (
+    AllowanceCreateRequest,
+    AllowanceUpdateRequest,
+    CreateAllowanceData,
+    PaymentRetryRequest,
+)
 from .tasks import lightning_address_url
 
 allowance_api_router = APIRouter()
@@ -475,4 +480,85 @@ async def api_allowance_health(wallet: WalletTypeInfo = Depends(require_invoice_
         "last_completed": heartbeat.get("last_completed"),
         "overdue": overdue,
         "pending": pending,
+    }
+
+
+@allowance_api_router.get("/api/v1/allowance/{allowance_id}/occurrences")
+async def api_payment_occurrences(
+    allowance_id: str, wallet: WalletTypeInfo = Depends(require_invoice_key)
+):
+    import json
+
+    from .crud import get_payment_history, get_payment_logs
+    from .payment_retry import payment_snapshot, retry_block_reason
+
+    allowance = await get_allowance(allowance_id)
+    if not allowance:
+        raise HTTPException(404, "Allowance not found")
+    if allowance.wallet != get_wallet_id(wallet):
+        raise HTTPException(403, "Not authorized to view these payments")
+    rows = await get_payment_history(allowance_id)
+    due = int(allowance.next_payment_date.timestamp())
+    if allowance.active or allowance.pending_payment_hash or allowance.retry_after:
+        rows = [row for row in rows if row["scheduled_at"] != due]
+        rows.insert(
+            0,
+            {
+                "id": f"{allowance.id}:{due}",
+                "scheduled_at": due,
+                "completed_at": None,
+                "outcome": "current",
+                "current": True,
+                "retry_snapshot": payment_snapshot(allowance),
+            },
+        )
+    logs = await get_payment_logs(allowance_id, 200)
+    now = datetime.now(timezone.utc)
+    for row in rows:
+        row["details"] = (
+            json.loads(row["retry_snapshot"]) if row.get("retry_snapshot") else None
+        )
+        row["retry_block_reason"] = retry_block_reason(allowance, row, now)
+        row["can_retry"] = row["retry_block_reason"] is None
+        row["events"] = [
+            log for log in logs if log["scheduled_at"] == row["scheduled_at"]
+        ]
+        row.pop("retry_snapshot", None)
+    return rows
+
+
+@allowance_api_router.post("/api/v1/allowance/{allowance_id}/retry", status_code=202)
+async def api_retry_occurrence(
+    allowance_id: str,
+    data: PaymentRetryRequest,
+    wallet: WalletTypeInfo = Depends(require_admin_key),
+):
+    from .crud import AllowanceConflictError, db
+    from .payment_retry import request_retry
+
+    allowance = await get_allowance(allowance_id)
+    if not allowance:
+        raise HTTPException(404, "Allowance not found")
+    if allowance.wallet != get_wallet_id(wallet):
+        raise HTTPException(403, "Not authorized to retry this payment")
+    if (
+        data.scheduled_at == int(allowance.next_payment_date.timestamp())
+        and allowance.retry_after
+    ):
+        occurrence = {"scheduled_at": data.scheduled_at, "current": True}
+    else:
+        saved = await db.fetchone(
+            f"SELECT * FROM {db.references_schema}payment_history "
+            "WHERE allowance_id = :id AND scheduled_at = :due",
+            {"id": allowance_id, "due": data.scheduled_at},
+        )
+        if not saved:
+            raise HTTPException(404, "Recorded payment not found")
+        occurrence = dict(saved)
+    try:
+        await request_retry(allowance, occurrence, data.revision)
+    except AllowanceConflictError as exc:
+        raise HTTPException(409, str(exc)) from None
+    return {
+        "message": "Retry queued for this payment. The regular schedule is preserved."
     }

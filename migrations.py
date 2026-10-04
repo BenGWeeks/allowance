@@ -209,3 +209,15 @@ async def m008_payment_logs(db):
             f"CREATE INDEX IF NOT EXISTS allowance_logs_lookup "
             f"ON {db.references_schema}payment_logs (allowance_id, recorded_at)"
         )
+
+
+async def m009_occurrence_retries(db):
+    async with _migration_transaction(db) as atomic:
+        await atomic.execute(
+            f"ALTER TABLE {db.references_schema}maintable "
+            "ADD COLUMN retry_resume_date TIMESTAMP"
+        )
+        await atomic.execute(
+            f"ALTER TABLE {db.references_schema}payment_history "
+            "ADD COLUMN retry_snapshot TEXT"
+        )

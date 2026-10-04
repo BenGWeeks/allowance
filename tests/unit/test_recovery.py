@@ -25,7 +25,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
             next_payment_date=datetime(2020, 1, 1, tzinfo=timezone.utc),
         )
 
-    async def test_host_rejections_retry_only_when_no_outgoing_payment_exists(self):
+    async def test_submission_errors_keep_claim_when_outcome_is_unknown(self):
         for exception in (
             ValueError("limit"),
             PaymentError("disabled"),
@@ -87,7 +87,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                     self.assertIsNone(
                         await tasks.execute_lightning_address_payment(allowance)
                     )
-                    self.assertEqual(defer.await_count, int(stored is None))
+                    defer.assert_not_awaited()
                     self.assertEqual(lookup.await_args_list[1].args, ("hash",))
                     self.assertEqual(lookup.await_args_list[1].kwargs, {})
 

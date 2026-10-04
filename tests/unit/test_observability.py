@@ -95,3 +95,41 @@ class ObservabilityTests(unittest.IsolatedAsyncioTestCase):
                     (await client.get("/api/v1/allowance/test/logs")).status_code, 403
                 )
                 self.assertEqual(read.await_count, 1)
+
+    async def test_occurrence_and_retry_endpoints_require_owning_wallet(self):
+        app = FastAPI()
+        app.include_router(views_api.allowance_api_router)
+        app.dependency_overrides[views_api.require_invoice_key] = (
+            lambda: SimpleNamespace(id="other")
+        )
+        app.dependency_overrides[views_api.require_admin_key] = lambda: SimpleNamespace(
+            id="other"
+        )
+        with patch.object(
+            views_api,
+            "get_allowance",
+            AsyncMock(return_value=SimpleNamespace(wallet="owned")),
+        ):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                self.assertEqual(
+                    (
+                        await client.get("/api/v1/allowance/test/occurrences")
+                    ).status_code,
+                    403,
+                )
+                payload = {"scheduled_at": 1, "revision": 0, "confirmed": True}
+                self.assertEqual(
+                    (
+                        await client.post("/api/v1/allowance/test/retry", json=payload)
+                    ).status_code,
+                    403,
+                )
+                payload["confirmed"] = False
+                self.assertEqual(
+                    (
+                        await client.post("/api/v1/allowance/test/retry", json=payload)
+                    ).status_code,
+                    422,
+                )
