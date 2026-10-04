@@ -9,7 +9,11 @@ window.app = Vue.createApp({
       allowances: [],
       healthWarning: '',
       healthTimer: null,
-      historyDialog: {show: false, rows: [], loading: false},
+      historyDialog: {show: false, rows: [], logs: [], allowance: null, loading: false, error: false},
+      logColumns: [
+        {name: 'time', label: 'Time', field: row => this.formatDatetime(new Date(row.recorded_at * 1000).toISOString()), align: 'left'},
+        {name: 'message', label: 'Details', field: 'message', align: 'left'}
+      ],
       historyColumns: [
         {name: 'scheduled', label: 'Scheduled', field: row => this.formatDatetime(new Date(row.scheduled_at * 1000).toISOString()), align: 'left'},
         {name: 'completed', label: 'Completed', field: row => this.formatDatetime(new Date(row.completed_at * 1000).toISOString()), align: 'left'},
@@ -88,14 +92,24 @@ window.app = Vue.createApp({
     async showHistory(row) {
       const wallet = this.g.user.wallets.find(wallet => wallet.id === row.wallet)
       if (!wallet) return
-      this.historyDialog = {show: true, rows: [], loading: true}
+      this.historyDialog = {show: true, rows: [], logs: [], allowance: row, loading: true, error: false}
+      const dialog = this.historyDialog
       try {
-        const response = await LNbits.api.request('GET', `/allowance/api/v1/allowance/${row.id}/history`, wallet.inkey)
-        this.historyDialog.rows = response.data
+        const [history, logs, current] = await Promise.all([
+          LNbits.api.request('GET', `/allowance/api/v1/allowance/${row.id}/history`, wallet.inkey),
+          LNbits.api.request('GET', `/allowance/api/v1/allowance/${row.id}/logs`, wallet.inkey),
+          LNbits.api.request('GET', `/allowance/api/v1/allowance/${row.id}`, wallet.inkey)
+        ])
+        if (this.historyDialog !== dialog || !dialog.show) return
+        this.historyDialog.rows = history.data
+        this.historyDialog.logs = logs.data
+        this.historyDialog.allowance = current.data
       } catch (error) {
+        if (this.historyDialog !== dialog || !dialog.show) return
+        this.historyDialog.error = true
         LNbits.utils.notifyApiError(error)
       } finally {
-        this.historyDialog.loading = false
+        if (this.historyDialog === dialog) dialog.loading = false
       }
     },
     getAllowances() {
@@ -304,12 +318,18 @@ window.app = Vue.createApp({
     reconcileAllowance(row) {
       const wallet = this.g.user.wallets.find(wallet => wallet.id === row.wallet)
       if (!wallet) return
-      LNbits.api.request('POST', `/allowance/api/v1/allowance/${row.id}/reconcile`, wallet.adminkey)
+      return LNbits.api.request('POST', `/allowance/api/v1/allowance/${row.id}/reconcile`, wallet.adminkey)
         .then(response => {
           Quasar.Notify.create({type: response.data.pending ? 'warning' : response.data.success === false ? 'negative' : 'positive', message: response.data.message})
           this.getAllowances()
+          if (this.historyDialog.show && this.historyDialog.allowance?.id === row.id) return this.showHistory(row)
         })
         .catch(LNbits.utils.notifyApiError)
+    },
+    editFromHistory() {
+      const row = this.historyDialog.allowance
+      this.historyDialog.show = false
+      this.openUpdateDialog(row)
     },
     openUpdateDialog(row) {
 

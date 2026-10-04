@@ -265,8 +265,34 @@ egress prevents host-specific NAT64 translation from bypassing address checks. P
 credentials in URLs, and redirects are rejected. DNS results are validated at
 connection time and the connection is pinned to the validated IP while preserving
 TLS hostname verification. Requests have a ten-second total deadline and a 256 KiB
-response limit. Internal-only or onion LNURL services are not supported by this policy.
+response limit. Onion LNURL services are unsupported.
 Returned invoices must contain exactly the requested millisatoshi amount.
+
+For split DNS, the server operator can explicitly trust exact hostname/private IPv4
+pairs using the container environment variable `ALLOWANCE_TRUSTED_LNURL_DESTINATIONS`:
+
+```yaml
+environment:
+  ALLOWANCE_TRUSTED_LNURL_DESTINATIONS: '{"payments.example.com":["192.168.1.89"]}'
+```
+
+Recreate the container after changing its environment. This setting is unavailable
+through the allowance API. Only list services you control and trust: allowances can
+request HTTPS paths on those services. Wildcards, CIDR ranges, loopback, link-local,
+IPv6, HTTP, other ports and redirects remain unsupported. Only RFC1918 IPv4 addresses
+are accepted in this policy; malformed configuration rejects requests. Each DNS
+answer must be public or explicitly approved for that exact hostname. Connections
+remain pinned to checked addresses, with normal certificate and hostname validation.
+Invoice callbacks are checked independently; a different private callback hostname
+needs its own explicit entry. Never add a broad internal network exception.
+
+Before release, resolve every existing recipient from inside the target container
+and perform read-only LNURL metadata discovery using the candidate policy. Do not
+request invoices or send payments as part of this preflight. On isolated dev, test
+an actual scheduled FakeWallet payment and a realistic split-DNS HTTPS endpoint,
+then verify history and the next scheduled date. Passing UI and heartbeat checks
+alone does not demonstrate payment delivery.
+
 
 ### Operational monitoring
 
@@ -275,6 +301,16 @@ The allowance screen shows **Last Success**, the latest 50 completed attempts in
 stale scheduler. History starts when this update is installed; earlier payments
 remain in LNbits wallet history. Deleting an allowance also deletes its extension
 history. The history API supports `limit` (1–100) and `offset` for older entries.
+
+Payment history also shows the current error, automatic retry time and a diagnostic
+log of failures, retry scheduling and completion. It displays the latest 50 log
+entries and retains up to 200 per allowance. Older errors cannot be reconstructed.
+`GET /allowance/api/v1/allowance/{id}/logs` uses the owning wallet's invoice key
+and supports `limit` (1–100) and `offset`. Logs contain fixed diagnostic messages,
+not raw exception text, invoices or wallet credentials. Deleting the allowance
+removes its logs. **Check payment status** is enabled only when an invoice is
+pending; it does not retry a payment. Use **Refresh history** for updated diagnostics
+or **Edit allowance** to correct the destination.
 
 `GET /allowance/api/v1/health` accepts a wallet invoice key and reports only that
 wallet's overdue/pending counts, plus scheduler health. A heartbeat older than

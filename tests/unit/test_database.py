@@ -49,6 +49,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         await migrations.m005_allowance_revision(self.database)
         await migrations.m006_operational_history(self.database)
         await migrations.m007_retry_and_local_schedule(self.database)
+        await migrations.m008_payment_logs(self.database)
 
     async def asyncTearDown(self):
         if self.database.type == POSTGRES:
@@ -531,3 +532,61 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(rows["fraction"][field], int(samples["fraction"]))
             finally:
                 await legacy.engine.dispose()
+
+    async def test_diagnostics_are_bounded_and_removed_with_allowance(self):
+        allowance = await self.history_fixture()
+        for index in range(205):
+            self.assertTrue(
+                await crud.update_allowance_error(
+                    allowance,
+                    "Safe diagnostic",
+                    index,
+                    stage="address_lookup",
+                    code="private_address",
+                )
+            )
+        logs = await crud.get_payment_logs(allowance.id, limit=250)
+        self.assertEqual(len(logs), 200)
+        self.assertEqual(logs[0]["code"], "private_address")
+        self.assertEqual(await crud.get_payment_logs("other-allowance"), [])
+        self.assertEqual(
+            len(await crud.get_payment_logs(allowance.id, limit=5, offset=198)), 2
+        )
+        stale = allowance.copy(update={"pending_payment_hash": "stale-claim"})
+        self.assertFalse(
+            await crud.update_allowance_error(stale, "Stale diagnostic", 999)
+        )
+        self.assertEqual(len(await crud.get_payment_logs(allowance.id, limit=250)), 200)
+        await crud.delete_allowance(allowance.id)
+        self.assertEqual(await crud.get_payment_logs(allowance.id), [])
+
+    async def test_retry_and_completion_logs_keep_the_original_occurrence(self):
+        allowance = await self.history_fixture()
+        due = int(allowance.next_payment_date.timestamp())
+        retry = datetime.now(timezone.utc) + timedelta(minutes=1)
+        self.assertTrue(
+            await crud.defer_payment(allowance, retry, retry + timedelta(hours=1))
+        )
+        logs = await crud.get_payment_logs(allowance.id)
+        self.assertEqual(logs[0]["code"], "retry_scheduled")
+        self.assertEqual(logs[0]["retry_at"], int(retry.timestamp()))
+        self.assertEqual(logs[0]["scheduled_at"], due)
+        current = await crud.get_allowance(allowance.id)
+        await crud.finish_payment_attempt(current, None, False)
+        logs = await crud.get_payment_logs(allowance.id)
+        self.assertEqual(logs[0]["code"], "failed")
+        self.assertEqual(logs[0]["scheduled_at"], due)
+
+    async def test_diagnostic_insert_failure_rolls_back_error_update(self):
+        allowance = await self.history_fixture()
+        original = crud.TransactionConnection.execute
+
+        async def fail_log(connection, query, values=None):
+            if "INSERT INTO" in query and "payment_logs" in query:
+                raise RuntimeError("Injected diagnostic write failure")
+            return await original(connection, query, values)
+
+        with patch.object(crud.TransactionConnection, "execute", fail_log):
+            with self.assertRaisesRegex(RuntimeError, "Injected diagnostic"):
+                await crud.update_allowance_error(allowance, "Error", 1)
+        self.assertIsNone((await crud.get_allowance(allowance.id)).last_error)

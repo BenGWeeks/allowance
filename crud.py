@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from time import time_ns
 from typing import Optional, Union
 
 from lnbits.db import POSTGRES, SQLITE, Connection, Database, dict_to_model
@@ -205,6 +206,10 @@ async def delete_allowance(allowance_id: str) -> None:
             {"id": allowance_id},
         )
         await conn.execute(
+            f"DELETE FROM {db.references_schema}payment_logs WHERE allowance_id = :id",
+            {"id": allowance_id},
+        )
+        await conn.execute(
             f"DELETE FROM {db.references_schema}maintable WHERE id = :id",
             {"id": allowance_id},
         )
@@ -280,17 +285,25 @@ def payment_state_filter(allowance: Allowance):
 
 
 async def update_allowance_error(
-    allowance: Allowance, error_message: str, error_time: int
+    allowance: Allowance,
+    error_message: str,
+    error_time: int,
+    *,
+    stage: str = "payment",
+    code: str = "payment_error",
 ) -> bool:
-    """Record an error only while the observed occurrence still owns the claim."""
+    """Record diagnostics only while this occurrence still owns the claim."""
     condition, values = payment_state_filter(allowance)
-    result = await db.execute(
-        f"UPDATE {db.references_schema}maintable SET last_error = :error_message, "
-        f"last_error_time = {db.timestamp_placeholder('error_time')} "
-        f"WHERE {condition}",
-        {**values, "error_message": error_message, "error_time": error_time},
-    )
-    return result.rowcount == 1
+    async with transaction(db) as conn:
+        result = await conn.execute(
+            f"UPDATE {db.references_schema}maintable SET last_error = :error_message, "
+            f"last_error_time = {db.timestamp_placeholder('error_time')} "
+            f"WHERE {condition}",
+            {**values, "error_message": error_message, "error_time": error_time},
+        )
+        if result.rowcount == 1:
+            await _append_payment_log(conn, allowance, stage, code, error_message)
+        return result.rowcount == 1
 
 
 async def update_allowance_success(allowance: Allowance, success_time: int) -> bool:
@@ -389,11 +402,58 @@ async def finish_payment_attempt(
                 },
             )
 
+            await _append_payment_log(
+                conn,
+                allowance,
+                "completion",
+                "succeeded" if outcome else "failed",
+                (
+                    "Payment succeeded."
+                    if outcome
+                    else "Payment occurrence ended without success."
+                ),
+            )
+
 
 async def get_payment_history(allowance_id: str, limit: int = 50, offset: int = 0):
     rows = await db.fetchall(
         f"SELECT * FROM {db.references_schema}payment_history "
         "WHERE allowance_id = :id ORDER BY completed_at DESC, id DESC "
+        "LIMIT :limit OFFSET :offset",
+        {"id": allowance_id, "limit": limit, "offset": offset},
+    )
+    return [dict(row) for row in rows]
+
+
+async def _append_payment_log(conn, allowance, stage, code, message, retry_at=None):
+    await conn.execute(
+        f"INSERT INTO {db.references_schema}payment_logs "
+        "(id, allowance_id, scheduled_at, recorded_at, stage, code, message, retry_at) "
+        "VALUES (:event, :id, :due, :now, :stage, :code, :message, :retry)",
+        {
+            "event": f"{time_ns()}-{urlsafe_short_hash()}",
+            "id": allowance.id,
+            "due": int(allowance.next_payment_date.timestamp()),
+            "now": int(datetime.now(timezone.utc).timestamp()),
+            "stage": stage,
+            "code": code,
+            "message": message,
+            "retry": retry_at,
+        },
+    )
+    await conn.execute(
+        f"DELETE FROM {db.references_schema}payment_logs WHERE allowance_id = :id "
+        f"AND id IN (SELECT id FROM {db.references_schema}payment_logs "
+        "WHERE allowance_id = :id ORDER BY recorded_at DESC, id DESC "
+        "LIMIT 1000 OFFSET 200)",
+        {"id": allowance.id},
+    )
+
+
+async def get_payment_logs(allowance_id: str, limit: int = 50, offset: int = 0):
+    rows = await db.fetchall(
+        f"SELECT * FROM {db.references_schema}payment_logs "
+        "WHERE allowance_id = :id ORDER BY recorded_at DESC, id DESC "
         "LIMIT :limit OFFSET :offset",
         {"id": allowance_id, "limit": limit, "offset": offset},
     )
@@ -421,15 +481,26 @@ async def defer_payment(
 ) -> bool:
     """Only the attempt owner may release a confirmed unsent claim for retry."""
     condition, values = payment_state_filter(allowance)
-    result = await db.execute(
-        f"UPDATE {db.references_schema}maintable SET pending_payment_hash = NULL, "
-        "retry_count = retry_count + 1, revision = revision + 1, "
-        f"retry_after = {db.timestamp_placeholder('retry_at')}, "
-        f"retry_deadline = {db.timestamp_placeholder('deadline')} WHERE {condition}",
-        {
-            **values,
-            "retry_at": int(retry_at.timestamp()),
-            "deadline": int(deadline.timestamp()),
-        },
-    )
-    return result.rowcount == 1
+    async with transaction(db) as conn:
+        result = await conn.execute(
+            f"UPDATE {db.references_schema}maintable SET pending_payment_hash = NULL, "
+            "retry_count = retry_count + 1, revision = revision + 1, "
+            f"retry_after = {db.timestamp_placeholder('retry_at')}, "
+            f"retry_deadline = {db.timestamp_placeholder('deadline')} "
+            f"WHERE {condition}",
+            {
+                **values,
+                "retry_at": int(retry_at.timestamp()),
+                "deadline": int(deadline.timestamp()),
+            },
+        )
+        if result.rowcount == 1:
+            await _append_payment_log(
+                conn,
+                allowance,
+                "retry",
+                "retry_scheduled",
+                "Payment confirmed unsent; another attempt is scheduled.",
+                int(retry_at.timestamp()),
+            )
+        return result.rowcount == 1
