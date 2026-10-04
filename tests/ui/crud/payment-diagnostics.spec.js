@@ -17,6 +17,7 @@ test(`payment diagnostics ${skipped ? 'pay skipped occurrence' : 'retry failure'
     last_error: 'LNURL host resolves to a private or otherwise disallowed address. Blocked by the public-address policy; contact the server operator.',
     last_error_time: '2026-10-04T10:00:00Z', retry_after: new Date(Date.now() + 3600000).toISOString(), retry_deadline: new Date(Date.now() + 86400000).toISOString()
   };
+  const originalError = record.last_error;
   if (skipped) {
     record.next_payment_date = new Date(Date.now() + 7 * 86400000).toISOString();
     record.retry_after = null;
@@ -40,11 +41,11 @@ test(`payment diagnostics ${skipped ? 'pay skipped occurrence' : 'retry failure'
     else if (path.endsWith('/allowance')) body = [record];
     else if (path.endsWith('/occurrences')) {
       logRequests++;
-      body = [{id: 'attempt', scheduled_at: 1791064800, completed_at: null, outcome: skipped && retryRequests === 0 ? 'skipped' : 'current', current: !skipped || retryRequests > 0,
+      body = [{id: 'attempt', scheduled_at: 1791064800, completed_at: skipped ? 1791108001 : null, outcome: skipped && retryRequests === 0 ? 'skipped' : 'current', current: !skipped || retryRequests > 0,
         can_retry: retryRequests === 0, retry_block_reason: retryRequests ? 'An attempt is already queued.' : null,
         details: {amount: 100, currency: 'sats', lightning_address: record.lightning_address},
         events: [{id: 'log', recorded_at: 1791108000, scheduled_at: 1791064800,
-        stage: 'address_lookup', code: 'private_address', message: record.last_error, retry_at: null}]}];
+        stage: 'address_lookup', code: 'private_address', message: originalError, retry_at: null}, ...(skipped ? [{id: 'skip-log', recorded_at: 1791108001, scheduled_at: 1791064800, stage: 'maintenance', code: 'missed_occurrence_skipped', message: 'Missed occurrence skipped during recovery; regular schedule resumed.', retry_at: null}] : [])]}];
     } else if (path.endsWith('/' + record.id)) body = record;
     else return route.abort();
     return route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(body)});
