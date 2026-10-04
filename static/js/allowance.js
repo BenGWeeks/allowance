@@ -10,15 +10,12 @@ window.app = Vue.createApp({
       healthWarning: '',
       retryRequestBusy: false,
       healthTimer: null,
-      historyDialog: {show: false, rows: [], logs: [], allowance: null, loading: false, error: false},
-      logColumns: [
-        {name: 'time', label: 'Time', field: row => this.formatDatetime(new Date(row.recorded_at * 1000).toISOString()), align: 'left'},
-        {name: 'message', label: 'Details', field: 'message', align: 'left'}
-      ],
+      historyDialog: {show: false, rows: [], selectedId: null, allowance: null, loading: false, error: false},
       historyColumns: [
-        {name: 'scheduled', label: 'Scheduled', field: row => this.formatDatetime(new Date(row.scheduled_at * 1000).toISOString()), align: 'left'},
-        {name: 'completed', label: 'Completed', field: row => this.formatDatetime(new Date(row.completed_at * 1000).toISOString()), align: 'left'},
-        {name: 'outcome', label: 'Outcome', field: 'outcome', align: 'left'}
+        {name: 'scheduled', label: 'Scheduled payment', field: row => this.formatDatetime(new Date(row.scheduled_at * 1000).toISOString()), align: 'left'},
+        {name: 'amount', label: 'Amount', field: row => row.details ? `${row.details.amount} ${row.details.currency || 'sats'}` : 'Not recorded', align: 'right'},
+        {name: 'status', label: 'Status', field: 'outcome', align: 'left'},
+        {name: 'actions', label: '', field: 'id', align: 'right'}
       ],
       currencies: [],
       fiatRates: {},
@@ -90,10 +87,11 @@ window.app = Vue.createApp({
         this.healthWarning = 'Allowance status is unavailable. The extension may be disabled or unreachable.'
       }
     },
-    async showHistory(row) {
+    async showHistory(row, selectedId = null) {
       const wallet = this.g.user.wallets.find(wallet => wallet.id === row.wallet)
       if (!wallet) return
-      this.historyDialog = {show: true, rows: [], logs: [], allowance: row, loading: true, error: false}
+      const previousRows = this.historyDialog.allowance?.id === row.id ? this.historyDialog.rows : []
+      this.historyDialog = {show: true, rows: previousRows, selectedId, allowance: row, loading: true, error: false}
       const dialog = this.historyDialog
       try {
         const [history, current] = await Promise.all([
@@ -102,7 +100,6 @@ window.app = Vue.createApp({
         ])
         if (this.historyDialog !== dialog || !dialog.show) return
         this.historyDialog.rows = history.data
-        this.historyDialog.logs = []
         this.historyDialog.allowance = current.data
       } catch (error) {
         if (this.historyDialog !== dialog || !dialog.show) return
@@ -127,6 +124,19 @@ window.app = Vue.createApp({
       if (row.current) return this.paymentState(this.historyDialog.allowance)
       return {succeeded: 'Paid', failed: 'Failed — automatic retries ended', skipped: 'Skipped'}[row.outcome] || row.outcome
     },
+    compactOccurrenceState(row) {
+      const label = this.occurrenceState(row)
+      if (label.startsWith('Retry scheduled for')) return 'Retry scheduled'
+      if (row.outcome === 'failed') return 'Failed'
+      return label
+    },
+    occurrenceColor(row) {
+      const label = this.compactOccurrenceState(row)
+      if (row.outcome === 'succeeded') return 'positive'
+      if (row.outcome === 'failed' || label === 'Automatic retries ended') return 'negative'
+      if (label.startsWith('Retry') || label === 'Awaiting payment confirmation') return 'warning'
+      return 'grey'
+    },
     confirmRetry(row) {
       const allowance = this.historyDialog.allowance
       if (!row.can_retry || !row.details || this.retryRequestBusy) return
@@ -145,10 +155,10 @@ window.app = Vue.createApp({
           })
           Quasar.Notify.create({type: 'positive', message: response.data.message})
           this.getAllowances()
-          await this.showHistory(allowance)
+          await this.showHistory(allowance, row.id)
         } catch (error) {
           LNbits.utils.notifyApiError(error)
-          await this.showHistory(allowance)
+          await this.showHistory(allowance, row.id)
         } finally {
           this.retryRequestBusy = false
         }
@@ -364,7 +374,7 @@ window.app = Vue.createApp({
         .then(response => {
           Quasar.Notify.create({type: response.data.pending ? 'warning' : response.data.success === false ? 'negative' : 'positive', message: response.data.message})
           this.getAllowances()
-          if (this.historyDialog.show && this.historyDialog.allowance?.id === row.id) return this.showHistory(row)
+          if (this.historyDialog.show && this.historyDialog.allowance?.id === row.id) return this.showHistory(row, this.historyDialog.selectedId)
         })
         .catch(LNbits.utils.notifyApiError)
     },
@@ -647,6 +657,9 @@ window.app = Vue.createApp({
     }
   },
   computed: {
+    selectedHistoryPayment() {
+      return this.historyDialog.rows.find(row => row.id === this.historyDialog.selectedId) || null
+    },
     isEndDateInPast() {
       if (!this.formDialog.data.end_datetime || this.formDialog.data.end_datetime === '') {
         return false

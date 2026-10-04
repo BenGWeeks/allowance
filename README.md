@@ -327,8 +327,8 @@ HTTPS is required except for loopback development URLs; redirects are rejected.
 
 ### Retrying a specific payment
 
-Open **Payment history** and expand the scheduled payment to see its retained
-attempts, failure reason and next action. Status distinguishes **Retry scheduled**,
+Open **Payment history** for a compact list of scheduled payments. Choose
+**Details** to see one payment’s retained attempts, failure reason and next action. Status distinguishes **Retry scheduled**,
 **Retry queued**, **Awaiting payment confirmation**, **Paid**, and ended retries.
 **Check payment status** only reconciles an existing claim; it never resends.
 

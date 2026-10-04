@@ -9,55 +9,93 @@
       <template v-slot:action><q-btn flat label="Refresh status" @click="getAllowances" ></q-btn></template>
     </q-banner>
     <q-dialog v-model="historyDialog.show">
-      <q-card style="width: 960px; max-width: 95vw">
-        <q-card-section class="text-h6">Payment history</q-card-section>
-        <q-card-section v-if="historyDialog.allowance" class="q-pt-none">
-          <div class="text-subtitle2" v-text="historyDialog.allowance.name"></div>
-          <q-banner v-if="historyDialog.error" class="bg-negative text-white q-mt-sm">Payment history could not be loaded. Close and reopen to retry.</q-banner>
-          <q-banner v-if="historyDialog.allowance.last_error" class="bg-warning text-black q-mt-sm">
-            <div v-text="historyDialog.allowance.last_error"></div>
-            <div v-if="historyDialog.allowance.last_error_time" class="text-caption">Last error: <span v-text="formatDatetime(historyDialog.allowance.last_error_time)"></span></div>
-            <div v-if="historyDialog.allowance.active && historyDialog.allowance.retry_after && Date.parse(historyDialog.allowance.retry_deadline) > Date.now()" class="text-caption">Next retry: <span v-text="formatDatetime(historyDialog.allowance.retry_after)"></span></div>
-          </q-banner>
+      <q-card style="width: 900px; max-width: 95vw" data-cy="payment-history-card">
+        <q-card-section class="row items-center no-wrap q-pb-sm">
+          <q-btn v-if="historyDialog.selectedId" flat round color="primary" icon="arrow_back" aria-label="Back to payment history" class="q-mr-sm" @click="historyDialog.selectedId = null"><q-tooltip>Back to payment history</q-tooltip></q-btn>
+          <div class="col">
+            <div class="text-h6" v-text="historyDialog.selectedId ? 'Payment details' : 'Payment history'"></div>
+            <div v-if="historyDialog.allowance" class="text-caption text-grey" v-text="historyDialog.allowance.name"></div>
+          </div>
+          <q-btn flat round color="primary" icon="refresh" aria-label="Refresh history" :loading="historyDialog.loading" :disable="retryRequestBusy" @click="showHistory(historyDialog.allowance, historyDialog.selectedId)"><q-tooltip>Refresh history</q-tooltip></q-btn>
         </q-card-section>
-        <q-card-section class="q-pt-none">
-          <div v-if="historyDialog.loading">Loading payment history…</div>
-          <div v-else-if="!historyDialog.rows.length">No recorded payments yet</div>
-          <q-expansion-item v-for="payment in historyDialog.rows" :key="payment.id" :default-opened="!!payment.current" class="q-mb-sm" expand-separator>
-            <template v-slot:header>
-              <q-item-section>
-                <q-item-label v-text="formatDatetime(new Date(payment.scheduled_at * 1000).toISOString())"></q-item-label>
-                <q-item-label caption v-text="occurrenceState(payment)"></q-item-label>
-              </q-item-section>
+        <q-card-section v-if="historyDialog.error" class="q-pt-none">
+          <q-banner dense class="bg-negative text-white">Payment history could not be refreshed. Try Refresh history again.</q-banner>
+        </q-card-section>
+        <q-card-section v-if="!historyDialog.selectedId" class="q-pt-sm">
+          <q-table flat bordered :grid="$q.screen.lt.sm" :rows="historyDialog.rows" :columns="historyColumns" :loading="historyDialog.loading" row-key="id" :pagination="{rowsPerPage: 5}" no-data-label="No recorded payments yet">
+            <template v-slot:item="props">
+              <div class="col-12 q-mb-sm">
+                <q-card flat bordered>
+                  <q-card-section class="q-pa-sm">
+                    <div v-text="formatDatetime(new Date(props.row.scheduled_at * 1000).toISOString())"></div>
+                    <div class="row items-center justify-between q-mt-sm">
+                      <span v-text="props.row.details ? props.row.details.amount + ' ' + (props.row.details.currency || 'sats') : 'Amount not recorded'"></span>
+                      <q-badge :color="occurrenceColor(props.row)" :text-color="occurrenceColor(props.row) === 'warning' ? 'black' : 'white'" :label="compactOccurrenceState(props.row)"></q-badge>
+                    </div>
+                    <div v-if="props.row.current && compactOccurrenceState(props.row) === 'Retry scheduled'" class="text-caption q-mt-xs">Next attempt: <span v-text="formatDatetime(historyDialog.allowance.retry_after)"></span></div>
+                    <q-btn flat color="primary" class="q-mt-xs" label="Details" :aria-label="'Details for ' + formatDatetime(new Date(props.row.scheduled_at * 1000).toISOString())" @click="historyDialog.selectedId = props.row.id"></q-btn>
+                  </q-card-section>
+                </q-card>
+              </div>
             </template>
-            <q-card-section class="q-pt-none">
-              <div v-if="payment.details"><span v-text="payment.details.amount"></span> <span v-text="payment.details.currency || 'sats'"></span> → <span v-text="payment.details.lightning_address"></span></div>
+            <template v-slot:body-cell-status="props">
+              <q-td :props="props" style="white-space: normal">
+                <q-badge :color="occurrenceColor(props.row)" :text-color="occurrenceColor(props.row) === 'warning' ? 'black' : 'white'" :label="compactOccurrenceState(props.row)"></q-badge>
+                <div v-if="props.row.current && compactOccurrenceState(props.row) === 'Retry scheduled'" class="text-caption q-mt-xs" v-text="formatDatetime(historyDialog.allowance.retry_after)"></div>
+              </q-td>
+            </template>
+            <template v-slot:body-cell-actions="props">
+              <q-td :props="props"><q-btn flat color="primary" label="Details" :aria-label="'Details for ' + formatDatetime(new Date(props.row.scheduled_at * 1000).toISOString())" @click="historyDialog.selectedId = props.row.id"></q-btn></q-td>
+            </template>
+          </q-table>
+          <div class="text-caption text-grey q-mt-sm">Showing the current payment and up to 50 recent completed payments.</div>
+        </q-card-section>
+        <q-card-section v-else-if="selectedHistoryPayment" class="q-pt-sm">
+          <div class="row q-col-gutter-md q-mb-lg">
+            <div class="col-12 col-sm-6">
+              <div class="text-caption text-grey">Scheduled payment</div>
+              <div v-text="formatDatetime(new Date(selectedHistoryPayment.scheduled_at * 1000).toISOString())"></div>
+              <div class="q-mt-sm"><q-badge :color="occurrenceColor(selectedHistoryPayment)" :text-color="occurrenceColor(selectedHistoryPayment) === 'warning' ? 'black' : 'white'" :label="compactOccurrenceState(selectedHistoryPayment)"></q-badge></div>
+              <div v-if="selectedHistoryPayment.current && compactOccurrenceState(selectedHistoryPayment) === 'Retry scheduled'" class="text-caption q-mt-xs">Next attempt: <span v-text="formatDatetime(historyDialog.allowance.retry_after)"></span></div>
+              <div v-if="selectedHistoryPayment.completed_at" class="text-caption q-mt-xs">Completed: <span v-text="formatDatetime(new Date(selectedHistoryPayment.completed_at * 1000).toISOString())"></span></div>
+            </div>
+            <div class="col-12 col-sm-6" style="overflow-wrap: anywhere">
+              <template v-if="selectedHistoryPayment.details">
+                <div class="text-caption text-grey">Amount</div>
+                <div><span v-text="selectedHistoryPayment.details.amount"></span> <span v-text="selectedHistoryPayment.details.currency || 'sats'"></span></div>
+                <div class="text-caption text-grey q-mt-sm">Recipient</div>
+                <div v-text="selectedHistoryPayment.details.lightning_address"></div>
+              </template>
               <div v-else class="text-caption">Original payment details were not recorded.</div>
-              <div v-if="payment.completed_at" class="text-caption">Completed: <span v-text="formatDatetime(new Date(payment.completed_at * 1000).toISOString())"></span></div>
-              <q-list separator class="q-my-sm">
-                <q-item v-for="event in payment.events" :key="event.id">
-                  <q-item-section>
-                    <q-item-label v-text="event.message"></q-item-label>
-                    <q-item-label caption><span v-text="formatDatetime(new Date(event.recorded_at * 1000).toISOString())"></span> · <span v-text="event.code"></span></q-item-label>
-                  </q-item-section>
-                </q-item>
-              </q-list>
-              <div v-if="!payment.events.length" class="text-caption">No retained attempt details for this payment.</div>
-              <q-btn flat icon="replay" label="Retry this payment" :disable="!payment.can_retry || retryRequestBusy || historyDialog.loading" @click="confirmRetry(payment)"></q-btn>
-              <div v-if="payment.retry_block_reason" class="text-caption" v-text="payment.retry_block_reason"></div>
-            </q-card-section>
-          </q-expansion-item>
-          <div class="text-caption q-mt-sm">Latest 50 completed payments plus the current occurrence. Up to 200 diagnostic events are retained. Older attempt details may be unavailable.</div>
+            </div>
+          </div>
+          <div class="text-subtitle2 q-mb-sm">Attempt history</div>
+          <q-list bordered separator>
+            <q-item v-for="event in selectedHistoryPayment.events" :key="event.id">
+              <q-item-section>
+                <q-item-label caption class="q-mb-xs" v-text="formatDatetime(new Date(event.recorded_at * 1000).toISOString())"></q-item-label>
+                <q-item-label v-text="event.message" style="overflow-wrap: anywhere"></q-item-label>
+                <q-item-label caption v-text="event.code"></q-item-label>
+              </q-item-section>
+            </q-item>
+            <q-item v-if="!selectedHistoryPayment.events.length"><q-item-section>No retained attempt details for this payment.</q-item-section></q-item>
+          </q-list>
+          <div v-if="selectedHistoryPayment.retry_block_reason" class="text-caption q-mt-md" v-text="selectedHistoryPayment.retry_block_reason"></div>
+          <div v-if="selectedHistoryPayment.current && historyDialog.allowance.pending_payment_hash" class="text-caption q-mt-sm">Checking payment status never sends another payment.</div>
         </q-card-section>
-        <q-card-section v-if="historyDialog.allowance" class="text-caption q-pt-none">
-          <span v-text="paymentState(historyDialog.allowance)"></span>.
-          Checking payment status never sends another payment.
-        </q-card-section>
-        <q-card-actions align="right" class="q-gutter-xs">
-          <q-btn flat label="Refresh history" icon="refresh" :disable="historyDialog.loading" @click="showHistory(historyDialog.allowance)" ></q-btn>
-          <q-btn flat label="Check payment status" icon="manage_search" :disable="historyDialog.loading || !historyDialog.allowance?.pending_payment_hash" @click="reconcileAllowance(historyDialog.allowance)" ></q-btn>
-          <q-btn flat label="Edit allowance" icon="edit" :disable="historyDialog.loading || !historyDialog.allowance" @click="editFromHistory" ></q-btn>
-          <q-btn flat label="Close" v-close-popup ></q-btn>
+        <q-card-section v-else>Payment details are no longer in the recent history. Go back to the payment list.</q-card-section>
+        <q-separator></q-separator>
+        <q-card-actions class="q-pa-md q-gutter-xs">
+          <template v-if="selectedHistoryPayment">
+            <q-btn unelevated color="primary" label="Retry this payment" :disable="!selectedHistoryPayment.can_retry || retryRequestBusy || historyDialog.loading || historyDialog.error" :loading="retryRequestBusy" @click="confirmRetry(selectedHistoryPayment)"></q-btn>
+            <span>
+              <q-btn flat color="primary" label="Check payment status" :disable="!selectedHistoryPayment.current || !historyDialog.allowance?.pending_payment_hash || historyDialog.loading || retryRequestBusy" @click="reconcileAllowance(historyDialog.allowance)"></q-btn>
+              <q-tooltip v-text="selectedHistoryPayment.current && historyDialog.allowance?.pending_payment_hash ? 'Checks an existing payment; does not send another one.' : 'No pending payment to check.'"></q-tooltip>
+            </span>
+          </template>
+          <q-btn v-else flat color="primary" label="Edit allowance" :disable="historyDialog.loading || !historyDialog.allowance || retryRequestBusy" @click="editFromHistory"></q-btn>
+          <q-space></q-space>
+          <q-btn flat color="grey" label="Close" v-close-popup></q-btn>
         </q-card-actions>
       </q-card>
     </q-dialog>
