@@ -84,6 +84,18 @@
             "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.2.0/config.json",
             "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.2.0/allowance-1.2.0.zip",
             "hash": "f9d3dff4077776aa47b6abdf8ca59e363159c3aa62d461f5ce49dc002b804429"
+        },
+        {
+            "id": "allowance",
+            "repo": "https://github.com/BenGWeeks/allowance",
+            "name": "Allowance",
+            "version": "1.2.1",
+            "min_lnbits_version": "1.6.0",
+            "short_description": "Automatic recurring payments",
+            "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.2.1/static/image/allowance.png",
+            "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.2.1/config.json",
+            "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.2.1/allowance-1.2.1.zip",
+            "hash": "f0c935af5e00ed1c2a8b4ff226c1d9c96c7f25f985248d81788936a148f33a0f"
         }
     ]
 }
