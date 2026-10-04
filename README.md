@@ -341,7 +341,7 @@ A current confirmed-unsent failure can be brought forward within its existing re
 window. An older failed occurrence can be retried only when it was never submitted,
 its saved payment details still match, the allowance is active, and no current
 payment is due or unresolved. Older records without saved details cannot be retried
-through this action. Paid, skipped and uncertain payments are never eligible.
+through this action. Paid and uncertain submitted payments are never eligible.
 
 An older retry temporarily occupies the worker's current occurrence while retaining
 the regular next-payment date. Completion restores that date, or skips elapsed
@@ -377,3 +377,24 @@ pending payment hashes. Back up the databases before recovery or upgrading.
 
 See the [release guide](docs/releasing.md) for archive validation, draft releases,
 restart-based upgrade checks and submitting to the LNbits extension registry.
+
+
+### Paying a skipped occurrence
+
+A skipped occurrence was deliberately passed over, such as when an operator resumes
+an interrupted schedule without catching up. A blocked or unsuccessful payment is
+a failure; it can subsequently be skipped during recovery. Skipping sends no funds.
+
+In Payment history, open Details for a skipped occurrence and choose **Pay this
+skipped occurrence**. Confirm the saved recipient and amount. The worker queues
+that one payment, records the request and result against the original occurrence,
+and preserves the regular schedule. Fiat amounts use the rate at payment time.
+Failed entries continue to show **Retry this payment**.
+
+A current confirmed-unsent failure can be retried within its retry window without
+a historical snapshot. Older failed or skipped occurrences require unchanged saved
+payment details. Both actions require no submitted or uncertain payment, and an
+active allowance with no other due payment or older retry in progress. Older entries
+without saved details cannot be paid through this action.
+Payments made separately through the LNbits wallet are not linked automatically;
+check wallet history before confirming if you may already have paid manually.

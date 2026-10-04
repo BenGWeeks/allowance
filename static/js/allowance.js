@@ -137,14 +137,19 @@ window.app = Vue.createApp({
       if (label.startsWith('Retry') || label === 'Awaiting payment confirmation') return 'warning'
       return 'grey'
     },
+    occurrenceActionLabel(row) {
+      return row.outcome === 'skipped' ? 'Pay this skipped occurrence' : 'Retry this payment'
+    },
     confirmRetry(row) {
       const allowance = this.historyDialog.allowance
       if (!row.can_retry || !row.details || this.retryRequestBusy) return
       const scheduled = this.formatDatetime(new Date(row.scheduled_at * 1000).toISOString())
+      const skipped = row.outcome === 'skipped'
+      const action = this.occurrenceActionLabel(row)
       Quasar.Dialog.create({
-        title: 'Retry this payment?',
-        message: `Pay ${row.details.amount} ${row.details.currency || 'sats'} to ${row.details.lightning_address} for the payment scheduled ${scheduled}? This explicitly retries this one payment. The regular schedule is preserved; other missed payments stay skipped. Fiat amounts use the rate at retry time.`,
-        cancel: true, persistent: true, ok: {label: 'Retry this payment', color: 'primary'}
+        title: skipped ? 'Pay this skipped occurrence?' : 'Retry this payment?',
+        message: `Pay ${row.details.amount} ${row.details.currency || 'sats'} to ${row.details.lightning_address} for the payment scheduled ${scheduled}? ${skipped ? 'This pays only this skipped occurrence. Confirm only if you have not already paid it separately.' : 'This explicitly retries this one payment.'} The regular schedule is preserved; other missed payments stay skipped. Fiat amounts use the rate when the payment is attempted.`,
+        cancel: true, persistent: true, ok: {label: action, color: 'primary'}
       }).onOk(async () => {
         const wallet = this.g.user.wallets.find(wallet => wallet.id === allowance.wallet)
         if (!wallet || this.retryRequestBusy) return

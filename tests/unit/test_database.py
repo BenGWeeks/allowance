@@ -680,7 +680,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
             (current, {**history, "retry_snapshot": None}),
             (current, {**history, "payment_hash": "submitted"}),
             (current, {**history, "outcome": "succeeded"}),
-            (current, {**history, "outcome": "skipped"}),
+            (current, {**history, "outcome": "skipped", "retry_snapshot": None}),
         ]
         for observed, event in cases:
             with self.assertRaises(crud.AllowanceConflictError):
@@ -820,3 +820,136 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             (await crud.get_payment_history(row.id))[0]["outcome"], "failed"
         )
+
+    async def test_skipped_payment_is_atomic_recorded_and_preserves_schedule(self):
+        from lnbits.extensions.allowance.payment_retry import request_retry
+
+        row, now = await self.retry_fixture()
+        following = now + timedelta(days=7)
+        await crud.finish_payment_attempt(row, following, False)
+        await self.database.execute(
+            f"UPDATE {self.database.references_schema}payment_history "
+            "SET outcome = 'skipped' WHERE allowance_id = :id",
+            {"id": row.id},
+        )
+        occurrence = (await crud.get_payment_history(row.id))[0]
+        current = await crud.get_allowance(row.id)
+        results = await asyncio.gather(
+            request_retry(current, occurrence, current.revision),
+            request_retry(current, occurrence, current.revision),
+            return_exceptions=True,
+        )
+        self.assertEqual(sum(value is None for value in results), 1)
+        self.assertEqual(
+            sum(isinstance(value, crud.AllowanceConflictError) for value in results), 1
+        )
+        queued = await crud.get_allowance(row.id)
+        self.assertEqual(queued.next_payment_date, row.next_payment_date)
+        self.assertEqual(queued.retry_resume_date, following)
+        logs = await crud.get_payment_logs(row.id)
+        self.assertEqual(
+            sum(event["code"] == "manual_skipped_payment_requested" for event in logs),
+            1,
+        )
+        self.assertEqual(
+            (await crud.get_payment_history(row.id))[0]["outcome"], "skipped"
+        )
+        await crud.finish_payment_attempt(queued, now + timedelta(days=1), True)
+        saved = await crud.get_allowance(row.id)
+        self.assertEqual(saved.next_payment_date, following)
+        history = await crud.get_payment_history(row.id)
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["outcome"], "succeeded")
+        with self.assertRaises(crud.AllowanceConflictError):
+            await request_retry(saved, history[0], saved.revision)
+
+    async def test_skipped_payment_rejects_unsafe_or_future_occurrences(self):
+        from lnbits.extensions.allowance.payment_retry import request_retry
+
+        row, now = await self.retry_fixture()
+        await crud.finish_payment_attempt(row, now + timedelta(days=7), False)
+        current = await crud.get_allowance(row.id)
+        event = {**(await crud.get_payment_history(row.id))[0], "outcome": "skipped"}
+        for allowance, occurrence in (
+            (current, {**event, "retry_snapshot": None}),
+            (current, {**event, "payment_hash": "submitted"}),
+            (
+                current,
+                {**event, "scheduled_at": int((now + timedelta(days=1)).timestamp())},
+            ),
+            (current.copy(update={"amount": 50}), event),
+            (current.copy(update={"pending_payment_hash": "unknown"}), event),
+            (current.copy(update={"active": False}), event),
+            (current.copy(update={"retry_resume_date": now}), event),
+        ):
+            with self.assertRaises(crud.AllowanceConflictError):
+                await request_retry(allowance, occurrence, current.revision)
+        self.assertEqual((await crud.get_allowance(row.id)).revision, current.revision)
+
+    async def test_twelve_month_outage_never_replays_payment_backlog(self):
+        from unittest.mock import AsyncMock
+
+        from lnbits.extensions.allowance import tasks
+        from lnbits.extensions.allowance.schedule import next_occurrence
+
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        start = now.replace(year=now.year - 1, day=1)
+        row = await crud.create_allowance(
+            CreateAllowanceData(
+                name="Twelve month outage",
+                wallet="test-wallet",
+                amount=25,
+                lightning_address="recipient@example.invalid",
+                memo="",
+                start_datetime=start,
+                next_payment_date=start,
+                frequency_type="monthly",
+            )
+        )
+        with patch.object(
+            tasks, "execute_lightning_address_payment", AsyncMock(return_value=True)
+        ) as pay:
+            for _ in range(14):
+                current = await crud.get_allowance(row.id)
+                await tasks.process_allowance(current, datetime.now(timezone.utc))
+            pay.assert_awaited_once()
+        saved = await crud.get_allowance(row.id)
+        self.assertEqual(
+            saved.next_payment_date, next_occurrence(start, "monthly", now)
+        )
+        self.assertEqual(len(await crud.get_payment_history(row.id)), 1)
+
+    async def test_expired_old_retry_window_never_creates_payment_backlog(self):
+        from unittest.mock import AsyncMock
+
+        from lnbits.extensions.allowance import tasks
+
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        start = now.replace(year=now.year - 1, day=1)
+        row = await crud.create_allowance(
+            CreateAllowanceData(
+                name="Expired outage",
+                wallet="test-wallet",
+                amount=25,
+                lightning_address="recipient@example.invalid",
+                memo="",
+                start_datetime=start,
+                next_payment_date=start,
+                frequency_type="monthly",
+            )
+        )
+        await crud.defer_payment(
+            row, start + timedelta(minutes=1), start + timedelta(hours=24)
+        )
+        row = await crud.get_allowance(row.id)
+        with patch.object(tasks, "resolve_lightning_address", AsyncMock()) as lookup:
+            await tasks.process_allowance(row, now)
+            lookup.assert_not_awaited()
+        with patch.object(
+            tasks, "execute_lightning_address_payment", AsyncMock(return_value=True)
+        ) as pay:
+            for _ in range(14):
+                current = await crud.get_allowance(row.id)
+                await tasks.process_allowance(current, datetime.now(timezone.utc))
+            pay.assert_awaited_once()
+        self.assertGreater((await crud.get_allowance(row.id)).next_payment_date, now)

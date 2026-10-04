@@ -38,17 +38,22 @@ def retry_block_reason(allowance, occurrence, now):
 
 
 def historical_retry_block_reason(allowance, occurrence, now):
-    if occurrence.get("outcome") != "failed":
-        return "Only failed payments can be retried."
+    if occurrence.get("outcome") not in {"failed", "skipped"}:
+        return "Only failed or skipped occurrences can be paid."
+    if occurrence["scheduled_at"] >= int(now.timestamp()):
+        return "This occurrence is not yet due."
     if occurrence.get("payment_hash"):
         return (
             "This payment was submitted. Operator verification is required "
             "before resending."
         )
     if not occurrence.get("retry_snapshot"):
-        return "This older failure has no saved payment details to verify a safe retry."
+        return (
+            "This older occurrence has no saved payment details "
+            "to verify a safe payment."
+        )
     if occurrence["retry_snapshot"] != payment_snapshot(allowance):
-        return "Payment details have changed since this failure."
+        return "Payment details have changed since this occurrence."
     if allowance.next_payment_date <= now or allowance.retry_after:
         return "The current scheduled payment must finish first."
     return None
@@ -63,6 +68,7 @@ async def request_retry(allowance, occurrence, revision):
         raise AllowanceConflictError(
             reason or "Allowance changed. Refresh and try again."
         )
+    skipped = occurrence.get("outcome") == "skipped"
     historical = not occurrence.get("current")
     due = occurrence["scheduled_at"]
     deadline = (
@@ -100,8 +106,12 @@ async def request_retry(allowance, occurrence, revision):
         await _append_payment_log(
             conn,
             attempted,
-            "retry",
-            "manual_retry_requested",
-            "User requested a retry of this scheduled payment.",
+            "payment_request" if skipped else "retry",
+            "manual_skipped_payment_requested" if skipped else "manual_retry_requested",
+            (
+                "User requested payment of this skipped occurrence."
+                if skipped
+                else "User requested a retry of this scheduled payment."
+            ),
             int(now.timestamp()),
         )
