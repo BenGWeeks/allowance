@@ -1,0 +1,66 @@
+<q-expansion-item expand-separator icon="quiz" label="FAQs" data-cy="allowance-faqs">
+  <q-list separator>
+    <q-expansion-item label="How often does a failed payment retry?">
+      <q-card-section class="text-body2">
+        <p>Failures before payment submission retry after 1, 2, 4, 8, 16 and 32 minutes, then hourly. Retries stop after 24 hours or at the next regular payment time, whichever comes first. A full 24-hour window allows roughly 29 attempts including the first; request duration can reduce that number.</p>
+        <p class="q-mb-none">These are attempts for one scheduled occurrence. Once a payment is submitted, its outcome is checked before another payment can be considered. An uncertain or pending payment is not automatically sent again.</p>
+      </q-card-section>
+    </q-expansion-item>
+    <q-expansion-item label="Will an outage trigger all the missed payments?">
+      <q-card-section class="text-body2">
+        <p>Recurring schedules do not replay every missed interval. An overdue allowance may make one overdue payment, then advance to its next future scheduled date. Retrying an older occurrence preserves the regular schedule.</p>
+        <p class="q-mb-none">Several overdue allowances can each attempt a payment when a fault is fixed. If that is unwanted, ask the server operator to skip missed occurrences before reactivating the scheduler. There is no global limit on the total amount across allowances.</p>
+      </q-card-section>
+    </q-expansion-item>
+    <q-expansion-item label="What is the difference between Failed and Skipped?">
+      <q-card-section class="text-body2">
+        A failed occurrence did not complete successfully. A skipped occurrence was deliberately passed over, for example when resuming a schedule without catching up. A payment can fail first and then have its remaining retries skipped during recovery. Skipping does not send a payment. Open Details to see the recorded events and their times.
+      </q-card-section>
+    </q-expansion-item>
+    <q-expansion-item label="Why is a payment action disabled?">
+      <q-card-section class="text-body2">
+        <p>Payment details explains the reason. An action may be blocked because the allowance is paused or ended, another payment is due or queued, settlement is pending or uncertain, the occurrence is already paid, or the saved recipient and amount no longer match.</p>
+        <p class="q-mb-none">Older entries without saved payment details cannot be verified for a safe payment. Submitted payments require operator verification before resending. Check wallet history before confirming any payment you may already have made separately.</p>
+      </q-card-section>
+    </q-expansion-item>
+    <q-expansion-item label="Does Check payment status send another payment?">
+      <q-card-section class="text-body2">
+        No. It checks the existing submitted payment. It is unavailable when there is no pending payment to inspect. Refresh history also only reads records; it never sends funds.
+      </q-card-section>
+    </q-expansion-item>
+    <q-expansion-item label="Will a manual wallet payment appear in Allowance history?">
+      <q-card-section class="text-body2">
+        Payments sent separately from the LNbits wallet appear in that wallet's payment history, but are not automatically linked to an allowance occurrence. Payments requested through an eligible occurrence's action are recorded against that occurrence. Avoid paying through both routes.
+      </q-card-section>
+    </q-expansion-item>
+    <q-expansion-item label="Why are older amounts or attempt details missing?">
+      <q-card-section class="text-body2">
+        History shows the current occurrence and up to 50 completed entries. Up to 200 diagnostic events per allowance are retained. Older releases did not save every attempt or its payment details, so missing information cannot be reconstructed. An old entry marked Not recorded does not mean its amount was zero.
+      </q-card-section>
+    </q-expansion-item>
+    <q-expansion-item label="Why is my recipient blocked by the private-address policy?">
+      <q-card-section class="text-body2">
+        <p>The extension normally allows only public HTTPS LNURL endpoints on port 443. This prevents recipient URLs from reaching private internal services.</p>
+        <p class="q-mb-none">With split DNS, a public-looking hostname can resolve to a private IP inside the LNbits container. That can block a legitimate recipient. Ask your server operator to check the recorded error and configure only the exact trusted service if needed; changing the recipient or repeatedly retrying does not fix that policy.</p>
+      </q-card-section>
+    </q-expansion-item>
+    <q-expansion-item label="How can the server operator configure split DNS?">
+      <q-card-section class="text-body2">
+        <p>The operator can set <code style="overflow-wrap: anywhere">ALLOWANCE_TRUSTED_LNURL_DESTINATIONS</code> in the container environment to a JSON mapping of exact hostnames to exact trusted private IPv4 addresses. For example:</p>
+        <pre class="q-pa-sm bg-grey-9" style="white-space: pre-wrap; overflow-wrap: anywhere">{"payments.example.com":["192.168.1.89"]}</pre>
+        <p>Recreate the LNbits container to load a changed environment. Only trust services you control. Wildcards, network ranges, loopback, link-local addresses, HTTP, other ports and redirects remain blocked. HTTPS certificate checks still apply. Invoice callbacks are checked independently and may need their own exact hostname/IP entry.</p>
+        <p class="q-mb-none">Read the <a href="https://github.com/BenGWeeks/allowance/blob/main/README.md#lnurl-network-policy" target="_blank" rel="noopener noreferrer">operator network policy</a> and perform a read-only HTTPS metadata check before allowing payments. Never use a broad internal-network exception.</p>
+      </q-card-section>
+    </q-expansion-item>
+    <q-expansion-item label="Will fiat payments use the original exchange rate?">
+      <q-card-section class="text-body2">
+        No. Fiat amounts are converted to sats when the payment is attempted. A later payment or retry can therefore use a different sat amount from the original scheduled date. The saved fiat amount and recipient must still match for an occurrence payment to be eligible.
+      </q-card-section>
+    </q-expansion-item>
+    <q-expansion-item label="Why do I still see the old interface after upgrading?">
+      <q-card-section class="text-body2">
+        Your browser may have cached older JavaScript. Try a hard refresh with Ctrl+Shift+R, or Cmd+Shift+R on macOS. Operators should deactivate Allowance before installation, restart LNbits afterward and verify activation and scheduler health. Installing new files alone does not replace Python modules already loaded by the server.
+      </q-card-section>
+    </q-expansion-item>
+  </q-list>
+</q-expansion-item>
