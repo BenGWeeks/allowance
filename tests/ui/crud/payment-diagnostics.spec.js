@@ -81,6 +81,7 @@ test('payment diagnostics explain failures and keep action sizes consistent', as
   await confirmation.locator('.q-card').screenshot({animations: 'disabled', path: testInfo.outputPath('retry-confirmation.png')});
   await confirmation.getByRole('button', {name: 'Retry this payment', exact: true}).click();
   await expect.poll(() => retryRequests).toBe(1);
+  await expect(confirmation).not.toBeVisible();
   await expect(dialog.getByRole('button', {name: 'Retry this payment', exact: true})).toBeDisabled();
   await expect(dialog.getByText('An attempt is already queued.', {exact: true})).toBeVisible();
   await dialog.getByRole('button', {name: 'Edit allowance', exact: true}).click();

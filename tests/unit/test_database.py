@@ -722,3 +722,71 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(paused.retry_resume_date, following)
         self.assertEqual(paused.retry_deadline, retry.retry_deadline)
         self.assertEqual(paused.next_payment_date, retry.next_payment_date)
+
+    async def test_retry_api_queues_once_and_worker_restores_regular_schedule(self):
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock
+
+        import httpx
+        from fastapi import FastAPI
+        from lnbits.extensions.allowance import tasks, views_api
+
+        row, now = await self.retry_fixture()
+        following = now + timedelta(days=7)
+        await crud.finish_payment_attempt(row, following, False)
+        current = await crud.get_allowance(row.id)
+        app = FastAPI()
+        app.include_router(views_api.allowance_api_router)
+        wallet = SimpleNamespace(id=row.wallet)
+        app.dependency_overrides[views_api.require_admin_key] = lambda: wallet
+        app.dependency_overrides[views_api.require_invoice_key] = lambda: wallet
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            url = f"/api/v1/allowance/{row.id}"
+            occurrences = (await client.get(url + "/occurrences")).json()
+            failed = next(
+                event for event in occurrences if event["outcome"] == "failed"
+            )
+            self.assertTrue(failed["can_retry"])
+            payload = {
+                "scheduled_at": failed["scheduled_at"],
+                "revision": current.revision,
+                "confirmed": True,
+            }
+            self.assertEqual(
+                (await client.post(url + "/retry", json=payload)).status_code, 202
+            )
+            self.assertEqual(
+                (await client.post(url + "/retry", json=payload)).status_code, 409
+            )
+            retry = await crud.get_allowance(row.id)
+            with patch.object(
+                tasks, "execute_lightning_address_payment", AsyncMock(return_value=True)
+            ) as execute:
+                await tasks.process_allowance(retry, datetime.now(timezone.utc))
+                execute.assert_awaited_once()
+            saved = await crud.get_allowance(row.id)
+            self.assertEqual(saved.next_payment_date, following)
+            occurrences = (await client.get(url + "/occurrences")).json()
+            paid = next(
+                event for event in occurrences if event["outcome"] == "succeeded"
+            )
+            self.assertFalse(paid["can_retry"])
+            self.assertIn(
+                "manual_retry_requested", [event["code"] for event in paid["events"]]
+            )
+
+    async def test_historical_retry_completion_skips_elapsed_regular_dates(self):
+        row, now = await self.retry_fixture()
+        await self.database.execute(
+            f"UPDATE {self.database.references_schema}maintable SET "
+            f"retry_resume_date = {self.database.timestamp_placeholder('resume')} "
+            "WHERE id = :id",
+            {"resume": int((now - timedelta(days=1)).timestamp()), "id": row.id},
+        )
+        row = await crud.get_allowance(row.id)
+        await crud.finish_payment_attempt(row, now - timedelta(days=1), True)
+        saved = await crud.get_allowance(row.id)
+        self.assertGreater(saved.next_payment_date, now)
+        self.assertIsNone(saved.retry_resume_date)
