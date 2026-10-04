@@ -1,101 +1,101 @@
 {
-  "featured": [],
-  "extensions": [
-    {
-      "id": "allowance",
-      "repo": "https://github.com/BenGWeeks/allowance",
-      "name": "Allowance",
-      "version": "1.0.2",
-      "min_lnbits_version": "1.1.0",
-      "short_description": "Initial stable release with recurring payments, lightning address support, and multiple frequency options.",
-      "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/allowance.png",
-      "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/config.json",
-      "archive": "https://github.com/BenGWeeks/allowance/archive/refs/tags/v1.0.2.zip",
-      "hash": "1f0dca16b0aea53be3e9455dd7f15336c15b92a23a5a3e276090cfda2fbf7dd8"
-    },
-    {
-      "id": "allowance",
-      "repo": "https://github.com/BenGWeeks/allowance",
-      "name": "Allowance",
-      "version": "1.0.3",
-      "min_lnbits_version": "1.1.0",
-      "short_description": "Enhanced UI with right panel details, table sorting/filtering, and improved mobile responsiveness.",
-      "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/allowance.png",
-      "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/config.json",
-      "archive": "https://github.com/BenGWeeks/allowance/archive/refs/tags/v1.0.3.zip",
-      "hash": "ad560cb9c0493faaa6bf13017b0e865722530c03c785be0b41fc4c2a12a8ff64"
-    },
-    {
-      "id": "allowance",
-      "repo": "https://github.com/BenGWeeks/allowance",
-      "name": "Allowance",
-      "version": "1.0.4",
-      "min_lnbits_version": "1.1.0",
-      "short_description": "Added 1-minute future validation for allowances, 5-minute default start time, and comprehensive test suite improvements.",
-      "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/allowance.png",
-      "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/config.json",
-      "archive": "https://github.com/BenGWeeks/allowance/archive/refs/tags/v1.0.4.zip",
-      "hash": "983ab0ca460e7aa245e9825a0c97ad440d60e13cffef58a0067e25a7822eea10"
-    },
-    {
-      "id": "allowance",
-      "repo": "https://github.com/BenGWeeks/allowance",
-      "name": "Allowance",
-      "version": "1.0.5",
-      "min_lnbits_version": "1.6.0",
-      "short_description": "LNbits 1.6 compatibility, anchored schedules, protected wallet access and pending-payment reconciliation.",
-      "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/allowance.png",
-      "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/config.json",
-      "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.0.5/allowance-1.0.5.zip",
-      "hash": "53e052f4e24fedb85d84160413fffb3cb25b9210609ec12d82e65d274e34f763"
-    },
-    {
-      "id": "allowance",
-      "repo": "https://github.com/BenGWeeks/allowance",
-      "name": "Allowance",
-      "version": "1.0.6",
-      "min_lnbits_version": "1.6.0",
-      "short_description": "Show the next payment date and time in a sortable allowance table column.",
-      "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/allowance.png",
-      "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/config.json",
-      "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.0.6/allowance-1.0.6.zip",
-      "hash": "538620a14642d6200a8ddc000a5fa8557e9453bda6728c612b452a4d721fe4ce"
-    },
-    {
-      "id": "allowance",
-      "repo": "https://github.com/BenGWeeks/allowance",
-      "name": "Allowance",
-      "version": "1.1.1",
-      "min_lnbits_version": "1.6.0",
-      "short_description": "Automatic recurring payments",
-      "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.1.1/static/image/allowance.png",
-      "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.1.1/config.json",
-      "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.1.1/allowance-1.1.1.zip",
-      "hash": "e524f68d3739aefc3d09fc28c5a2c91e8ddf8728639b34ea31ad20abc5963d69"
-    },
-    {
-      "id": "allowance",
-      "repo": "https://github.com/BenGWeeks/allowance",
-      "name": "Allowance",
-      "version": "1.2.0",
-      "min_lnbits_version": "1.6.0",
-      "short_description": "Automatic recurring payments",
-      "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.2.0/static/image/allowance.png",
-      "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.2.0/config.json",
-      "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.2.0/allowance-1.2.0.zip",
-      "hash": "f9d3dff4077776aa47b6abdf8ca59e363159c3aa62d461f5ce49dc002b804429"
-    },
-    {
-      "id": "allowance",
-      "repo": "https://github.com/BenGWeeks/allowance",
-      "name": "Allowance",
-      "version": "1.2.1",
-      "min_lnbits_version": "1.6.0",
-      "short_description": "Automatic recurring payments",
-      "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.2.1/static/image/allowance.png",
-      "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.2.1/config.json",
-      "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.2.1/allowance-1.2.1.zip",
-      "hash": "f0c935af5e00ed1c2a8b4ff226c1d9c96c7f25f985248d81788936a148f33a0f"
-    }
-  ]
+    "featured": [],
+    "extensions": [
+        {
+            "id": "allowance",
+            "repo": "https://github.com/BenGWeeks/allowance",
+            "name": "Allowance",
+            "version": "1.0.2",
+            "min_lnbits_version": "1.1.0",
+            "short_description": "Initial stable release with recurring payments, lightning address support, and multiple frequency options.",
+            "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/allowance.png",
+            "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/config.json",
+            "archive": "https://github.com/BenGWeeks/allowance/archive/refs/tags/v1.0.2.zip",
+            "hash": "1f0dca16b0aea53be3e9455dd7f15336c15b92a23a5a3e276090cfda2fbf7dd8"
+        },
+        {
+            "id": "allowance",
+            "repo": "https://github.com/BenGWeeks/allowance",
+            "name": "Allowance",
+            "version": "1.0.3",
+            "min_lnbits_version": "1.1.0",
+            "short_description": "Enhanced UI with right panel details, table sorting/filtering, and improved mobile responsiveness.",
+            "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/allowance.png",
+            "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/config.json",
+            "archive": "https://github.com/BenGWeeks/allowance/archive/refs/tags/v1.0.3.zip",
+            "hash": "ad560cb9c0493faaa6bf13017b0e865722530c03c785be0b41fc4c2a12a8ff64"
+        },
+        {
+            "id": "allowance",
+            "repo": "https://github.com/BenGWeeks/allowance",
+            "name": "Allowance",
+            "version": "1.0.4",
+            "min_lnbits_version": "1.1.0",
+            "short_description": "Added 1-minute future validation for allowances, 5-minute default start time, and comprehensive test suite improvements.",
+            "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/allowance.png",
+            "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/config.json",
+            "archive": "https://github.com/BenGWeeks/allowance/archive/refs/tags/v1.0.4.zip",
+            "hash": "983ab0ca460e7aa245e9825a0c97ad440d60e13cffef58a0067e25a7822eea10"
+        },
+        {
+            "id": "allowance",
+            "repo": "https://github.com/BenGWeeks/allowance",
+            "name": "Allowance",
+            "version": "1.0.5",
+            "min_lnbits_version": "1.6.0",
+            "short_description": "LNbits 1.6 compatibility, anchored schedules, protected wallet access and pending-payment reconciliation.",
+            "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/allowance.png",
+            "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/config.json",
+            "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.0.5/allowance-1.0.5.zip",
+            "hash": "53e052f4e24fedb85d84160413fffb3cb25b9210609ec12d82e65d274e34f763"
+        },
+        {
+            "id": "allowance",
+            "repo": "https://github.com/BenGWeeks/allowance",
+            "name": "Allowance",
+            "version": "1.0.6",
+            "min_lnbits_version": "1.6.0",
+            "short_description": "Show the next payment date and time in a sortable allowance table column.",
+            "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/static/image/allowance.png",
+            "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/main/config.json",
+            "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.0.6/allowance-1.0.6.zip",
+            "hash": "538620a14642d6200a8ddc000a5fa8557e9453bda6728c612b452a4d721fe4ce"
+        },
+        {
+            "id": "allowance",
+            "repo": "https://github.com/BenGWeeks/allowance",
+            "name": "Allowance",
+            "version": "1.1.1",
+            "min_lnbits_version": "1.6.0",
+            "short_description": "Automatic recurring payments",
+            "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.1.1/static/image/allowance.png",
+            "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.1.1/config.json",
+            "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.1.1/allowance-1.1.1.zip",
+            "hash": "e524f68d3739aefc3d09fc28c5a2c91e8ddf8728639b34ea31ad20abc5963d69"
+        },
+        {
+            "id": "allowance",
+            "repo": "https://github.com/BenGWeeks/allowance",
+            "name": "Allowance",
+            "version": "1.2.0",
+            "min_lnbits_version": "1.6.0",
+            "short_description": "Automatic recurring payments",
+            "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.2.0/static/image/allowance.png",
+            "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.2.0/config.json",
+            "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.2.0/allowance-1.2.0.zip",
+            "hash": "f9d3dff4077776aa47b6abdf8ca59e363159c3aa62d461f5ce49dc002b804429"
+        },
+        {
+            "id": "allowance",
+            "repo": "https://github.com/BenGWeeks/allowance",
+            "name": "Allowance",
+            "version": "1.2.1",
+            "min_lnbits_version": "1.6.0",
+            "short_description": "Automatic recurring payments",
+            "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.2.1/static/image/allowance.png",
+            "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.2.1/config.json",
+            "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.2.1/allowance-1.2.1.zip",
+            "hash": "f0c935af5e00ed1c2a8b4ff226c1d9c96c7f25f985248d81788936a148f33a0f"
+        }
+    ]
 }
