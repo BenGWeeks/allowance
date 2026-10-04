@@ -17,6 +17,12 @@
         A failed occurrence did not complete successfully. A skipped occurrence was deliberately passed over, for example when resuming a schedule without catching up. A payment can fail first and then have its remaining retries skipped during recovery. Skipping does not send a payment. Open Details to see the recorded events and their times.
       </q-card-section>
     </q-expansion-item>
+    <q-expansion-item label="How can I pay one failed or skipped occurrence?">
+      <q-card-section class="text-body2">
+        <p>Open Payment history, then Details for that occurrence. Eligible failed entries offer Retry this payment; eligible skipped entries offer Pay this skipped occurrence. Confirm the recipient, amount and original scheduled date. Only that occurrence is queued, its result stays linked in history, and the regular schedule is preserved.</p>
+        <p class="q-mb-none">Check wallet history first if you may already have paid separately. Paying a skipped occurrence is an explicit choice; upgrading or refreshing history never requests that payment for you.</p>
+      </q-card-section>
+    </q-expansion-item>
     <q-expansion-item label="Why is a payment action disabled?">
       <q-card-section class="text-body2">
         <p>Payment details explains the reason. An action may be blocked because the allowance is paused or ended, another payment is due or queued, settlement is pending or uncertain, the occurrence is already paid, or the saved recipient and amount no longer match.</p>
