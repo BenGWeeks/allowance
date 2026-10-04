@@ -13,7 +13,11 @@ or submit changes to the upstream LNbits registry.
    only after approving the release. Existing releases are never overwritten by
    the workflow; resolve a failed or partial draft manually before retrying.
 5. Add the entry from `release-manifest.json` to `extensions.json` in a reviewed
-   follow-up PR. Its hash describes the exact uploaded ZIP, not GitHub's generated
+   follow-up PR. Replace its generic `short_description` with a concise summary
+   of what changed in that release. Each version must have a distinct, factual
+   summary, so the LNbits release picker explains the update. Check the summary
+   against the release notes; do not reuse the extension tagline. Historical
+   descriptions can be corrected, but archive URLs and hashes must stay unchanged. Its hash describes the exact uploaded ZIP, not GitHub's generated
    source archive. The custom manifest feed continues to use `extensions.json`.
 6. Submit the repository manifest to the LNbits registry separately, following
    [the registry guide](https://docs.lnbits.com/dev/extensions/registry).
