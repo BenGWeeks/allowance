@@ -416,6 +416,12 @@ async def finish_payment_attempt(
     else:
         assignment = f"next_payment_date = {db.timestamp_placeholder('next')}"
         values["next"] = int(next_date.timestamp())
+    if (
+        allowance.retry_resume_date
+        and allowance.end_datetime
+        and allowance.end_datetime <= datetime.now(timezone.utc)
+    ):
+        assignment += ", active = false"
     async with transaction(db) as conn:
         result = await conn.execute(
             f"UPDATE {db.references_schema}maintable SET {assignment}, "

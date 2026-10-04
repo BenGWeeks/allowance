@@ -347,7 +347,12 @@ async def process_allowance(allowance: Allowance, current_time: datetime):
         if not allowance.active or current_time < allowance.start_datetime:
             return
         if allowance.end_datetime and current_time > allowance.end_datetime:
-            await deactivate_allowance(allowance.id, revision=allowance.revision)
+            if allowance.retry_resume_date:
+                await finish_payment_attempt(
+                    allowance, allowance.retry_resume_date, False
+                )
+            else:
+                await deactivate_allowance(allowance.id, revision=allowance.revision)
             return
         if current_time < allowance.next_payment_date:
             return

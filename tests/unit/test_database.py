@@ -790,3 +790,31 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         saved = await crud.get_allowance(row.id)
         self.assertGreater(saved.next_payment_date, now)
         self.assertIsNone(saved.retry_resume_date)
+
+    async def test_ended_historical_retry_is_closed_without_sending(self):
+        from unittest.mock import AsyncMock
+        from lnbits.extensions.allowance import tasks
+
+        row, now = await self.retry_fixture()
+        await self.database.execute(
+            f"UPDATE {self.database.references_schema}maintable SET "
+            f"retry_resume_date = {self.database.timestamp_placeholder('resume')}, "
+            f"end_datetime = {self.database.timestamp_placeholder('end')} WHERE id = :id",
+            {
+                "resume": int((now + timedelta(days=7)).timestamp()),
+                "end": int((now - timedelta(seconds=1)).timestamp()),
+                "id": row.id,
+            },
+        )
+        row = await crud.get_allowance(row.id)
+        with patch.object(
+            tasks, "execute_lightning_address_payment", AsyncMock()
+        ) as send:
+            await tasks.process_allowance(row, now)
+            send.assert_not_awaited()
+        saved = await crud.get_allowance(row.id)
+        self.assertFalse(saved.active)
+        self.assertIsNone(saved.retry_resume_date)
+        self.assertEqual(
+            (await crud.get_payment_history(row.id))[0]["outcome"], "failed"
+        )
