@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import socket
 import ssl
 import unittest
@@ -194,3 +195,108 @@ class NetworkTests(unittest.IsolatedAsyncioTestCase):
                     f"https://example.com/.well-known/lnurlp/{username}"
                 )
                 decode.assert_not_called()
+
+
+class TrustedNetworkTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.environment = patch.dict(
+            os.environ,
+            {
+                safe_http.TRUSTED_DESTINATIONS_ENV: json.dumps(
+                    {"recipient.example": ["192.168.1.89"]}
+                )
+            },
+        )
+        self.environment.start()
+        self.addCleanup(self.environment.stop)
+
+    async def test_split_dns_preserves_tls_host_and_pins_approved_address(self):
+        stream = Stream(b'{"ok":true}')
+        with patch.object(
+            asyncio.get_running_loop(),
+            "getaddrinfo",
+            AsyncMock(return_value=[(socket.AF_INET, 1, 6, "", ("192.168.1.89", 443))]),
+        ) as dns, patch.object(
+            httpcore.AnyIOBackend, "connect_tcp", AsyncMock(return_value=stream)
+        ) as connect:
+            self.assertEqual(
+                await safe_http.get_public_json("https://recipient.example/pay"),
+                {"ok": True},
+            )
+        dns.assert_awaited_once()
+        self.assertEqual(connect.await_args.args[0], "192.168.1.89")
+        self.assertEqual(stream.hostname, "recipient.example")
+        self.assertIn(b"Host: recipient.example", stream.written)
+
+    async def test_exception_cannot_escape_hostname_or_address(self):
+        for host, addresses in [
+            ("other.example", ["192.168.1.89"]),
+            ("child.recipient.example", ["192.168.1.89"]),
+            ("recipient.example.evil.example", ["192.168.1.89"]),
+            ("192.168.1.89", ["192.168.1.89"]),
+            ("recipient.example", ["192.168.1.90"]),
+            ("recipient.example", ["192.168.1.89", "127.0.0.1"]),
+            ("recipient.example", ["192.168.1.89", "169.254.169.254"]),
+            ("recipient.example", ["192.168.1.89", "10.0.0.1"]),
+        ]:
+            with self.subTest(host=host, addresses=addresses), patch.object(
+                asyncio.get_running_loop(),
+                "getaddrinfo",
+                AsyncMock(
+                    return_value=[
+                        (socket.AF_INET, 1, 6, "", (ip, 443)) for ip in addresses
+                    ]
+                ),
+            ), patch.object(
+                httpcore.AnyIOBackend, "connect_tcp", AsyncMock()
+            ) as connect:
+                with self.assertRaises(safe_http.PrivateLNURLAddressError):
+                    await safe_http.get_public_json(f"https://{host}/pay")
+                connect.assert_not_awaited()
+
+    async def test_callback_cannot_inherit_discovery_exception(self):
+        metadata = {
+            "tag": "payRequest",
+            "minSendable": 1000,
+            "maxSendable": 2000,
+            "metadata": '[["text/plain","Test"]]',
+            "callback": "https://other.example/invoice",
+        }
+        with patch.object(
+            asyncio.get_running_loop(),
+            "getaddrinfo",
+            AsyncMock(return_value=[(socket.AF_INET, 1, 6, "", ("192.168.1.89", 443))]),
+        ), patch.object(
+            httpcore.AnyIOBackend,
+            "connect_tcp",
+            AsyncMock(return_value=Stream(json.dumps(metadata).encode())),
+        ) as connect:
+            callback, _ = await tasks.resolve_lightning_address(
+                "test@recipient.example"
+            )
+            with self.assertRaises(safe_http.PrivateLNURLAddressError):
+                await safe_http.get_public_json(callback, params={"amount": 1000})
+            self.assertEqual(connect.await_count, 1)
+
+    async def test_invalid_operator_policy_fails_before_connecting(self):
+        for policy in [
+            "not-json",
+            "[]",
+            '{"*.example":["192.168.1.89"]}',
+            '{"recipient.example":["192.168.0.0/16"]}',
+            '{"recipient.example":["127.0.0.1"]}',
+            '{"recipient.example":["169.254.169.254"]}',
+            '{"recipient.example":["::1"]}',
+            '{"recipient.example":["8.8.8.8"]}',
+            '{"recipient.example":[]}',
+            '{"recipient.example":[123]}',
+            '{"recipient.example":"192.168.1.89"}',
+        ]:
+            with self.subTest(policy=policy), patch.dict(
+                os.environ, {safe_http.TRUSTED_DESTINATIONS_ENV: policy}
+            ), patch.object(
+                httpcore.AnyIOBackend, "connect_tcp", AsyncMock()
+            ) as connect:
+                with self.assertRaisesRegex(ValueError, "Invalid trusted LNURL"):
+                    await safe_http.get_public_json("https://recipient.example/pay")
+                connect.assert_not_awaited()

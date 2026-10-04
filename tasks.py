@@ -26,7 +26,7 @@ from .crud import (
     update_allowance_success,
 )
 from .models import Allowance
-from .safe_http import get_public_json, validate_url
+from .safe_http import PrivateLNURLAddressError, get_public_json, validate_url
 from .schedule import next_occurrence
 
 
@@ -85,6 +85,41 @@ async def get_invoice_from_lnurl(
     return invoice
 
 
+_PAYMENT_STAGES = {
+    "currency_conversion": "Currency conversion failed.",
+    "address_lookup": "Lightning address lookup failed.",
+    "amount_validation": "The amount is outside the recipient's supported range.",
+    "invoice_request": "The recipient could not provide an invoice.",
+    "invoice_validation": "The invoice failed validation.",
+    "payment_submission": "LNbits could not complete the payment attempt.",
+}
+
+
+def payment_diagnostic(stage: str, error: Exception) -> tuple[str, str]:
+    if isinstance(error, PrivateLNURLAddressError):
+        return "private_address", (
+            "LNURL host resolves to a private or otherwise disallowed address. "
+            "Blocked by the public-address policy; contact the server operator."
+        )
+    known_errors = {
+        "Invoice amount does not match the requested amount": "invoice_amount_mismatch",
+        "Invoice metadata hash mismatch": "invoice_metadata_mismatch",
+        "Invoice expired": "invoice_expired",
+        "Invoice was already used": "invoice_reused",
+        "LNURL requires a public HTTPS URL on port 443": "invalid_lnurl_url",
+        "Invalid LNURL-pay response": "invalid_lnurl_metadata",
+        "Missing LNURL callback": "missing_lnurl_callback",
+        "LNURL endpoint returned an unsuccessful status": "lnurl_http_error",
+        "LNURL endpoint rejected the invoice request": "invoice_request_rejected",
+        "Could not connect to LNURL host": "lnurl_connection_failed",
+    }
+    if str(error) in known_errors:
+        return known_errors[str(error)], str(error) + "."
+    if isinstance(error, (TimeoutError, asyncio.TimeoutError)):
+        return "timeout", "The payment operation timed out; settlement must be checked."
+    return stage + "_failed", _PAYMENT_STAGES[stage]
+
+
 async def execute_lightning_address_payment(  # noqa: C901
     allowance: Allowance,
 ) -> bool | None:
@@ -108,6 +143,7 @@ async def execute_lightning_address_payment(  # noqa: C901
     if current.retry_deadline and now >= current.retry_deadline:
         return False
 
+    stage = "currency_conversion"
     try:
         amount_sats = allowance.amount
 
@@ -121,10 +157,12 @@ async def execute_lightning_address_payment(  # noqa: C901
 
         amount_msats = int(amount_sats * 1000)
 
+        stage = "address_lookup"
         callback_url, lnurl_data = await resolve_lightning_address(
             allowance.lightning_address
         )
 
+        stage = "amount_validation"
         min_sendable = lnurl_data.get("minSendable", 1000)
         max_sendable = lnurl_data.get("maxSendable", 100000000000)
         comment_allowed = lnurl_data.get("commentAllowed", 0)
@@ -155,12 +193,14 @@ async def execute_lightning_address_payment(  # noqa: C901
             desired_memo = allowance.memo or ""
             memo = desired_memo[:comment_allowed]
 
+        stage = "invoice_request"
         payment_request = await get_invoice_from_lnurl(
             callback_url,
             amount_msats,
             memo,
         )
 
+        stage = "invoice_validation"
         invoice = decode_invoice(payment_request)
         if invoice.amount_msat != amount_msats:
             raise ValueError("Invoice amount does not match the requested amount")
@@ -178,6 +218,7 @@ async def execute_lightning_address_payment(  # noqa: C901
         if not await claim_payment(allowance, payment_hash):
             return None
         allowance.pending_payment_hash = payment_hash
+        stage = "payment_submission"
         payment_result = await pay_invoice(
             wallet_id=allowance.wallet,
             payment_request=payment_request,
@@ -213,12 +254,17 @@ async def execute_lightning_address_payment(  # noqa: C901
             )
             return None if payment_result.pending else False
 
-    except Exception:
-        logger.error("Allowance payment attempt did not complete")
+    except Exception as exc:
+        code, message = payment_diagnostic(stage, exc)
+        logger.warning(
+            "Allowance payment attempt failed: stage={} code={}", stage, code
+        )
         await update_allowance_error(
             allowance,
-            "Payment attempt failed; retrying if confirmed unsent",
+            message,
             int(datetime.now(timezone.utc).timestamp()),
+            stage=stage,
+            code=code,
         )
         if allowance.pending_payment_hash:
             try:

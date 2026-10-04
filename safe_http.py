@@ -3,6 +3,8 @@
 import asyncio
 import ipaddress
 import json
+import os
+import re
 import socket
 import ssl
 
@@ -38,10 +40,56 @@ def public_address(value: str) -> bool:
     )
 
 
+TRUSTED_DESTINATIONS_ENV = "ALLOWANCE_TRUSTED_LNURL_DESTINATIONS"
+_PRIVATE_NETWORKS = tuple(
+    ipaddress.ip_network(value)
+    for value in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
+)
+
+
+def trusted_destinations() -> dict[str, set[str]]:
+    """Read operator-owned exact hostname/IP pairs; invalid policy fails closed."""
+    try:
+        policy = json.loads(os.environ.get(TRUSTED_DESTINATIONS_ENV, "{}"))
+        if not isinstance(policy, dict):
+            raise ValueError
+        result = {}
+        for host, values in policy.items():
+            if (
+                not isinstance(host, str)
+                or len(host) > 253
+                or not re.fullmatch(
+                    r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+                    r"(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+",
+                    host,
+                )
+                or not isinstance(values, list)
+                or not values
+            ):
+                raise ValueError
+            addresses = set()
+            for value in values:
+                if not isinstance(value, str):
+                    raise ValueError
+                address = ipaddress.IPv4Address(value)
+                if not any(address in network for network in _PRIVATE_NETWORKS):
+                    raise ValueError
+                addresses.add(str(address))
+            result[host] = addresses
+        return result
+    except (ValueError, TypeError):
+        raise ValueError("Invalid trusted LNURL destination configuration") from None
+
+
+class PrivateLNURLAddressError(ValueError):
+    pass
+
+
 class PublicNetworkBackend(httpcore.AnyIOBackend):
     def __init__(self, deadline):
         super().__init__()
         self.deadline = deadline
+        self.trusted = trusted_destinations()
 
     async def connect_tcp(
         self, host, port, timeout=None, local_address=None, socket_options=None
@@ -56,8 +104,13 @@ class PublicNetworkBackend(httpcore.AnyIOBackend):
             host, port, family=socket.AF_INET, type=socket.SOCK_STREAM
         )
         addresses = list(dict.fromkeys(result[4][0] for result in results))
-        if not addresses or not all(public_address(address) for address in addresses):
-            raise ValueError("LNURL host must resolve only to public addresses")
+        approved = self.trusted.get(host, set()) if port == 443 else set()
+        if not addresses or not all(
+            public_address(address) or address in approved for address in addresses
+        ):
+            raise PrivateLNURLAddressError(
+                "LNURL host must resolve only to public addresses"
+            )
         for index, address in enumerate(addresses):
             remaining = deadline - loop.time()
             if remaining <= 0:

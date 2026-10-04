@@ -194,3 +194,18 @@ async def m007_retry_and_local_schedule(db):
                     f"WHERE typeof({column}) = 'text' "
                     f"AND strftime('%s', {column}) IS NOT NULL"
                 )
+
+
+async def m008_payment_logs(db):
+    async with _migration_transaction(db) as atomic:
+        await atomic.execute(
+            f"CREATE TABLE IF NOT EXISTS {db.references_schema}payment_logs ("
+            "id TEXT PRIMARY KEY, allowance_id TEXT NOT NULL, "
+            "scheduled_at BIGINT NOT NULL, recorded_at BIGINT NOT NULL, "
+            "stage TEXT NOT NULL, code TEXT NOT NULL, message TEXT NOT NULL, "
+            "retry_at BIGINT)"
+        )
+        await atomic.execute(
+            f"CREATE INDEX IF NOT EXISTS allowance_logs_lookup "
+            f"ON {db.references_schema}payment_logs (allowance_id, recorded_at)"
+        )

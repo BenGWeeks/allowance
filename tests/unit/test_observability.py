@@ -65,3 +65,33 @@ class ObservabilityTests(unittest.IsolatedAsyncioTestCase):
                     SimpleNamespace(id="owned")
                 )
                 self.assertIs(result["scheduler_ok"], expected)
+
+    async def test_payment_logs_enforce_ownership_and_pagination(self):
+        app = FastAPI()
+        app.include_router(views_api.allowance_api_router)
+        wallet = SimpleNamespace(id="owned")
+        app.dependency_overrides[views_api.require_invoice_key] = lambda: wallet
+        with patch.object(
+            views_api,
+            "get_allowance",
+            AsyncMock(return_value=SimpleNamespace(wallet="owned")),
+        ), patch.object(crud, "get_payment_logs", AsyncMock(return_value=[])) as read:
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.get(
+                    "/api/v1/allowance/test/logs?limit=10&offset=20"
+                )
+                self.assertEqual(response.status_code, 200)
+                read.assert_awaited_once_with("test", 10, 20)
+                self.assertEqual(
+                    (
+                        await client.get("/api/v1/allowance/test/logs?limit=1000")
+                    ).status_code,
+                    422,
+                )
+                wallet.id = "other"
+                self.assertEqual(
+                    (await client.get("/api/v1/allowance/test/logs")).status_code, 403
+                )
+                self.assertEqual(read.await_count, 1)

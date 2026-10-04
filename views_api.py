@@ -439,6 +439,23 @@ async def api_allowance_history(
     return await get_payment_history(allowance_id, limit, offset)
 
 
+@allowance_api_router.get("/api/v1/allowance/{allowance_id}/logs")
+async def api_allowance_logs(
+    allowance_id: str,
+    wallet: WalletTypeInfo = Depends(require_invoice_key),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    from .crud import get_payment_logs
+
+    allowance = await get_allowance(allowance_id)
+    if not allowance:
+        raise HTTPException(404, "Allowance not found")
+    if allowance.wallet != get_wallet_id(wallet):
+        raise HTTPException(403, "Not authorized to view these logs")
+    return await get_payment_logs(allowance_id, limit, offset)
+
+
 @allowance_api_router.get("/api/v1/health")
 async def api_allowance_health(wallet: WalletTypeInfo = Depends(require_invoice_key)):
     from .crud import get_scheduler_health

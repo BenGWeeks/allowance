@@ -124,7 +124,7 @@ async def main():
         await install(candidate)
         require(
             (await get_db_version("allowance")).version
-            == (5 if mode == "retry_after_failure" else 4 if cached else 7),
+            == (5 if mode == "retry_after_failure" else 4 if cached else 8),
             "Unexpected migration version before restart",
         )
         require(
@@ -142,7 +142,11 @@ async def main():
     from lnbits.extensions.allowance import crud
 
     version = await get_db_version("allowance")
-    require(version.version == 7, "Expected migrations through m007")
+    require(version.version == 8, "Expected migrations through m008")
+    require(
+        await crud.get_payment_logs("synthetic-missing") == [],
+        "Missing diagnostic log table",
+    )
     config = json.loads((ext.ext_dir / "config.json").read_text())
     require(config["min_lnbits_version"] == "1.6.0", "Unexpected compatibility floor")
     manifest = Manifest.parse_raw((ext.ext_dir / "manifest.json").read_text())
@@ -176,7 +180,7 @@ async def main():
         )
     await install(candidate)
     require(
-        (await get_db_version("allowance")).version == 7,
+        (await get_db_version("allowance")).version == 8,
         "Reinstallation changed migration version",
     )
     print(f"PASS: native {mode} installation and reinstallation")
