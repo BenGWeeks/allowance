@@ -52,6 +52,7 @@ test('payment diagnostics explain failures and keep action sizes consistent', as
   expect(new Set(sizes.map(size => size.button)).size).toBe(1);
   expect(new Set(sizes.map(size => size.icon)).size).toBe(1);
   await expect(row.getByRole('button', {name: 'Check payment status', exact: true})).toBeDisabled();
+  await row.screenshot({animations: 'disabled', path: testInfo.outputPath('consistent-action-icons.png')});
   await row.getByRole('button', {name: 'Payment history', exact: true}).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByText('private_address', {exact: false})).toBeVisible();
