@@ -1,7 +1,7 @@
 const {test, expect} = require('@playwright/test');
 const {login, getConfig} = require('../auth-helper');
 
-test.use({timezoneId: 'Europe/London', viewport: {width: 1500, height: 1100}});
+test.use({serviceWorkers: 'block', timezoneId: 'Europe/London', viewport: {width: 1500, height: 1100}});
 
 test('payment diagnostics explain failures and keep action sizes consistent', async ({page}, testInfo) => {
   await login(page);
