@@ -391,8 +391,10 @@ that one payment, records the request and result against the original occurrence
 and preserves the regular schedule. Fiat amounts use the rate at payment time.
 Failed entries continue to show **Retry this payment**.
 
-Both actions require unchanged saved payment details, no submitted or uncertain
-payment, and an active allowance with no other due payment or older retry in
-progress. Older entries without saved details cannot be paid through this action.
+A current confirmed-unsent failure can be retried within its retry window without
+a historical snapshot. Older failed or skipped occurrences require unchanged saved
+payment details. Both actions require no submitted or uncertain payment, and an
+active allowance with no other due payment or older retry in progress. Older entries
+without saved details cannot be paid through this action.
 Payments made separately through the LNbits wallet are not linked automatically;
 check wallet history before confirming if you may already have paid manually.
