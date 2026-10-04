@@ -118,6 +118,20 @@ jobs:
         run: |
           black --check ./*.py tests/unit tests/run_unit_tests.py tests/check_release_install.py tests/test_release_builder.py scripts
           ruff check ./*.py tests/unit tests/run_unit_tests.py tests/check_release_install.py tests/test_release_builder.py scripts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+      - name: Check browser scripts and discover scenarios
+        env:
+          TEST_LNBITS_URL: http://127.0.0.1:5000
+          LNBITS_ADMIN_USERNAME: synthetic-user
+          LNBITS_ADMIN_PASSWORD: synthetic-password
+        run: |
+          npm ci --prefix tests
+          find tests/ui -name '*.js' -not -path '*/node_modules/*' -print0 | xargs -0 -n1 node --check
+          node tests/node_modules/@playwright/test/cli.js test --config tests/playwright.config.js --list
       - name: Check release builder failure cases
         run: python tests/test_release_builder.py
       - name: Check extension metadata
