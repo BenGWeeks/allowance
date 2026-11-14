@@ -5,7 +5,9 @@ This script creates allowances with various configurations including different e
 """
 
 import asyncio
+import os
 import random
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -28,7 +30,12 @@ def load_config():
                 config[key.strip()] = value.strip()
 
     # Validate required variables
-    required = ["TEST_LNBITS_URL", "LNBITS_ADMIN_USERNAME", "LNBITS_ADMIN_PASSWORD"]
+    required = [
+        "TEST_LNBITS_URL",
+        "LNBITS_ADMIN_USERNAME",
+        "LNBITS_ADMIN_PASSWORD",
+        "PAYLINK_EMAIL",
+    ]
     missing = [key for key in required if key not in config]
     if missing:
         raise Exception(f"Missing required environment variables: {', '.join(missing)}")
@@ -37,20 +44,21 @@ def load_config():
         "base_url": config["TEST_LNBITS_URL"],
         "username": config["LNBITS_ADMIN_USERNAME"],
         "password": config["LNBITS_ADMIN_PASSWORD"],
-        "receiving_email": config.get(
-            "PAYLINK_EMAIL", "receiving@lnbits-allowance.weeksfamily.me"
-        ),
+        "receiving_email": config["PAYLINK_EMAIL"],
     }
 
 
 async def get_admin_key(config):
-    """Get the admin key for the wallet"""
-    # First, we need to find the wallet ID and admin key
-    # This would normally be done via login, but for testing we'll use a known key
-    # You may need to update this with your actual admin key
+    """Get the admin key via the shared get_api_key helper (reads .env.local)."""
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from get_api_key import main as get_api_key_main
 
-    # For now, return the known admin key from the database query
-    return "2c3cd50a44784f19a4d7b4f605bbe247"
+    wallet_info = await get_api_key_main()
+    if not wallet_info:
+        raise RuntimeError(
+            "Could not get the admin wallet; check .env.local (see .env.example)"
+        )
+    return wallet_info["api_key"]
 
 
 async def create_allowance(client, base_url, api_key, allowance_data):
@@ -92,7 +100,7 @@ async def main():
     test_allowances = [
         {
             "name": "Test 1 (API)",
-            "lightning_address": "receiving@lnbits-allowance.weeksfamily.me",
+            "lightning_address": config["receiving_email"],
             "amount": random.randint(1, 99),
             "currency": "sats",
             "frequency_type": "minutely",
@@ -103,7 +111,7 @@ async def main():
         },
         {
             "name": "Test 2 (API)",
-            "lightning_address": "receiving@lnbits-allowance.weeksfamily.me",
+            "lightning_address": config["receiving_email"],
             "amount": 0.02,
             "currency": "GBP",
             "frequency_type": "minutely",
@@ -114,7 +122,7 @@ async def main():
         },
         {
             "name": "Test 3 (API)",
-            "lightning_address": "receiving@lnbits-allowance.weeksfamily.me",
+            "lightning_address": config["receiving_email"],
             "amount": 0.30,
             "currency": "USD",
             "frequency_type": "minutely",
@@ -127,7 +135,7 @@ async def main():
         },
         {
             "name": "Test 4 (API)",
-            "lightning_address": "receiving@lnbits-allowance.weeksfamily.me",
+            "lightning_address": config["receiving_email"],
             "amount": random.randint(1, 99),
             "currency": "sats",
             "frequency_type": "minutely",
@@ -138,7 +146,7 @@ async def main():
         },
         {
             "name": "Test 5 (API)",
-            "lightning_address": "receiving@lnbits-allowance.weeksfamily.me",
+            "lightning_address": config["receiving_email"],
             "amount": random.randint(1, 99),
             "currency": "sats",
             "frequency_type": "minutely",
@@ -149,7 +157,7 @@ async def main():
         },
         {
             "name": "Test 6 (API)",
-            "lightning_address": "receiving@lnbits-allowance.weeksfamily.me",
+            "lightning_address": config["receiving_email"],
             "amount": random.randint(1, 99),
             "currency": "sats",
             "frequency_type": "minutely",
@@ -162,7 +170,7 @@ async def main():
         },
         {
             "name": "Test 7 (API)",
-            "lightning_address": "receiving@lnbits-allowance.weeksfamily.me",
+            "lightning_address": config["receiving_email"],
             "amount": random.randint(1, 99),
             "currency": "sats",
             "frequency_type": "minutely",
@@ -173,7 +181,7 @@ async def main():
         },
         {
             "name": "Test 8 (API)",
-            "lightning_address": "receiving@lnbits-allowance.weeksfamily.me",
+            "lightning_address": config["receiving_email"],
             "amount": random.randint(1, 99),
             "currency": "sats",
             "frequency_type": "hourly",  # Different frequency
@@ -186,7 +194,7 @@ async def main():
         },
         {
             "name": "Test 9 (API)",
-            "lightning_address": "receiving@lnbits-allowance.weeksfamily.me",
+            "lightning_address": config["receiving_email"],
             "amount": random.randint(1, 99),
             "currency": "sats",
             "frequency_type": "monthly",  # Different frequency
@@ -197,7 +205,7 @@ async def main():
         },
         {
             "name": "Test 10 (API)",
-            "lightning_address": "receiving@lnbits-allowance.weeksfamily.me",
+            "lightning_address": config["receiving_email"],
             "amount": random.randint(1, 99),
             "currency": "sats",
             "frequency_type": "yearly",  # Different frequency

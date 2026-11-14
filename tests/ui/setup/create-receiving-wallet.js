@@ -5,7 +5,10 @@ async function createReceivingWallet() {
   const config = getConfig();
   const browser = await chromium.launch({ headless: false });
   const page = await browser.newPage();
-  const walletName = process.env.RECEIVING_WALLET_NAME || 'Receiving';
+  const walletName = process.env.RECEIVING_WALLET_NAME;
+  if (!walletName) {
+    throw new Error('RECEIVING_WALLET_NAME is not set; see .env.example');
+  }
 
   try {
     console.log('🔍 Creating receiving wallet...');

@@ -1,0 +1,69 @@
+# Allowance (LNbits extension)
+
+Native Python LNbits extension that pays scheduled allowances from a funded wallet. Bugs can move real money, so treat payment, scheduling and validation changes with care.
+
+## Secrets: zero tolerance
+
+**Leaking a secret is not acceptable.** This repository is public and the extension controls funded wallets: one committed password or key can empty a wallet. A secret in any commit, branch, PR, issue, review comment, CI log or screenshot is compromised for good. Deleting it later does not undo the leak, because git history, forks and caches keep it.
+
+- **Never write a real secret into any file in this repo**, including code, docs, examples, test fixtures, comments, and this file. Secrets include passwords, LNbits admin/invoice keys, user IDs used for login, wallet IDs, NWC connection strings, macaroons, nsecs/private keys, API tokens, `.lnbits_auth_key`, and real instance URLs or usernames.
+- Real values live only in git-ignored files: `.env.local` (UI/API test login) and `.env.test` (wallet IDs and keys). Copy them from `.env.example` and `.env.test.example`, which contain **placeholders only**.
+- **Before every commit, review `git diff --cached` for secrets.** Never use `git add -A` or `git commit -a` without reading the diff. Never print secrets into command output, logs, PR bodies or chat.
+- Never bypass GitHub push protection ("allow secret") or the gitleaks CI check. If either flags something, remove the secret; don't override it. Push protection only knows provider token formats, so a plain password gets through it: your own review is the main defence.
+- **If a secret leaks:** stop and tell the maintainer immediately and privately (GitHub private vulnerability reporting). Rotate or revoke it first, then remove it from the files. Treat it as compromised even if it has since been deleted. See `CONTRIBUTING.md`.
+- Test scripts read configuration via `tests/ui/auth-helper.js` (`getConfig()`, `login(page)`). If a variable is missing, throw. Never fall back to defaults (`process.env.X || '…'`) and never hardcode test data (URLs, users, passwords, addresses, amounts).
+
+## Project
+
+- Reference implementation: https://github.com/lnbits/myextension (docs may be stale). For patterns, read the official `lnurlp` extension source; don't vendor it.
+- Never open PRs against or change `lnbits/myextension`.
+- Compatibility, CI coverage and the release process: `README.md` → "LNbits compatibility" and `docs/releasing.md`. Bump `min_lnbits_version` in `config.json` only with a matching CI matrix change.
+
+## Development environment
+
+- `docker-compose.yml` runs a FakeWallet dev instance on **http://localhost:5002** (`lnbits-dev`, data in `./data-dev`). Work there, never against a production instance.
+- **Warning:** the dev service mounts the whole repo as the extension directory (`.:/app/lnbits/extensions/allowance`). Uninstalling Allowance from that instance's UI deletes the checkout, `.git` included. Don't uninstall it there.
+- Restart the container after `config.json` changes; the extensions page caches metadata.
+- Database fields are `start_datetime` / `end_datetime` (not `start_date` / `end_date`). Payments use the allowance memo (or its name when the memo is empty) as the description, tagged `extra.tag = "allowance"` (`tasks.py`).
+
+## Checks before committing
+
+```bash
+python3 tests/run_ci_checks.py   # black, ruff and mypy over the repo
+# or individually (black and ruff are pinned in pyproject.toml):
+black --check .
+ruff check .
+mypy .
+```
+
+CI (`.github/workflows/api-unit-tests.yml`) runs the offline unit suite inside the official LNbits images in its matrix, plus PostgreSQL, release-archive installation and quality jobs. To run the unit suite the same way:
+
+```bash
+docker run --rm --network none -e LNBITS_DATA_FOLDER=/tmp/allowance-tests \
+  -e LNBITS_BACKEND_WALLET_CLASS=FakeWallet -e LOGURU_LEVEL=ERROR \
+  -v "$PWD:/app/lnbits/extensions/allowance:ro" lnbits/lnbits:<version> \
+  /app/.venv/bin/python /app/lnbits/extensions/allowance/tests/run_unit_tests.py
+```
+
+## Tests
+
+- `tests/unit/`: offline unit and regression tests (the CI suite).
+- `tests/api/`: Python scripts against a live instance (`create-allowance.py`, `check-scheduled-payments.py`, …).
+- `tests/ui/`: Playwright. `setup/` provisions an instance (admin account, extensions, wallets, paylinks); `crud/` exercises allowances.
+- Runners: `tests/run_all_tests.sh`, `run_api_tests.sh` (`--all` adds long-running scheduled-payment tests; allow several minutes), `run_ui_tests.sh`, `run_postgres_tests.sh`, `run_release_tests.sh`.
+- Use the "minutely" frequency with a short end time to test schedules quickly. Verify the resulting transactions afterwards.
+- Name scripts by action (`create-allowance.js`, not `step1.js` or `-v2` / `-simple` copies). Fix an existing script rather than duplicating it.
+- Scripts exit 0 on success and non-zero on failure. Capture screenshots at key steps (`test-results/` is git-ignored).
+
+### Playwright tips
+
+- LNbits may show "Create account" even when accounts exist. Click through to "Login".
+- Dismiss the "I understand" popup if it appears.
+- Prefer accessible selectors: `getByLabel(...)` as `auth-helper.js` uses, or `[aria-label="…"]`. Scope by card text (`.q-card:has(.text-h5:has-text("Allowance"))`). Confirm state changes by button text (Enable → Disable).
+
+## Frontend gotchas (Vue 3 / Quasar)
+
+- Mount like `lnurlp`: `window.app = Vue.createApp({ el: '#vue', mixins: [window.windowMixin], … })` with **no** `.mount('#vue')` call. LNbits mounts the app, and calling `.mount()` triggers the `this.$q.localStorage` undefined error.
+- `windowMixin` is required (user, wallets, Quasar helpers).
+- The allowance dialog saves through the form: `@submit.prevent="saveAllowance"` with a `type="submit"` button (`templates/allowance/index.html`).
+- Give every required field a default in `openCreateDialog()` (e.g. `frequency_type`). Map every field in `openUpdateDialog()`. Missing fields fail validation silently.
