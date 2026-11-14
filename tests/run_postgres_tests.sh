@@ -25,5 +25,5 @@ docker run --rm --network "$network" \
   -e LNBITS_DATA_FOLDER=/tmp/allowance-tests \
   -e LNBITS_BACKEND_WALLET_CLASS=FakeWallet -e LOGURU_LEVEL=ERROR \
   -v "$repo_dir:/app/lnbits/extensions/allowance:ro" \
-  lnbits/lnbits:v1.6.1 \
+  lnbits/lnbits:v1.7.1 \
   /app/.venv/bin/python /app/lnbits/extensions/allowance/tests/run_unit_tests.py

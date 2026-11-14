@@ -213,7 +213,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         for failing_call in ("get_standalone_payment", "check_payment_status"):
             allowance = self.allowance()
             allowance.pending_payment_hash = "pending-hash"
-            before = allowance.dict()
+            before = allowance.model_dump()
             pending = SimpleNamespace(
                 amount=-1000,
                 extra={"allowance_id": allowance.id},
@@ -236,7 +236,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIsNone(
                     await tasks.reconcile_payment(allowance, refresh=True)
                 )
-                self.assertEqual(allowance.dict(), before)
+                self.assertEqual(allowance.model_dump(), before)
                 success.assert_not_awaited()
                 error.assert_not_awaited()
                 pay.assert_not_awaited()

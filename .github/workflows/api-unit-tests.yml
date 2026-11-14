@@ -31,7 +31,7 @@ jobs:
           set -euo pipefail
           latest=$(gh api repos/lnbits/lnbits/releases/latest --jq .tag_name)
           [[ "$latest" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          matrix=$(jq -cn --arg latest "$latest" '["v1.6.0", "v1.6.1", $latest] | unique')
+          matrix=$(jq -cn --arg latest "$latest" '["v1.7.0", $latest] | unique')
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   regression:
@@ -64,7 +64,7 @@ jobs:
             /app/.venv/bin/python /app/lnbits/extensions/allowance/tests/run_unit_tests.py
 
   postgres:
-    name: PostgreSQL (LNbits v1.6.1)
+    name: PostgreSQL (LNbits v1.7.1)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -74,7 +74,7 @@ jobs:
       - name: Pull test runtimes
         run: |
           docker pull postgres:15
-          docker pull lnbits/lnbits:v1.6.1
+          docker pull lnbits/lnbits:v1.7.1
       - name: Run isolated PostgreSQL regressions
         run: bash tests/run_postgres_tests.sh
 

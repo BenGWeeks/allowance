@@ -148,8 +148,8 @@ async def main():
         "Missing diagnostic log table",
     )
     config = json.loads((ext.ext_dir / "config.json").read_text())
-    require(config["min_lnbits_version"] == "1.6.0", "Unexpected compatibility floor")
-    manifest = Manifest.parse_raw((ext.ext_dir / "manifest.json").read_text())
+    require(config["min_lnbits_version"] == "1.7.0", "Unexpected compatibility floor")
+    manifest = Manifest.model_validate_json((ext.ext_dir / "manifest.json").read_text())
     require(manifest.repos[0].id == "allowance", "Invalid repository manifest")
     require(
         (ext.ext_dir / "templates/allowance/index.html").is_file(),

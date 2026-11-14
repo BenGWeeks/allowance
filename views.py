@@ -16,5 +16,5 @@ async def index(request: Request, user: User = Depends(check_user_exists)):
     return allowance_renderer().TemplateResponse(
         request=request,
         name="allowance/index.html",
-        context={"user": user.json()},
+        context={"user": user.model_dump_json()},
     )

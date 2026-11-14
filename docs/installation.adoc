@@ -2,7 +2,7 @@
 
 == Requirements
 
-Allowance requires LNbits 1.6.0 or later in the tested 1.6.x series, SQLite or PostgreSQL, and a configured LNbits funding source. Use the Python version supported by your LNbits release. This is a native Python extension with server access, not a sandboxed WASM extension.
+Allowance requires LNbits 1.7.0 or later (releases up to 1.2.1 support 1.6.x only), SQLite or PostgreSQL, and a configured LNbits funding source. Use the Python version supported by your LNbits release. This is a native Python extension with server access, not a sandboxed WASM extension.
 
 == Install
 
