@@ -61,7 +61,7 @@ async def get_admin_wallet():
             logger.error("Failed to get wallet info")
             return None, None
 
-        wallet_id = wallet_info.get("wallet_id", "768a7da8063046d98cd5ee6f42621038")
+        wallet_id = wallet_info["wallet_id"]
         admin_key = wallet_info.get("api_key")
         return wallet_id, admin_key
 

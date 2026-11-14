@@ -55,12 +55,9 @@ async def get_admin_wallet():
             "wallet_id": wallet_info["wallet_id"],
             "api_key": wallet_info["api_key"],
         }
-    else:
-        # Fallback to known values if helper fails
-        return {
-            "wallet_id": "768a7da8063046d98cd5ee6f42621038",
-            "api_key": "2c3cd50a44784f19a4d7b4f605bbe247",
-        }
+    raise RuntimeError(
+        "Could not get the admin wallet; check .env.local (see .env.example)"
+    )
 
 
 async def test_gbp_allowance():

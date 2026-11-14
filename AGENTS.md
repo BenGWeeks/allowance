@@ -9,8 +9,8 @@ Native Python LNbits extension that pays scheduled allowances from a funded wall
 - **Never write a real secret into any file in this repo**, including code, docs, examples, test fixtures, comments, and this file. Secrets include passwords, LNbits admin/invoice keys, user IDs used for login, wallet IDs, NWC connection strings, macaroons, nsecs/private keys, API tokens, `.lnbits_auth_key`, and real instance URLs or usernames.
 - Real values live only in git-ignored files: `.env.local` (UI/API test login) and `.env.test` (wallet IDs and keys). Copy them from `.env.example` and `.env.test.example`, which contain **placeholders only**.
 - **Before every commit, review `git diff --cached` for secrets.** Never use `git add -A` or `git commit -a` without reading the diff. Never print secrets into command output, logs, PR bodies or chat.
-- Never bypass GitHub push protection ("allow secret"). If it blocks a push, remove the secret; don't override it.
-- **If a secret leaks:** stop and tell the maintainer immediately. Rotate or revoke it first, then remove it from the files. Treat it as compromised even if it has since been deleted. See `CONTRIBUTING.md`.
+- Never bypass GitHub push protection ("allow secret") or the gitleaks CI check. If either flags something, remove the secret; don't override it. Push protection only knows provider token formats, so a plain password gets through it: your own review is the main defence.
+- **If a secret leaks:** stop and tell the maintainer immediately and privately (GitHub private vulnerability reporting). Rotate or revoke it first, then remove it from the files. Treat it as compromised even if it has since been deleted. See `CONTRIBUTING.md`.
 - Test scripts read configuration via `tests/ui/auth-helper.js` (`getConfig()`, `login(page)`). If a variable is missing, throw. Never fall back to defaults (`process.env.X || '…'`) and never hardcode test data (URLs, users, passwords, addresses, amounts).
 
 ## Project
@@ -24,13 +24,13 @@ Native Python LNbits extension that pays scheduled allowances from a funded wall
 - `docker-compose.yml` runs a FakeWallet dev instance on **http://localhost:5002** (`lnbits-dev`, data in `./data-dev`). Work there, never against a production instance.
 - **Warning:** the dev service mounts the whole repo as the extension directory (`.:/app/lnbits/extensions/allowance`). Uninstalling Allowance from that instance's UI deletes the checkout, `.git` included. Don't uninstall it there.
 - Restart the container after `config.json` changes; the extensions page caches metadata.
-- Database fields are `start_datetime` / `end_datetime` (not `start_date` / `end_date`). Payment memos use `#allowance: {name}`.
+- Database fields are `start_datetime` / `end_datetime` (not `start_date` / `end_date`). Payments use the allowance memo (or its name when the memo is empty) as the description, tagged `extra.tag = "allowance"` (`tasks.py`).
 
 ## Checks before committing
 
 ```bash
-python3 tests/run_ci_checks.py   # all CI quality checks
-# or individually (versions pinned in pyproject.toml):
+python3 tests/run_ci_checks.py   # black, ruff and mypy over the repo
+# or individually (black and ruff are pinned in pyproject.toml):
 black --check .
 ruff check .
 mypy .
@@ -50,7 +50,7 @@ docker run --rm --network none -e LNBITS_DATA_FOLDER=/tmp/allowance-tests \
 - `tests/unit/`: offline unit and regression tests (the CI suite).
 - `tests/api/`: Python scripts against a live instance (`create-allowance.py`, `check-scheduled-payments.py`, …).
 - `tests/ui/`: Playwright. `setup/` provisions an instance (admin account, extensions, wallets, paylinks); `crud/` exercises allowances.
-- Runners: `tests/run_all_tests.sh`, `run_api_tests.sh` (`--all` adds long scheduled-payment tests, which need a 10+ minute timeout), `run_ui_tests.sh`, `run_postgres_tests.sh`, `run_release_tests.sh`.
+- Runners: `tests/run_all_tests.sh`, `run_api_tests.sh` (`--all` adds long-running scheduled-payment tests; allow several minutes), `run_ui_tests.sh`, `run_postgres_tests.sh`, `run_release_tests.sh`.
 - Use the "minutely" frequency with a short end time to test schedules quickly. Verify the resulting transactions afterwards.
 - Name scripts by action (`create-allowance.js`, not `step1.js` or `-v2` / `-simple` copies). Fix an existing script rather than duplicating it.
 - Scripts exit 0 on success and non-zero on failure. Capture screenshots at key steps (`test-results/` is git-ignored).
@@ -59,11 +59,11 @@ docker run --rm --network none -e LNBITS_DATA_FOLDER=/tmp/allowance-tests \
 
 - LNbits may show "Create account" even when accounts exist. Click through to "Login".
 - Dismiss the "I understand" popup if it appears.
-- Prefer `aria-label` selectors (`[aria-label="Username"]`). Scope by card text (`.q-card:has(.text-h5:has-text("Allowance"))`). Confirm state changes by button text (Enable → Disable).
+- Prefer accessible selectors: `getByLabel(...)` as `auth-helper.js` uses, or `[aria-label="…"]`. Scope by card text (`.q-card:has(.text-h5:has-text("Allowance"))`). Confirm state changes by button text (Enable → Disable).
 
 ## Frontend gotchas (Vue 3 / Quasar)
 
 - Mount like `lnurlp`: `window.app = Vue.createApp({ el: '#vue', mixins: [window.windowMixin], … })` with **no** `.mount('#vue')` call. LNbits mounts the app, and calling `.mount()` triggers the `this.$q.localStorage` undefined error.
 - `windowMixin` is required (user, wallets, Quasar helpers).
-- Trigger saves with `@click` on the button, not form `@submit.prevent`.
+- The allowance dialog saves through the form: `@submit.prevent="saveAllowance"` with a `type="submit"` button (`templates/allowance/index.html`).
 - Give every required field a default in `openCreateDialog()` (e.g. `frequency_type`). Map every field in `openUpdateDialog()`. Missing fields fail validation silently.

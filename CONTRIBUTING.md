@@ -16,12 +16,12 @@ Passwords; LNbits admin and invoice keys; user IDs used to log in; wallet IDs; N
 2. Never hardcode credentials or real configuration in code, tests, docs, examples or agent instruction files (`AGENTS.md`, `CLAUDE.md`). Test scripts read configuration through `tests/ui/auth-helper.js` and fail if a value is missing.
 3. Review `git diff --cached` before every commit. Don't commit with `git add -A` or `git commit -a` without reading what is staged.
 4. Never paste secrets into pull request descriptions, issues, review comments, logs or screenshots. Redact them before sharing output.
-5. GitHub secret scanning and push protection are enabled. If a push is blocked, remove the secret. Never use "allow secret" to bypass it.
+5. GitHub secret scanning and push protection are enabled, and CI runs gitleaks on every push and pull request. Push protection only recognises provider token formats, so it will not stop a plain password: review your own diff. If either blocks something, remove the secret. Never use "allow secret" to bypass it.
 6. AI coding agents follow the same rules. Their instructions are in `AGENTS.md`.
 
 ### If a secret leaks
 
-1. **Tell the maintainer immediately, privately.** Don't open a public issue about it.
+1. **Tell the maintainer immediately, privately**, through GitHub's private vulnerability reporting (Security tab → "Report a vulnerability"). Don't open a public issue about it.
 2. **Rotate or revoke the secret first.** Change the password or key, re-issue the macaroon, re-pair the NWC connection. Assume it has already been copied.
 3. Then remove it from the files in a pull request. Rewriting git history is the maintainer's decision and is never a substitute for rotation.
 4. Check where else it was used and rotate it there too.
@@ -33,7 +33,7 @@ See `AGENTS.md` for the dev environment, test layout and Vue/Quasar gotchas, `RE
 Before opening a pull request:
 
 ```bash
-python3 tests/run_ci_checks.py   # black, ruff, mypy (CI also runs prettier)
+python3 tests/run_ci_checks.py   # black, ruff, mypy
 ```
 
-CI runs the offline unit suite in the official LNbits images, PostgreSQL, release-installation and quality checks. All must pass. Add or update tests for any change to payments, scheduling or validation.
+CI runs the offline unit suite in the official LNbits images, PostgreSQL, release-installation, quality (black, ruff, release-builder test, JSON validation) and gitleaks checks. All must pass. Add or update tests for any change to payments, scheduling or validation.

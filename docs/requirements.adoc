@@ -354,7 +354,7 @@ Then it should:
   - Set end times 5 minutes in the future
   - Capture screenshots at key points
   - Verify transactions were processed correctly
-  - Use production URL (https://lnbits-allowance.weeksfamily.me/)
+  - Use the URL from `TEST_LNBITS_URL` in `.env.local`
 ----
 
 === User Story: Transaction Verification
