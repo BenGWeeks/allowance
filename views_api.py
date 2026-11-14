@@ -92,7 +92,7 @@ async def api_allowances(  # noqa: C901
 
         result = []
         for allowance in allowances:
-            data = allowance.dict()
+            data = allowance.model_dump()
 
             for field in [
                 "start_datetime",
@@ -138,7 +138,7 @@ async def api_allowance(
             detail="Not authorized to view this allowance",
         )
 
-    data = allowance.dict()
+    data = allowance.model_dump()
 
     for field in ["start_datetime", "end_datetime", "next_payment_date", "created_at"]:
         if data.get(field):
@@ -206,11 +206,11 @@ async def api_allowance_update(
         user = await get_user(get_wallet_user(wallet))
         if not user or not user.super_user:
             raise HTTPException(403, "Not authorized to update this allowance")
-    changes = data.dict(exclude_unset=True)
+    changes = data.model_dump(exclude_unset=True)
     for field in ("id", "wallet", "start_datetime", "frequency_type", "timezone_name"):
         if field in changes and changes[field] != getattr(allowance, field):
             raise HTTPException(422, f"Cannot change {field} of an existing allowance")
-    merged = {**allowance.dict(), **changes}
+    merged = {**allowance.model_dump(), **changes}
     if merged.get("memo") is None:
         merged["memo"] = ""
     if merged.get("total") is None:
@@ -227,7 +227,7 @@ async def api_allowance_update(
     )
     try:
         updated = await update_allowance(CreateAllowanceData(**merged))
-        return updated.dict()
+        return updated.model_dump()
     except AllowanceConflictError as exc:
         raise HTTPException(409, str(exc)) from exc
 
@@ -245,7 +245,7 @@ async def api_allowance_create(
         raise HTTPException(
             422, "start_datetime must be at least 1 minute in the future"
         )
-    values = data.dict(exclude={"id", "revision", "wallet"})
+    values = data.model_dump(exclude={"id", "revision", "wallet"})
     validate_schedule_input(values)
     try:
         allowance = await create_allowance(
@@ -258,7 +258,7 @@ async def api_allowance_create(
         )
     except AllowanceLimitError as exc:
         raise HTTPException(422, str(exc)) from exc
-    return allowance.dict()
+    return allowance.model_dump()
 
 
 @allowance_api_router.delete(

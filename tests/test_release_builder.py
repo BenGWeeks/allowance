@@ -29,7 +29,7 @@ class ReleaseBuilderTests(unittest.TestCase):
                 {
                     "version": "1.2.3",
                     "name": "Allowance",
-                    "min_lnbits_version": "1.6.0",
+                    "min_lnbits_version": "1.7.0",
                     "short_description": "Fixture",
                 }
             )

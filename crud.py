@@ -138,7 +138,7 @@ async def create_allowance(data: CreateAllowanceData) -> Allowance:
                 "created_at": created_ts or int(datetime.now().timestamp()),
             },
         )
-    return Allowance(**data.dict())
+    return Allowance(**data.model_dump())
 
 
 async def get_allowance(allowance_id: str) -> Optional[Allowance]:

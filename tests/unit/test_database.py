@@ -129,7 +129,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
                 memo="",
             )
         )
-        stale = CreateAllowanceData(**created.dict())
+        stale = CreateAllowanceData(**created.model_dump())
         future = now + timedelta(days=7)
         await crud.finish_payment_attempt(created, future)
         stale.name = "Renamed"
@@ -137,7 +137,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
             await crud.update_allowance(stale)
         current = await crud.get_allowance(created.id)
         self.assertEqual(current.next_payment_date, future)
-        edited = CreateAllowanceData(**current.dict())
+        edited = CreateAllowanceData(**current.model_dump())
         edited.next_payment_date = now  # editable updates must ignore this field
         edited.name = "Renamed"
         updated = await crud.update_allowance(edited)
@@ -162,7 +162,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
                 memo="",
             )
         )
-        edit = CreateAllowanceData(**allowance.dict())
+        edit = CreateAllowanceData(**allowance.model_dump())
         edit.end_datetime = now + timedelta(days=7)
         current = await crud.update_allowance(edit)
         await crud.deactivate_allowance(allowance.id, revision=allowance.revision)
@@ -378,7 +378,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_invalid_stored_amount_does_not_block_other_allowances(self):
         valid = await self.history_fixture()
-        other = CreateAllowanceData(**valid.dict())
+        other = CreateAllowanceData(**valid.model_dump())
         other.id = None
         bad = await crud.create_allowance(other)
         await self.database.execute(
@@ -426,7 +426,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_wallet_quota_and_timezone_persist(self):
         allowance = await self.history_fixture()
-        data = CreateAllowanceData(**allowance.dict())
+        data = CreateAllowanceData(**allowance.model_dump())
         data.timezone_name = "Europe/London"
         with patch.object(crud, "MAX_ALLOWANCES_PER_WALLET", 1):
             with self.assertRaises(crud.AllowanceLimitError):
@@ -439,7 +439,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_concurrent_creates_cannot_exceed_wallet_quota(self):
         original = await self.history_fixture()
-        values = {**original.dict(), "wallet": "quota-wallet"}
+        values = {**original.model_dump(), "wallet": "quota-wallet"}
         with patch.object(crud, "MAX_ALLOWANCES_PER_WALLET", 1):
             results = await asyncio.gather(
                 crud.create_allowance(CreateAllowanceData(**values)),
@@ -456,18 +456,18 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         now = datetime.now(timezone.utc)
         await crud.defer_payment(allowance, now, now)
         current = await crud.get_allowance(allowance.id)
-        data = CreateAllowanceData(**current.dict())
+        data = CreateAllowanceData(**current.model_dump())
         data.active = False
         paused = await crud.update_allowance(data)
         self.assertIsNone(paused.retry_deadline)
         self.assertIsNone(paused.retry_after)
         self.assertEqual(paused.retry_count, 0)
-        data = CreateAllowanceData(**paused.dict())
+        data = CreateAllowanceData(**paused.model_dump())
         data.active = True
         active = await crud.update_allowance(data)
         self.assertTrue(await crud.claim_payment(active, "pending"))
         active = await crud.get_allowance(active.id)
-        data = CreateAllowanceData(**active.dict())
+        data = CreateAllowanceData(**active.model_dump())
         data.name = "Edited while pending"
         edited = await crud.update_allowance(data)
         self.assertEqual(edited.pending_payment_hash, "pending")
@@ -553,7 +553,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             len(await crud.get_payment_logs(allowance.id, limit=5, offset=198)), 2
         )
-        stale = allowance.copy(update={"pending_payment_hash": "stale-claim"})
+        stale = allowance.model_copy(update={"pending_payment_hash": "stale-claim"})
         self.assertFalse(
             await crud.update_allowance_error(stale, "Stale diagnostic", 999)
         )
@@ -654,7 +654,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(retry.retry_resume_date, following)
         with self.assertRaises(crud.AllowanceConflictError):
             await crud.update_allowance(
-                CreateAllowanceData(**{**retry.dict(), "amount": 50})
+                CreateAllowanceData(**{**retry.model_dump(), "amount": 50})
             )
         await crud.finish_payment_attempt(retry, now + timedelta(days=1), True)
         restored = await crud.get_allowance(row.id)
@@ -673,10 +673,10 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         current = await crud.get_allowance(row.id)
         history = (await crud.get_payment_history(row.id))[0]
         cases = [
-            (current.copy(update={"active": False}), history),
-            (current.copy(update={"pending_payment_hash": "uncertain"}), history),
-            (current.copy(update={"amount": 50}), history),
-            (current.copy(update={"end_datetime": now}), history),
+            (current.model_copy(update={"active": False}), history),
+            (current.model_copy(update={"pending_payment_hash": "uncertain"}), history),
+            (current.model_copy(update={"amount": 50}), history),
+            (current.model_copy(update={"end_datetime": now}), history),
             (current, {**history, "retry_snapshot": None}),
             (current, {**history, "payment_hash": "submitted"}),
             (current, {**history, "outcome": "succeeded"}),
@@ -716,7 +716,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         await request_retry(current, event, current.revision)
         retry = await crud.get_allowance(row.id)
         paused = await crud.update_allowance(
-            CreateAllowanceData(**{**retry.dict(), "active": False})
+            CreateAllowanceData(**{**retry.model_dump(), "active": False})
         )
         self.assertFalse(paused.active)
         self.assertEqual(paused.retry_resume_date, following)
@@ -877,10 +877,10 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
                 current,
                 {**event, "scheduled_at": int((now + timedelta(days=1)).timestamp())},
             ),
-            (current.copy(update={"amount": 50}), event),
-            (current.copy(update={"pending_payment_hash": "unknown"}), event),
-            (current.copy(update={"active": False}), event),
-            (current.copy(update={"retry_resume_date": now}), event),
+            (current.model_copy(update={"amount": 50}), event),
+            (current.model_copy(update={"pending_payment_hash": "unknown"}), event),
+            (current.model_copy(update={"active": False}), event),
+            (current.model_copy(update={"retry_resume_date": now}), event),
         ):
             with self.assertRaises(crud.AllowanceConflictError):
                 await request_retry(allowance, occurrence, current.revision)

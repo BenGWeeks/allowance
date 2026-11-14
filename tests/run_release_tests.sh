@@ -2,7 +2,7 @@
 set -euo pipefail
 repo_dir=$(cd "$(dirname "$0")/.." && pwd)
 cd "$repo_dir"
-image="lnbits/lnbits:${LNBITS_VERSION:-v1.6.1}"
+image="lnbits/lnbits:${LNBITS_VERSION:-v1.7.1}"
 work=$(mktemp -d)
 network="allowance-install-$$"
 container="allowance-install-postgres-$$"

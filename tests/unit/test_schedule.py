@@ -229,7 +229,7 @@ class ScheduleEditTests(unittest.IsolatedAsyncioTestCase):
                 wallet = SimpleNamespace(id="wallet", user="owner")
 
                 async def save(data):
-                    return Allowance(**data.dict())
+                    return Allowance(**data.model_dump())
 
                 with patch.object(
                     views_api, "get_allowance", AsyncMock(return_value=allowance)
