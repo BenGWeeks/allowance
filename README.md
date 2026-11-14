@@ -14,7 +14,7 @@ Allowance schedules recurring Lightning payments from an LNbits wallet to a Ligh
 
 ### Installation
 
-Requires LNbits 1.7.0 or later (Pydantic 2). Releases up to 1.2.1 support LNbits 1.6.x only; earlier LNbits versions have a fund-theft vulnerability fixed in 1.7.0, so upgrade LNbits first. Allowance is not yet vetted for the official registry. Add this custom source under Server → Extension Sources:
+Requires LNbits 1.7.0 or later (Pydantic 2). Releases up to 1.2.1 support LNbits 1.6.x only. LNbits says funds on versions before 1.7.0 are at risk of theft ([security update](https://news.lnbits.com/news/lnbits-1-7-0-security-update)), so upgrade LNbits first. An Allowance 1.2.1 or earlier already installed on an LNbits 1.7 server fails to load and stops paying until you install 1.3.0 or later. Allowance is not yet vetted for the official registry. Add this custom source under Server → Extension Sources:
 
 `https://raw.githubusercontent.com/BenGWeeks/allowance/main/extensions.json`
 

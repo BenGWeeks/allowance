@@ -102,6 +102,12 @@ class Allowance(BaseModel):
             raise ValueError("Amount must be greater than 0")
         return v
 
+    # LNbits 1.7 passes NULL columns as None; keep the "" that payment snapshots expect.
+    @field_validator("memo", mode="before")
+    @classmethod
+    def null_memo_is_empty(cls, value):
+        return "" if value is None else value
+
 
 Frequency = Literal[
     "once", "minutely", "hourly", "daily", "weekly", "monthly", "yearly"
@@ -169,6 +175,8 @@ class AllowanceUpdateRequest(BaseModel):
     @classmethod
     def iso_datetimes(cls, value):
         if value is not None and not isinstance(value, (str, datetime)):
+            raise ValueError("date must be an ISO datetime")
+        if isinstance(value, str) and "T" not in value.upper() and " " not in value:
             raise ValueError("date must be an ISO datetime")
         return value
 

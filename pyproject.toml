@@ -6,7 +6,7 @@ authors = ["bengweeks", ""]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
-lnbits = ">=1.6.0,<2.0.0"
+lnbits = ">=1.7.0,<2.0.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "24.10.0"
