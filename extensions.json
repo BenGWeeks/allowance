@@ -104,6 +104,18 @@
             "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.2.1/config.json",
             "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.2.1/allowance-1.2.1.zip",
             "hash": "f0c935af5e00ed1c2a8b4ff226c1d9c96c7f25f985248d81788936a148f33a0f"
+        },
+        {
+            "id": "allowance",
+            "repo": "https://github.com/BenGWeeks/allowance",
+            "name": "Allowance",
+            "version": "1.2.2",
+            "min_lnbits_version": "1.7.0",
+            "short_description": "Support LNbits 1.7 (Pydantic 2); LNbits 1.7.0 or later required",
+            "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.2.2/static/image/allowance.png",
+            "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.2.2/config.json",
+            "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.2.2/allowance-1.2.2.zip",
+            "hash": "f2a9d18bebaec56dacaf422853b1b617cd69c998454505bae6da1c2cce7914c8"
         }
     ]
 }
