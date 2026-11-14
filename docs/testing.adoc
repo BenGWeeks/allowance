@@ -11,7 +11,7 @@ docker run --rm --network none \
   -e LNBITS_BACKEND_WALLET_CLASS=FakeWallet \
   -e LOGURU_LEVEL=ERROR \
   -v "$PWD:/app/lnbits/extensions/allowance:ro" \
-  lnbits/lnbits:v1.6.1 \
+  lnbits/lnbits:v1.7.1 \
   /app/.venv/bin/python /app/lnbits/extensions/allowance/tests/run_unit_tests.py
 bash tests/run_postgres_tests.sh
 bash tests/run_release_tests.sh

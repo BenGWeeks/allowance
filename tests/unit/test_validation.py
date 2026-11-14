@@ -7,6 +7,7 @@ import httpx
 from fastapi import FastAPI
 from lnbits.extensions.allowance import views_api
 from lnbits.extensions.allowance.models import Allowance, AllowanceCreateRequest
+from lnbits.extensions.allowance.payment_retry import payment_snapshot
 from pydantic import ValidationError
 
 
@@ -54,6 +55,8 @@ class ValidationTests(unittest.IsolatedAsyncioTestCase):
             {"memo": None},
             {"next_payment_date": "2090-01-01"},
             {"end_datetime": "2080-01-01T00:00:00Z"},
+            {"start_datetime": "2090-01-01"},
+            {"end_datetime": "2095-01-01"},
         ]:
             with self.subTest(data=data), patch.object(
                 views_api, "get_allowance", AsyncMock(return_value=self.allowance)
@@ -118,6 +121,15 @@ class ValidationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(save.await_args.args[0].memo, "")
             self.assertEqual(save.await_args.args[0].total, 0)
+
+    async def test_null_memo_row_loads_as_empty_string(self):
+        row = {**self.allowance.model_dump(), "memo": None}
+        loaded = Allowance(**row)
+        self.assertEqual(loaded.memo, "")
+        self.assertEqual(
+            payment_snapshot(loaded),
+            payment_snapshot(Allowance(**{**row, "memo": ""})),
+        )
 
     async def test_expired_allowance_can_be_edited_without_reactivation(self):
         self.allowance.start_datetime = datetime(2020, 1, 1, tzinfo=timezone.utc)

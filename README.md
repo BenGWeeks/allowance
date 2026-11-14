@@ -14,7 +14,7 @@ Allowance schedules recurring Lightning payments from an LNbits wallet to a Ligh
 
 ### Installation
 
-Requires LNbits 1.6.0 or later in the tested 1.6.x series. Allowance is not yet vetted for the official registry. Add this custom source under Server → Extension Sources:
+Requires LNbits 1.7.0 or later (Pydantic 2). Releases up to 1.2.1 support LNbits 1.6.x only. LNbits says funds on versions before 1.7.0 are at risk of theft ([security update](https://news.lnbits.com/news/lnbits-1-7-0-security-update)), so upgrade LNbits first. An Allowance 1.2.1 or earlier already installed on an LNbits 1.7 server fails to load and stops paying until you install 1.2.2 or later. Allowance is not yet vetted for the official registry. Add this custom source under Server → Extension Sources:
 
 `https://raw.githubusercontent.com/BenGWeeks/allowance/main/extensions.json`
 
@@ -85,9 +85,10 @@ The manual `/trigger` endpoint and unused public template routes have been remov
 
 ### LNbits compatibility
 
-The Python extension targets LNbits 1.6.x (tested by CI on 1.6.0, 1.6.1 and the latest stable 1.6.x release), with Python 3.10–3.12. It uses LNbits' task manager, wallet
-authentication wrapper, and configured fiat-rate providers. The 1.6.1 release
-retains internal `1.6.1-rc2` metadata, so the declared minimum is 1.6.0.
+The Python extension targets LNbits 1.7.x (tested by CI on 1.7.0 and the latest stable release), with Python 3.10–3.12. It uses LNbits' task manager, wallet
+authentication wrapper, and configured fiat-rate providers. LNbits 1.7 moved to
+Pydantic 2, so the declared minimum is 1.7.0; every earlier release in
+`extensions.json` is capped with `max_lnbits_version` 1.7.0.
 
 This remains a native Python extension, not a sandboxed WASM component. Porting
 to WASM requires replacing direct database, HTTP and payment-service access with
@@ -97,7 +98,7 @@ permission-scoped host APIs and a migration strategy for existing allowances.
 
 `Allowance checks` runs on every PR, main/develop push, manual invocation, and
 weekly. It discovers real unit tests and fails if none are found. Tests run in
-the official LNbits 1.6.0, 1.6.1, and latest stable release images (deduplicated),
+the official LNbits 1.7.0 and latest stable release images (deduplicated),
 with networking disabled, a read-only checkout, and disposable SQLite data.
 Payment/HTTP interactions are mocked; these checks cannot send real payments.
 The suite covers calendar recurrence, worker timing, authorization, wallet/task
@@ -110,7 +111,7 @@ docker run --rm --network none \
   -e LNBITS_DATA_FOLDER=/tmp/allowance-tests \
   -e LOGURU_LEVEL=ERROR \
   -v "$PWD:/app/lnbits/extensions/allowance:ro" \
-  lnbits/lnbits:v1.6.1 /app/.venv/bin/python \
+  lnbits/lnbits:v1.7.1 /app/.venv/bin/python \
   /app/lnbits/extensions/allowance/tests/run_unit_tests.py
 ```
 

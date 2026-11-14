@@ -4,14 +4,22 @@ from decimal import Decimal
 from typing import Literal, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, StrictBool, conint, constr, root_validator, validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    StrictBool,
+    conint,
+    constr,
+    field_validator,
+    model_validator,
+)
 
 
 class CreateAllowanceData(BaseModel):
     id: Optional[str] = ""
     name: str
     revision: int = 0
-    wallet: Optional[str]
+    wallet: Optional[str] = None
     lightning_address: str
     amount: float = 0
     currency: str = "sats"
@@ -26,15 +34,18 @@ class CreateAllowanceData(BaseModel):
     total: float = 0
     created_at: Optional[datetime] = None
 
-    @validator("start_datetime", "next_payment_date", "end_datetime", "created_at")
-    def timestamps_are_utc(cls, value):  # noqa: N805
-
+    @field_validator(
+        "start_datetime", "next_payment_date", "end_datetime", "created_at"
+    )
+    @classmethod
+    def timestamps_are_utc(cls, value):
         if value is not None and value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value
 
-    @validator("amount")
-    def amount_must_be_positive(cls, v):  # noqa: N805
+    @field_validator("amount")
+    @classmethod
+    def amount_must_be_positive(cls, v):
         if not math.isfinite(v) or v <= 0:
             raise ValueError("Amount must be greater than 0")
         return v
@@ -67,7 +78,7 @@ class Allowance(BaseModel):
     last_error_time: Optional[datetime] = None
     last_success_time: Optional[datetime] = None
 
-    @validator(
+    @field_validator(
         "start_datetime",
         "next_payment_date",
         "end_datetime",
@@ -78,16 +89,24 @@ class Allowance(BaseModel):
         "retry_deadline",
         "retry_resume_date",
     )
-    def timestamps_are_utc(cls, value):  # noqa: N805
+    @classmethod
+    def timestamps_are_utc(cls, value):
         if value is not None and value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value
 
-    @validator("amount")
-    def amount_must_be_positive(cls, v):  # noqa: N805
+    @field_validator("amount")
+    @classmethod
+    def amount_must_be_positive(cls, v):
         if not math.isfinite(v) or v <= 0:
             raise ValueError("Amount must be greater than 0")
         return v
+
+    # LNbits 1.7 passes NULL columns as None; keep the "" that payment snapshots expect.
+    @field_validator("memo", mode="before")
+    @classmethod
+    def null_memo_is_empty(cls, value):
+        return "" if value is None else value
 
 
 Frequency = Literal[
@@ -108,9 +127,9 @@ class AllowanceUpdateRequest(BaseModel):
         constr(strict=True, strip_whitespace=True, min_length=1, max_length=2048)
     ] = None
     amount: Optional[float] = None
-    currency: Optional[constr(strict=True, regex=r"^(sats|satoshis|[A-Za-z]{3})$")] = (
-        None
-    )
+    currency: Optional[
+        constr(strict=True, pattern=r"^(sats|satoshis|[A-Za-z]{3})$")
+    ] = None
     memo: Optional[constr(strict=True, max_length=1000)] = None
     active: Optional[StrictBool] = None
     start_datetime: Optional[datetime] = None
@@ -118,10 +137,10 @@ class AllowanceUpdateRequest(BaseModel):
     frequency_type: Optional[Frequency] = None
     timezone_name: Optional[constr(strict=True, max_length=100)] = None
 
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def reject_null_fields(cls, values):
         if isinstance(values, dict):
             for key, value in values.items():
@@ -129,8 +148,9 @@ class AllowanceUpdateRequest(BaseModel):
                     raise ValueError(f"{key} cannot be null")
         return values
 
-    @validator("amount", pre=True)
-    def valid_amount(cls, value):  # noqa: N805
+    @field_validator("amount", mode="before")
+    @classmethod
+    def valid_amount(cls, value):
         if type(value) not in (int, float) or not math.isfinite(value) or value <= 0:
             raise ValueError("amount must be a finite positive number")
         amount = Decimal(str(value))
@@ -140,22 +160,29 @@ class AllowanceUpdateRequest(BaseModel):
             raise ValueError("amount must fit 8 integer and 4 decimal places")
         return value
 
-    @validator("timezone_name")
-    def valid_timezone(cls, value):  # noqa: N805
+    @field_validator("timezone_name")
+    @classmethod
+    def valid_timezone(cls, value):
+        if value is None:
+            return value
         try:
             ZoneInfo(value)
         except (ZoneInfoNotFoundError, ValueError, OSError) as exc:
             raise ValueError("Unknown IANA timezone") from exc
         return value
 
-    @validator("start_datetime", "end_datetime", pre=True)
-    def iso_datetimes(cls, value):  # noqa: N805
+    @field_validator("start_datetime", "end_datetime", mode="before")
+    @classmethod
+    def iso_datetimes(cls, value):
         if value is not None and not isinstance(value, (str, datetime)):
+            raise ValueError("date must be an ISO datetime")
+        if isinstance(value, str) and "T" not in value.upper() and " " not in value:
             raise ValueError("date must be an ISO datetime")
         return value
 
-    @validator("start_datetime", "end_datetime")
-    def utc_datetimes(cls, value):  # noqa: N805
+    @field_validator("start_datetime", "end_datetime")
+    @classmethod
+    def utc_datetimes(cls, value):
         if value is None:
             return value
         return (
@@ -173,7 +200,7 @@ class AllowanceCreateRequest(AllowanceUpdateRequest):
         strict=True, strip_whitespace=True, min_length=1, max_length=2048
     )
     amount: float
-    currency: constr(strict=True, regex=r"^(sats|satoshis|[A-Za-z]{3})$") = "sats"
+    currency: constr(strict=True, pattern=r"^(sats|satoshis|[A-Za-z]{3})$") = "sats"
     memo: constr(strict=True, max_length=1000) = ""
     active: StrictBool = True
     start_datetime: datetime

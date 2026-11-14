@@ -100,7 +100,7 @@ async def request_retry(allowance, occurrence, revision):
             raise AllowanceConflictError(
                 "Payment state changed. Refresh and try again."
             )
-        attempted = allowance.copy(
+        attempted = allowance.model_copy(
             update={"next_payment_date": datetime.fromtimestamp(due, timezone.utc)}
         )
         await _append_payment_log(
