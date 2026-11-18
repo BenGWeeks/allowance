@@ -211,3 +211,7 @@ class PaymentRetryRequest(BaseModel):
     revision: int
     scheduled_at: int
     confirmed: Literal[True]
+
+
+class PaymentRetryCancelRequest(BaseModel):
+    revision: int

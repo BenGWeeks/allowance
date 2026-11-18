@@ -115,3 +115,59 @@ async def request_retry(allowance, occurrence, revision):
             ),
             int(now.timestamp()),
         )
+
+
+async def cancel_retry(allowance, revision):
+    """End an explicitly requested occurrence retry without sending anything.
+
+    The occurrence keeps its recorded failed or skipped outcome and the regular
+    schedule resumes, which makes the payment details editable again.
+    """
+    from .crud import AllowanceConflictError, _append_payment_log, db, transaction
+    from .schedule import next_occurrence
+
+    if allowance.pending_payment_hash:
+        raise AllowanceConflictError(
+            "A payment is awaiting confirmation. Check its status first."
+        )
+    if not allowance.retry_resume_date:
+        raise AllowanceConflictError("There is no requested retry to cancel.")
+    if revision != allowance.revision:
+        raise AllowanceConflictError("Allowance changed. Refresh and try again.")
+    now = datetime.now(timezone.utc)
+    next_date = allowance.retry_resume_date
+    if next_date <= now:
+        next_date = next_occurrence(
+            allowance.start_datetime,
+            allowance.frequency_type,
+            now,
+            allowance.timezone_name,
+        )
+    values = {"id": allowance.id, "revision": revision}
+    if next_date is None:
+        assignment = "active = false"
+    else:
+        assignment = f"next_payment_date = {db.timestamp_placeholder('next')}"
+        values["next"] = int(next_date.timestamp())
+        if allowance.end_datetime and allowance.end_datetime <= now:
+            assignment += ", active = false"
+    async with transaction(db) as conn:
+        result = await conn.execute(
+            f"UPDATE {db.references_schema}maintable SET {assignment}, "
+            "retry_count = 0, retry_after = NULL, retry_deadline = NULL, "
+            "retry_resume_date = NULL, revision = revision + 1 "
+            "WHERE id = :id AND revision = :revision "
+            "AND pending_payment_hash IS NULL AND retry_resume_date IS NOT NULL",
+            values,
+        )
+        if result.rowcount != 1:
+            raise AllowanceConflictError(
+                "Payment state changed. Refresh and try again."
+            )
+        await _append_payment_log(
+            conn,
+            allowance,
+            "retry",
+            "manual_retry_cancelled",
+            "User cancelled the requested retry. Nothing was sent.",
+        )

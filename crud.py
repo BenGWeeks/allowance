@@ -181,6 +181,7 @@ async def update_allowance(data: CreateAllowanceData) -> Allowance:
         ):
             raise AllowanceConflictError(
                 "Payment details cannot change during an occurrence retry. "
+                "Cancel the retry in the payment history to edit them. "
                 "You can still pause or resume this allowance."
             )
         result = await db.execute(

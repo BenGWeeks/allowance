@@ -260,10 +260,20 @@ window ends at the earlier of 24 hours or the regular next-payment date. Pause/r
 remains available, but payment details cannot change while an older retry is active.
 A payment already submitted cannot be cancelled by pausing.
 
+**Cancel retry**, shown on the payment being retried, ends an older retry before its
+window closes, for example when the recipient address is wrong and must be edited.
+Nothing is sent, the payment stays recorded as failed or skipped, the regular
+next-payment date is restored and payment details become editable again. It is
+refused while a submitted payment awaits confirmation. A payment whose details were
+edited afterwards cannot be retried, because its saved details no longer match.
+
 The owning wallet's admin key is required for
 `POST /allowance/api/v1/allowance/{id}/retry` with `scheduled_at` (epoch seconds),
 `revision`, and `confirmed: true`. Success returns 202; changed or ineligible state
-returns 409. The wallet-scoped `/occurrences` endpoint provides eligibility reasons,
+returns 409. `POST /allowance/api/v1/allowance/{id}/retry/cancel` with `revision`
+(admin key) cancels an older retry; it returns 200, or 409 when there is no such
+retry, the state changed or a payment is pending. The wallet-scoped `/occurrences`
+endpoint provides eligibility reasons,
 saved details and retained diagnostic events. Migration m009 adds saved details for
 new outcomes; it does not invent snapshots for legacy history.
 

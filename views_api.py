@@ -26,6 +26,7 @@ from .models import (
     AllowanceCreateRequest,
     AllowanceUpdateRequest,
     CreateAllowanceData,
+    PaymentRetryCancelRequest,
     PaymentRetryRequest,
 )
 from .tasks import lightning_address_url
@@ -565,5 +566,30 @@ async def api_retry_occurrence(
             "The regular schedule is preserved."
             if occurrence.get("outcome") == "skipped"
             else "Retry queued for this payment. The regular schedule is preserved."
+        )
+    }
+
+
+@allowance_api_router.post("/api/v1/allowance/{allowance_id}/retry/cancel")
+async def api_cancel_retry(
+    allowance_id: str,
+    data: PaymentRetryCancelRequest,
+    wallet: WalletTypeInfo = Depends(require_admin_key),
+):
+    from .crud import AllowanceConflictError
+    from .payment_retry import cancel_retry
+
+    allowance = await get_allowance(allowance_id)
+    if not allowance:
+        raise HTTPException(404, "Allowance not found")
+    if allowance.wallet != get_wallet_id(wallet):
+        raise HTTPException(403, "Not authorized to cancel this retry")
+    try:
+        await cancel_retry(allowance, data.revision)
+    except AllowanceConflictError as exc:
+        raise HTTPException(409, str(exc)) from None
+    return {
+        "message": (
+            "Retry cancelled. Nothing was sent and the regular schedule is preserved."
         )
     }
