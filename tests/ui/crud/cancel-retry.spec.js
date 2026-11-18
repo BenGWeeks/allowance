@@ -31,7 +31,7 @@ test('cancel an older retry so the allowance can be edited', async ({page}, test
     const path = new URL(request.url()).pathname;
     if (request.method() === 'POST' && path.endsWith('/retry/cancel')) {
       cancelRequests++;
-      expect(request.postDataJSON()).toEqual({revision: 4});
+      expect(request.postDataJSON()).toEqual({scheduled_at: due, revision: 4});
       Object.assign(record, {revision: 5, next_payment_date: resume, retry_count: 0, retry_after: null, retry_deadline: null, retry_resume_date: null});
       events.push({id: 'cancel', recorded_at: due + 340120, scheduled_at: due, stage: 'retry', code: 'manual_retry_cancelled', message: 'User cancelled the requested retry. Nothing was sent.', retry_at: null});
       return route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify({message: 'Retry cancelled. Nothing was sent and the regular schedule is preserved.'})});

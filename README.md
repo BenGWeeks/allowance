@@ -270,8 +270,8 @@ edited afterwards cannot be retried, because its saved details no longer match.
 The owning wallet's admin key is required for
 `POST /allowance/api/v1/allowance/{id}/retry` with `scheduled_at` (epoch seconds),
 `revision`, and `confirmed: true`. Success returns 202; changed or ineligible state
-returns 409. `POST /allowance/api/v1/allowance/{id}/retry/cancel` with `revision`
-(admin key) cancels an older retry; it returns 200, or 409 when there is no such
+returns 409. `POST /allowance/api/v1/allowance/{id}/retry/cancel` with `scheduled_at`
+and `revision` (admin key) cancels that older retry; it returns 200, or 409 when there is no such
 retry, the state changed or a payment is pending. The wallet-scoped `/occurrences`
 endpoint provides eligibility reasons,
 saved details and retained diagnostic events. Migration m009 adds saved details for

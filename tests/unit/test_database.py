@@ -738,9 +738,10 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         from lnbits.extensions.allowance.payment_retry import cancel_retry
 
         retry, following = await self.historical_retry_fixture()
+        due = int(retry.next_payment_date.timestamp())
         results = await asyncio.gather(
-            cancel_retry(retry, retry.revision),
-            cancel_retry(retry, retry.revision),
+            cancel_retry(retry, retry.revision, due),
+            cancel_retry(retry, retry.revision, due),
             return_exceptions=True,
         )
         self.assertEqual(sum(value is None for value in results), 1)
@@ -778,16 +779,21 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
 
         row, _ = await self.retry_fixture()
         with self.assertRaises(crud.AllowanceConflictError):
-            await cancel_retry(row, row.revision)
+            await cancel_retry(
+                row, row.revision, int(row.next_payment_date.timestamp())
+            )
         retry, following = await self.historical_retry_fixture()
+        due = int(retry.next_payment_date.timestamp())
         with self.assertRaises(crud.AllowanceConflictError):
-            await cancel_retry(retry, retry.revision - 1)
+            await cancel_retry(retry, retry.revision - 1, due)
+        with self.assertRaises(crud.AllowanceConflictError):
+            await cancel_retry(retry, retry.revision, int(following.timestamp()))
         self.assertTrue(await crud.claim_payment(retry, "submitted"))
         with self.assertRaises(crud.AllowanceConflictError):
-            await cancel_retry(retry, retry.revision)
+            await cancel_retry(retry, retry.revision, due)
         claimed = await crud.get_allowance(retry.id)
         with self.assertRaises(crud.AllowanceConflictError):
-            await cancel_retry(claimed, claimed.revision)
+            await cancel_retry(claimed, claimed.revision, due)
         saved = await crud.get_allowance(retry.id)
         self.assertEqual(saved.pending_payment_hash, "submitted")
         self.assertEqual(saved.retry_resume_date, following)
@@ -805,7 +811,9 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
             {"id": retry.id, "resume": int(elapsed.timestamp())},
         )
         retry = await crud.get_allowance(retry.id)
-        await cancel_retry(retry, retry.revision)
+        await cancel_retry(
+            retry, retry.revision, int(retry.next_payment_date.timestamp())
+        )
         saved = await crud.get_allowance(retry.id)
         self.assertGreater(saved.next_payment_date, datetime.now(timezone.utc))
         self.assertIsNone(saved.retry_resume_date)
@@ -828,12 +836,18 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
             transport=httpx.ASGITransport(app=app), base_url="http://test"
         ) as client:
             url = f"/api/v1/allowance/{retry.id}"
-            payload = {"revision": retry.revision}
+            payload = {
+                "revision": retry.revision,
+                "scheduled_at": int(retry.next_payment_date.timestamp()),
+            }
             response = await client.post(url + "/retry/cancel", json=payload)
             self.assertEqual(response.status_code, 403)
             wallet.id = retry.wallet
             response = await client.post(url + "/retry/cancel", json=payload)
             self.assertEqual(response.status_code, 200)
+            wrong = {**payload, "scheduled_at": payload["scheduled_at"] + 1}
+            response = await client.post(url + "/retry/cancel", json=wrong)
+            self.assertEqual(response.status_code, 409)
             response = await client.post(url + "/retry/cancel", json=payload)
             self.assertEqual(response.status_code, 409)
             occurrences = (await client.get(url + "/occurrences")).json()

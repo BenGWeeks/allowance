@@ -171,7 +171,8 @@ window.app = Vue.createApp({
     },
     canCancelRetry(row) {
       const allowance = this.historyDialog.allowance
-      return Boolean(row && row.current && allowance && allowance.retry_resume_date && !allowance.pending_payment_hash)
+      return Boolean(row && row.current && allowance && allowance.retry_resume_date && !allowance.pending_payment_hash &&
+        row.scheduled_at === Math.floor(Date.parse(allowance.next_payment_date) / 1000))
     },
     confirmCancelRetry(row) {
       const allowance = this.historyDialog.allowance
@@ -185,7 +186,7 @@ window.app = Vue.createApp({
         if (!wallet || this.retryRequestBusy) return
         this.retryRequestBusy = true
         try {
-          const response = await LNbits.api.request('POST', `/allowance/api/v1/allowance/${allowance.id}/retry/cancel`, wallet.adminkey, {revision: allowance.revision})
+          const response = await LNbits.api.request('POST', `/allowance/api/v1/allowance/${allowance.id}/retry/cancel`, wallet.adminkey, {scheduled_at: row.scheduled_at, revision: allowance.revision})
           Quasar.Notify.create({type: 'positive', message: response.data.message})
           this.getAllowances()
           await this.showHistory(allowance)

@@ -215,3 +215,4 @@ class PaymentRetryRequest(BaseModel):
 
 class PaymentRetryCancelRequest(BaseModel):
     revision: int
+    scheduled_at: int

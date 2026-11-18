@@ -585,7 +585,7 @@ async def api_cancel_retry(
     if allowance.wallet != get_wallet_id(wallet):
         raise HTTPException(403, "Not authorized to cancel this retry")
     try:
-        await cancel_retry(allowance, data.revision)
+        await cancel_retry(allowance, data.revision, data.scheduled_at)
     except AllowanceConflictError as exc:
         raise HTTPException(409, str(exc)) from None
     return {

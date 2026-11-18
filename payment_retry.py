@@ -117,7 +117,7 @@ async def request_retry(allowance, occurrence, revision):
         )
 
 
-async def cancel_retry(allowance, revision):
+async def cancel_retry(allowance, revision, scheduled_at):
     """End an explicitly requested occurrence retry without sending anything.
 
     The occurrence keeps its recorded failed or skipped outcome and the regular
@@ -132,7 +132,9 @@ async def cancel_retry(allowance, revision):
         )
     if not allowance.retry_resume_date:
         raise AllowanceConflictError("There is no requested retry to cancel.")
-    if revision != allowance.revision:
+    if revision != allowance.revision or scheduled_at != int(
+        allowance.next_payment_date.timestamp()
+    ):
         raise AllowanceConflictError("Allowance changed. Refresh and try again.")
     now = datetime.now(timezone.utc)
     next_date = allowance.retry_resume_date
@@ -143,7 +145,7 @@ async def cancel_retry(allowance, revision):
             now,
             allowance.timezone_name,
         )
-    values = {"id": allowance.id, "revision": revision}
+    values = {"id": allowance.id, "revision": revision, "due": scheduled_at}
     if next_date is None:
         assignment = "active = false"
     else:
@@ -157,7 +159,8 @@ async def cancel_retry(allowance, revision):
             "retry_count = 0, retry_after = NULL, retry_deadline = NULL, "
             "retry_resume_date = NULL, revision = revision + 1 "
             "WHERE id = :id AND revision = :revision "
-            "AND pending_payment_hash IS NULL AND retry_resume_date IS NOT NULL",
+            "AND pending_payment_hash IS NULL AND retry_resume_date IS NOT NULL "
+            f"AND next_payment_date = {db.timestamp_placeholder('due')}",
             values,
         )
         if result.rowcount != 1:
