@@ -3,10 +3,11 @@ const {login, getConfig} = require('../auth-helper');
 
 test.use({serviceWorkers: 'block', timezoneId: 'Europe/London', viewport: {width: 1500, height: 1100}});
 
-test('cancel an older retry so the allowance can be edited', async ({page}, testInfo) => {
+for (const regularDue of [false, true]) {
+test(`cancel an older retry so the allowance can be edited${regularDue ? ' when the regular payment is already due' : ''}`, async ({page}, testInfo) => {
   await login(page);
   const week = 7 * 86400;
-  const due = Math.floor(Date.now() / 1000 / 3600) * 3600 - 4 * 86400;
+  const due = Math.floor(Date.now() / 1000 / 3600) * 3600 - (regularDue ? 8 : 4) * 86400;
   const resume = new Date((due + week) * 1000).toISOString();
   const lookupError = 'Lightning address lookup failed.';
   const wallet = {id: 'synthetic-wallet', name: 'Test wallet', adminkey: 'synthetic-key', inkey: 'synthetic-key'};
@@ -82,7 +83,8 @@ test('cancel an older retry so the allowance can be edited', async ({page}, test
 
   await cancel.click();
   const confirmation = page.getByRole('dialog').filter({hasText: 'Cancel this retry?'});
-  await expect(confirmation.getByText(/nothing is sent/)).toBeVisible();
+  await expect(confirmation.getByText(/nothing is sent for it/)).toBeVisible();
+  await expect(confirmation.getByText(/is already due and will be attempted straight away/)).toHaveCount(regularDue ? 1 : 0);
   await confirmation.getByRole('button', {name: 'Keep retrying', exact: true}).click();
   await expect(confirmation).not.toBeVisible();
   expect(cancelRequests).toBe(0);
@@ -105,3 +107,5 @@ test('cancel an older retry so the allowance can be edited', async ({page}, test
   await dialog.getByRole('button', {name: 'Cancel', exact: true}).click();
   expect(cancelRequests).toBe(1);
 });
+
+}

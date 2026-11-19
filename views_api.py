@@ -588,8 +588,14 @@ async def api_cancel_retry(
         await cancel_retry(allowance, data.revision, data.scheduled_at)
     except AllowanceConflictError as exc:
         raise HTTPException(409, str(exc)) from None
+    now = datetime.now(timezone.utc)
+    regular_due = (
+        allowance.active
+        and allowance.retry_resume_date <= now
+        and not (allowance.end_datetime and allowance.end_datetime <= now)
+    )
     return {
-        "message": (
-            "Retry cancelled. Nothing was sent and the regular schedule is preserved."
-        )
+        "message": "Retry cancelled. Nothing was sent for that payment and the "
+        "regular schedule is preserved."
+        + (" The regular payment is now due." if regular_due else "")
     }

@@ -177,9 +177,11 @@ window.app = Vue.createApp({
     confirmCancelRetry(row) {
       const allowance = this.historyDialog.allowance
       if (!this.canCancelRetry(row) || this.retryRequestBusy) return
+      const regularDue = allowance.active && Date.parse(allowance.retry_resume_date) <= Date.now()
       Quasar.Dialog.create({
         title: 'Cancel this retry?',
-        message: 'No further attempts are made for this payment and nothing is sent. It stays recorded as not paid, the regular schedule is preserved, and the allowance can be edited again.',
+        message: 'No further attempts are made for this payment and nothing is sent for it. It stays recorded as not paid, the regular schedule is preserved, and the allowance can be edited again.' +
+          (regularDue ? ` The regular payment scheduled ${this.formatDatetime(allowance.retry_resume_date)} is already due and will be attempted straight away with the current payment details. Pause the allowance first if those need changing.` : ''),
         cancel: {label: 'Keep retrying', flat: true}, persistent: true, ok: {label: 'Cancel retry', color: 'negative'}
       }).onOk(async () => {
         const wallet = this.g.user.wallets.find(wallet => wallet.id === allowance.wallet)

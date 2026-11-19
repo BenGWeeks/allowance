@@ -825,6 +825,41 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(saved.retry_resume_date)
         self.assertEqual(len(await crud.get_payment_history(retry.id)), 1)
 
+    async def test_retry_cancel_api_says_when_the_regular_payment_is_due(self):
+        from types import SimpleNamespace
+
+        import httpx
+        from fastapi import FastAPI
+        from lnbits.extensions.allowance import views_api
+
+        elapsed = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(hours=1)
+        app = FastAPI()
+        app.include_router(views_api.allowance_api_router)
+        app.dependency_overrides[views_api.require_admin_key] = lambda: SimpleNamespace(
+            id="test-wallet"
+        )
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            for paused, expected in ((False, True), (True, False)):
+                retry, _ = await self.historical_retry_fixture()
+                if paused:
+                    retry = await crud.update_allowance(
+                        CreateAllowanceData(**{**retry.model_dump(), "active": False})
+                    )
+                retry = await self.set_retry_dates(retry.id, retry_resume_date=elapsed)
+                response = await client.post(
+                    f"/api/v1/allowance/{retry.id}/retry/cancel",
+                    json={
+                        "revision": retry.revision,
+                        "scheduled_at": int(retry.next_payment_date.timestamp()),
+                    },
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual("now due" in response.json()["message"], expected)
+                saved = await crud.get_allowance(retry.id)
+                self.assertEqual(saved.next_payment_date, elapsed)
+
     async def test_cancelled_retry_keeps_pause_and_closes_an_ended_allowance(self):
         from lnbits.extensions.allowance.payment_retry import cancel_retry
 
@@ -890,6 +925,7 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
             wallet.id = retry.wallet
             response = await client.post(url + "/retry/cancel", json=payload)
             self.assertEqual(response.status_code, 200)
+            self.assertNotIn("now due", response.json()["message"])
             wrong = {**payload, "scheduled_at": payload["scheduled_at"] + 1}
             response = await client.post(url + "/retry/cancel", json=wrong)
             self.assertEqual(response.status_code, 409)
