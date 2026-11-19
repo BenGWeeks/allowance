@@ -723,6 +723,225 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(paused.retry_deadline, retry.retry_deadline)
         self.assertEqual(paused.next_payment_date, retry.next_payment_date)
 
+    async def historical_retry_fixture(self):
+        from lnbits.extensions.allowance.payment_retry import request_retry
+
+        row, now = await self.retry_fixture()
+        following = now + timedelta(days=7)
+        await crud.finish_payment_attempt(row, following, False)
+        current = await crud.get_allowance(row.id)
+        event = (await crud.get_payment_history(row.id))[0]
+        await request_retry(current, event, current.revision)
+        return await crud.get_allowance(row.id), following
+
+    async def test_cancelled_retry_restores_schedule_and_unlocks_editing(self):
+        from lnbits.extensions.allowance.payment_retry import cancel_retry
+
+        retry, following = await self.historical_retry_fixture()
+        due = int(retry.next_payment_date.timestamp())
+        results = await asyncio.gather(
+            cancel_retry(retry, retry.revision, due),
+            cancel_retry(retry, retry.revision, due),
+            return_exceptions=True,
+        )
+        self.assertEqual(sum(value is None for value in results), 1)
+        self.assertEqual(
+            sum(isinstance(value, crud.AllowanceConflictError) for value in results), 1
+        )
+        saved = await crud.get_allowance(retry.id)
+        self.assertTrue(saved.active)
+        self.assertEqual(saved.next_payment_date, following)
+        self.assertEqual(saved.retry_count, 0)
+        for field in ("retry_after", "retry_deadline", "retry_resume_date"):
+            self.assertIsNone(getattr(saved, field))
+        # An attempt that started before the cancellation can no longer send.
+        self.assertFalse(await crud.claim_payment(retry, "stale-attempt"))
+        self.assertFalse(
+            await crud.defer_payment(retry, following, following + timedelta(hours=1))
+        )
+        self.assertIsNone((await crud.get_allowance(retry.id)).pending_payment_hash)
+        history = await crud.get_payment_history(retry.id)
+        self.assertEqual([event["outcome"] for event in history], ["failed"])
+        events = await crud.get_payment_logs(retry.id)
+        cancelled = [e for e in events if e["code"] == "manual_retry_cancelled"]
+        self.assertEqual(len(cancelled), 1)
+        self.assertEqual(cancelled[0]["scheduled_at"], history[0]["scheduled_at"])
+        edited = await crud.update_allowance(
+            CreateAllowanceData(
+                **{**saved.model_dump(), "lightning_address": "new@example.invalid"}
+            )
+        )
+        self.assertEqual(edited.lightning_address, "new@example.invalid")
+        self.assertEqual(edited.next_payment_date, following)
+
+    async def test_retry_cancellation_rejects_unsafe_or_stale_requests(self):
+        from lnbits.extensions.allowance.payment_retry import cancel_retry
+
+        row, _ = await self.retry_fixture()
+        with self.assertRaises(crud.AllowanceConflictError):
+            await cancel_retry(
+                row, row.revision, int(row.next_payment_date.timestamp())
+            )
+        retry, following = await self.historical_retry_fixture()
+        due = int(retry.next_payment_date.timestamp())
+        with self.assertRaises(crud.AllowanceConflictError):
+            await cancel_retry(retry, retry.revision - 1, due)
+        with self.assertRaises(crud.AllowanceConflictError):
+            await cancel_retry(retry, retry.revision, int(following.timestamp()))
+        self.assertTrue(await crud.claim_payment(retry, "submitted"))
+        with self.assertRaises(crud.AllowanceConflictError):
+            await cancel_retry(retry, retry.revision, due)
+        claimed = await crud.get_allowance(retry.id)
+        with self.assertRaises(crud.AllowanceConflictError):
+            await cancel_retry(claimed, claimed.revision, due)
+        saved = await crud.get_allowance(retry.id)
+        self.assertEqual(saved.pending_payment_hash, "submitted")
+        self.assertEqual(saved.retry_resume_date, following)
+        self.assertEqual(saved.next_payment_date, retry.next_payment_date)
+
+    async def set_retry_dates(self, allowance_id, **dates):
+        assignments = ", ".join(
+            f"{column} = {self.database.timestamp_placeholder(column)}"
+            for column in dates
+        )
+        await self.database.execute(
+            f"UPDATE {self.database.references_schema}maintable SET {assignments} "
+            "WHERE id = :id",
+            {"id": allowance_id, **{k: int(v.timestamp()) for k, v in dates.items()}},
+        )
+        return await crud.get_allowance(allowance_id)
+
+    async def test_cancelled_retry_keeps_an_elapsed_regular_date(self):
+        from lnbits.extensions.allowance.payment_retry import cancel_retry
+
+        retry, _ = await self.historical_retry_fixture()
+        elapsed = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(hours=1)
+        retry = await self.set_retry_dates(retry.id, retry_resume_date=elapsed)
+        await cancel_retry(
+            retry, retry.revision, int(retry.next_payment_date.timestamp())
+        )
+        saved = await crud.get_allowance(retry.id)
+        self.assertEqual(saved.next_payment_date, elapsed)
+        self.assertIsNone(saved.retry_resume_date)
+        self.assertEqual(len(await crud.get_payment_history(retry.id)), 1)
+
+    async def test_retry_cancel_api_says_when_the_regular_payment_is_due(self):
+        from types import SimpleNamespace
+
+        import httpx
+        from fastapi import FastAPI
+        from lnbits.extensions.allowance import views_api
+
+        elapsed = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(hours=1)
+        app = FastAPI()
+        app.include_router(views_api.allowance_api_router)
+        app.dependency_overrides[views_api.require_admin_key] = lambda: SimpleNamespace(
+            id="test-wallet"
+        )
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            for paused, expected in ((False, True), (True, False)):
+                retry, _ = await self.historical_retry_fixture()
+                if paused:
+                    retry = await crud.update_allowance(
+                        CreateAllowanceData(**{**retry.model_dump(), "active": False})
+                    )
+                retry = await self.set_retry_dates(retry.id, retry_resume_date=elapsed)
+                response = await client.post(
+                    f"/api/v1/allowance/{retry.id}/retry/cancel",
+                    json={
+                        "revision": retry.revision,
+                        "scheduled_at": int(retry.next_payment_date.timestamp()),
+                    },
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual("now due" in response.json()["message"], expected)
+                saved = await crud.get_allowance(retry.id)
+                self.assertEqual(saved.next_payment_date, elapsed)
+
+    async def test_cancelled_retry_keeps_pause_and_closes_an_ended_allowance(self):
+        from lnbits.extensions.allowance.payment_retry import cancel_retry
+
+        retry, following = await self.historical_retry_fixture()
+        paused = await crud.update_allowance(
+            CreateAllowanceData(**{**retry.model_dump(), "active": False})
+        )
+        await cancel_retry(
+            paused, paused.revision, int(paused.next_payment_date.timestamp())
+        )
+        saved = await crud.get_allowance(retry.id)
+        self.assertFalse(saved.active)
+        self.assertEqual(saved.next_payment_date, following)
+        self.assertIsNone(saved.retry_resume_date)
+
+        retry, following = await self.historical_retry_fixture()
+        ended = datetime.now(timezone.utc) - timedelta(seconds=1)
+        retry = await self.set_retry_dates(retry.id, end_datetime=ended)
+        self.assertTrue(retry.active)
+        await cancel_retry(
+            retry, retry.revision, int(retry.next_payment_date.timestamp())
+        )
+        saved = await crud.get_allowance(retry.id)
+        self.assertFalse(saved.active)
+        self.assertEqual(saved.next_payment_date, following)
+        self.assertIsNone(saved.retry_resume_date)
+
+    async def test_edit_refusal_names_the_action_that_is_available(self):
+        retry, _ = await self.historical_retry_fixture()
+        edit = CreateAllowanceData(**{**retry.model_dump(), "amount": 50})
+        with self.assertRaisesRegex(crud.AllowanceConflictError, "Cancel the retry"):
+            await crud.update_allowance(edit)
+        self.assertTrue(await crud.claim_payment(retry, "submitted"))
+        with self.assertRaisesRegex(
+            crud.AllowanceConflictError, "awaiting confirmation"
+        ) as refused:
+            await crud.update_allowance(edit)
+        self.assertNotIn("Cancel the retry", str(refused.exception))
+
+    async def test_retry_cancel_api_cancels_once_for_the_owning_wallet(self):
+        from types import SimpleNamespace
+
+        import httpx
+        from fastapi import FastAPI
+        from lnbits.extensions.allowance import views_api
+
+        retry, following = await self.historical_retry_fixture()
+        app = FastAPI()
+        app.include_router(views_api.allowance_api_router)
+        wallet = SimpleNamespace(id="another-wallet")
+        app.dependency_overrides[views_api.require_admin_key] = lambda: wallet
+        app.dependency_overrides[views_api.require_invoice_key] = lambda: wallet
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            url = f"/api/v1/allowance/{retry.id}"
+            payload = {
+                "revision": retry.revision,
+                "scheduled_at": int(retry.next_payment_date.timestamp()),
+            }
+            response = await client.post(url + "/retry/cancel", json=payload)
+            self.assertEqual(response.status_code, 403)
+            wallet.id = retry.wallet
+            response = await client.post(url + "/retry/cancel", json=payload)
+            self.assertEqual(response.status_code, 200)
+            self.assertNotIn("now due", response.json()["message"])
+            wrong = {**payload, "scheduled_at": payload["scheduled_at"] + 1}
+            response = await client.post(url + "/retry/cancel", json=wrong)
+            self.assertEqual(response.status_code, 409)
+            response = await client.post(url + "/retry/cancel", json=payload)
+            self.assertEqual(response.status_code, 409)
+            occurrences = (await client.get(url + "/occurrences")).json()
+            failed = next(
+                event for event in occurrences if event["outcome"] == "failed"
+            )
+            self.assertIn(
+                "manual_retry_cancelled", [event["code"] for event in failed["events"]]
+            )
+        saved = await crud.get_allowance(retry.id)
+        self.assertEqual(saved.next_payment_date, following)
+        self.assertIsNone(saved.retry_resume_date)
+
     async def test_retry_api_queues_once_and_worker_restores_regular_schedule(self):
         from types import SimpleNamespace
         from unittest.mock import AsyncMock
@@ -777,19 +996,65 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
                 "manual_retry_requested", [event["code"] for event in paid["events"]]
             )
 
-    async def test_historical_retry_completion_skips_elapsed_regular_dates(self):
+    async def test_historical_retry_completion_keeps_an_elapsed_regular_date(self):
         row, now = await self.retry_fixture()
-        await self.database.execute(
-            f"UPDATE {self.database.references_schema}maintable SET "
-            f"retry_resume_date = {self.database.timestamp_placeholder('resume')} "
-            "WHERE id = :id",
-            {"resume": int((now - timedelta(days=1)).timestamp()), "id": row.id},
-        )
-        row = await crud.get_allowance(row.id)
-        await crud.finish_payment_attempt(row, now - timedelta(days=1), True)
+        resume = now - timedelta(days=1)
+        row = await self.set_retry_dates(row.id, retry_resume_date=resume)
+        await crud.finish_payment_attempt(row, now + timedelta(days=30), True)
         saved = await crud.get_allowance(row.id)
-        self.assertGreater(saved.next_payment_date, now)
+        self.assertEqual(saved.next_payment_date, resume)
         self.assertIsNone(saved.retry_resume_date)
+
+    async def test_retry_ending_at_the_regular_date_keeps_that_payment(self):
+        from unittest.mock import AsyncMock
+
+        from lnbits.extensions.allowance import tasks
+
+        # A retry requested within a day of the next regular payment ends exactly
+        # when that payment falls due; it must still get its own single attempt.
+        retry, _ = await self.historical_retry_fixture()
+        old_due = retry.next_payment_date
+        resume = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(
+            seconds=5
+        )
+        retry = await self.set_retry_dates(
+            retry.id,
+            retry_resume_date=resume,
+            retry_deadline=resume,
+            retry_after=resume - timedelta(minutes=1),
+        )
+        with patch.object(tasks, "resolve_lightning_address", AsyncMock()) as lookup:
+            await tasks.process_allowance(retry, datetime.now(timezone.utc))
+            lookup.assert_not_awaited()
+        closed = await crud.get_allowance(retry.id)
+        self.assertEqual(closed.next_payment_date, resume)
+        self.assertIsNone(closed.retry_resume_date)
+        self.assertIsNone(closed.retry_deadline)
+        history = await crud.get_payment_history(retry.id)
+        self.assertEqual(
+            [(event["scheduled_at"], event["outcome"]) for event in history],
+            [(int(old_due.timestamp()), "failed")],
+        )
+        with patch.object(
+            tasks, "execute_lightning_address_payment", AsyncMock(return_value=True)
+        ) as pay:
+            for _ in range(5):
+                current = await crud.get_allowance(retry.id)
+                await tasks.process_allowance(current, datetime.now(timezone.utc))
+            pay.assert_awaited_once()
+        saved = await crud.get_allowance(retry.id)
+        self.assertGreater(saved.next_payment_date, datetime.now(timezone.utc))
+        outcomes = {
+            event["scheduled_at"]: event["outcome"]
+            for event in await crud.get_payment_history(retry.id)
+        }
+        self.assertEqual(
+            outcomes,
+            {
+                int(old_due.timestamp()): "failed",
+                int(resume.timestamp()): "succeeded",
+            },
+        )
 
     async def test_ended_historical_retry_is_closed_without_sending(self):
         from unittest.mock import AsyncMock

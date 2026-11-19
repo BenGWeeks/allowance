@@ -181,7 +181,12 @@ async def update_allowance(data: CreateAllowanceData) -> Allowance:
         ):
             raise AllowanceConflictError(
                 "Payment details cannot change during an occurrence retry. "
-                "You can still pause or resume this allowance."
+                + (
+                    "A payment is awaiting confirmation; check its status first. "
+                    if current.pending_payment_hash
+                    else "Cancel the retry in the payment history to edit them. "
+                )
+                + "You can still pause or resume this allowance."
             )
         result = await db.execute(
             f"UPDATE {db.references_schema}maintable SET name = :name, "
@@ -399,18 +404,9 @@ async def finish_payment_attempt(
         else "pending_payment_hash IS NULL AND revision = :revision"
     )
     if allowance.retry_resume_date:
-        now = datetime.now(timezone.utc)
-        if allowance.retry_resume_date > now:
-            next_date = allowance.retry_resume_date
-        else:
-            from .schedule import next_occurrence
-
-            next_date = next_occurrence(
-                allowance.start_datetime,
-                allowance.frequency_type,
-                now,
-                allowance.timezone_name,
-            )
+        # The regular occurrence keeps its own attempt even when an older retry
+        # ran up to or past it; the worker then treats it as any overdue payment.
+        next_date = allowance.retry_resume_date
     if next_date is None:
         assignment = "active = false"
     else:

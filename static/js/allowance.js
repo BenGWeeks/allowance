@@ -169,6 +169,37 @@ window.app = Vue.createApp({
         }
       })
     },
+    canCancelRetry(row) {
+      const allowance = this.historyDialog.allowance
+      return Boolean(row && row.current && allowance && allowance.retry_resume_date && !allowance.pending_payment_hash &&
+        row.scheduled_at === Math.floor(Date.parse(allowance.next_payment_date) / 1000))
+    },
+    confirmCancelRetry(row) {
+      const allowance = this.historyDialog.allowance
+      if (!this.canCancelRetry(row) || this.retryRequestBusy) return
+      const regularDue = allowance.active && Date.parse(allowance.retry_resume_date) <= Date.now()
+      Quasar.Dialog.create({
+        title: 'Cancel this retry?',
+        message: 'No further attempts are made for this payment and nothing is sent for it. It stays recorded as not paid, the regular schedule is preserved, and the allowance can be edited again.' +
+          (regularDue ? ` The regular payment scheduled ${this.formatDatetime(allowance.retry_resume_date)} is already due and will be attempted straight away with the current payment details. Pause the allowance first if those need changing.` : ''),
+        cancel: {label: 'Keep retrying', flat: true}, persistent: true, ok: {label: 'Cancel retry', color: 'negative'}
+      }).onOk(async () => {
+        const wallet = this.g.user.wallets.find(wallet => wallet.id === allowance.wallet)
+        if (!wallet || this.retryRequestBusy) return
+        this.retryRequestBusy = true
+        try {
+          const response = await LNbits.api.request('POST', `/allowance/api/v1/allowance/${allowance.id}/retry/cancel`, wallet.adminkey, {scheduled_at: row.scheduled_at, revision: allowance.revision})
+          Quasar.Notify.create({type: 'positive', message: response.data.message})
+          this.getAllowances()
+          await this.showHistory(allowance)
+        } catch (error) {
+          LNbits.utils.notifyApiError(error)
+          await this.showHistory(allowance, row.id)
+        } finally {
+          this.retryRequestBusy = false
+        }
+      })
+    },
     getAllowances() {
       this.loadHealth()
 
