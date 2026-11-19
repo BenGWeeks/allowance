@@ -12,7 +12,7 @@ Schedules do not replay every missed interval. An overdue allowance may make one
 
 Failed means the occurrence did not complete successfully. Skipped means it was deliberately passed over, for example during recovery without catch-up. An occurrence can fail first and then have its remaining retries skipped. Skipping sends no funds.
 
-In Payment history, open Details. Eligible failed entries offer Retry this payment; eligible skipped entries offer Pay this skipped occurrence. Confirm the original date, recipient and amount. Only that occurrence is queued and the regular schedule is preserved. Older occurrences require saved details that still match; paused/ended allowances, submitted payments and conflicting queued or due payments prevent the action. The UI explains the reason.
+In Payment history, open Details. Eligible failed entries offer Retry this payment; eligible skipped entries offer Pay this skipped occurrence. Confirm the original date, recipient, amount and message. The payment uses the allowance's current details; if they were edited since, for example to correct an address, the confirmation shows both the recorded and the current ones. Only that occurrence is queued and the regular schedule is preserved. Older occurrences require saved details; paused/ended allowances, submitted payments and conflicting queued or due payments prevent the action. The UI explains the reason.
 
 Payments sent separately from a wallet appear in wallet history, but are not automatically linked to an allowance. Check wallet history before requesting an occurrence payment you may already have sent.
 

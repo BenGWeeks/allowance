@@ -238,8 +238,11 @@ HTTPS is required except for loopback development URLs; redirects are rejected.
 ### Retrying a specific payment
 
 Open **Payment history** for a compact list of scheduled payments. Choose
-**Details** to see one payment’s retained attempts, failure reason and next action. Status distinguishes **Retry scheduled**,
-**Retry queued**, **Awaiting payment confirmation**, **Paid**, and ended retries.
+**Details** to see one payment’s retained attempts, failure reason and next action. Status distinguishes **Next payment**,
+**Retry scheduled**, **Retry queued**, **Awaiting payment confirmation**, **Paid**, and ended retries.
+The upcoming payment is labelled **Next payment** with the time remaining, and times
+are shown in the browser's local time zone, which is named beside them. It offers no
+retry until it is due.
 **Check payment status** only reconciles an existing claim; it never resends.
 
 **Retry this payment** requires an explicit confirmation showing the amount,
@@ -249,9 +252,16 @@ send synchronously. Duplicate requests and stale confirmations are rejected.
 
 A current confirmed-unsent failure can be brought forward within its existing retry
 window. An older failed occurrence can be retried only when it was never submitted,
-its saved payment details still match, the allowance is active, and no current
-payment is due or unresolved. Older records without saved details cannot be retried
-through this action. Paid and uncertain submitted payments are never eligible.
+the allowance is active, and no current payment is due or unresolved. Older records
+without saved details cannot be retried through this action. Paid and uncertain
+submitted payments are never eligible.
+
+A retry is always sent with the allowance's current amount, currency, recipient and
+message. If those were edited after the payment was scheduled, for example to correct
+a wrong address, the details panel and the confirmation show both the recorded and
+the current details, including the message, and the retry goes ahead only when the
+current ones are confirmed. When the retry is paid, history records the details that
+were paid; a retry that fails keeps the recorded ones.
 
 An older retry temporarily occupies the worker's current occurrence while retaining
 the regular next-payment date. Completion always restores that date. If the retry ran
@@ -269,13 +279,15 @@ next-payment date is restored (even if it has just passed) and payment details
 become editable again. If that regular date has already passed, its payment is
 attempted straight away with the current details, and the confirmation says so;
 pause the allowance first if they need changing. It is refused while a submitted
-payment awaits confirmation. A payment whose details were
-edited afterwards cannot be retried, because its saved details no longer match.
+payment awaits confirmation. A cancelled payment can be retried again later,
+including after its details are edited.
 
 The owning wallet's admin key is required for
 `POST /allowance/api/v1/allowance/{id}/retry` with `scheduled_at` (epoch seconds),
-`revision`, and `confirmed: true`. Success returns 202; changed or ineligible state
-returns 409. `POST /allowance/api/v1/allowance/{id}/retry/cancel` with `scheduled_at`
+`revision`, and `confirmed: true`. When the payment's recorded details differ from
+the allowance's current ones, `use_current_details: true` is also required; the
+`/occurrences` entry reports this as `details_changed`. Success returns 202; changed
+or ineligible state returns 409. `POST /allowance/api/v1/allowance/{id}/retry/cancel` with `scheduled_at`
 and `revision` (admin key) cancels that older retry; it returns 200, or 409 when there is no such
 retry, the state changed or a payment is pending. The wallet-scoped `/occurrences`
 endpoint provides eligibility reasons,

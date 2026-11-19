@@ -437,7 +437,10 @@ async def finish_payment_attempt(
                 "payment_hash, retry_snapshot) "
                 "VALUES (:event, :id, :due, :completed, :outcome, :hash, :snapshot) "
                 "ON CONFLICT (id) DO UPDATE SET completed_at = excluded.completed_at, "
-                "outcome = excluded.outcome, payment_hash = excluded.payment_hash",
+                "outcome = excluded.outcome, payment_hash = excluded.payment_hash"
+                # A retried occurrence keeps its recorded details unless it was paid,
+                # so a later retry of a failure still has to confirm any difference.
+                + (", retry_snapshot = excluded.retry_snapshot" if outcome else ""),
                 {
                     "event": f"{allowance.id}:{values['due']}",
                     "id": allowance.id,

@@ -43,7 +43,7 @@ test(`cancel an older retry so the allowance can be edited${regularDue ? ' when 
     else if (path.endsWith('/allowance')) body = [record];
     else if (path.endsWith('/occurrences')) {
       body = cancelRequests ? [
-        {id: 'next', scheduled_at: due + week, completed_at: null, outcome: 'current', current: true, can_retry: false, retry_block_reason: 'There is no confirmed-unsent failure eligible for retry.', details, events: []},
+        {id: 'next', scheduled_at: due + week, completed_at: null, outcome: 'current', current: true, can_retry: false, retry_block_reason: 'This payment is not due yet.', details, events: []},
         {id: 'attempt', scheduled_at: due, completed_at: due + 86400, outcome: 'failed', can_retry: true, retry_block_reason: null, details, events}
       ] : [
         {id: 'attempt', scheduled_at: due, completed_at: null, outcome: 'current', current: true, can_retry: false, retry_block_reason: 'An earlier payment is already being retried.', details, events}
