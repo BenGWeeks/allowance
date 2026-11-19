@@ -120,7 +120,41 @@ window.app = Vue.createApp({
       if (row.last_error) return 'Scheduled · last payment failed'
       return 'Scheduled'
     },
+    isUpcoming(row) {
+      const allowance = this.historyDialog.allowance
+      return Boolean(row && row.current && allowance && allowance.active && !allowance.pending_payment_hash &&
+        row.scheduled_at * 1000 > Date.now())
+    },
+    relativeTime(epochSeconds) {
+      const minutes = Math.round((epochSeconds * 1000 - Date.now()) / 60000)
+      if (minutes < 1) return 'in under a minute'
+      if (minutes < 60) return `in ${minutes} minute${minutes === 1 ? '' : 's'}`
+      const hours = Math.round(minutes / 60)
+      if (hours < 48) return `in ${hours} hour${hours === 1 ? '' : 's'}`
+      return `in ${Math.round(hours / 24)} days`
+    },
+    localZoneName(epochSeconds) {
+      try {
+        return new Intl.DateTimeFormat(this.userLocale, {timeZoneName: 'short'})
+          .formatToParts(new Date(epochSeconds * 1000)).find(part => part.type === 'timeZoneName').value
+      } catch (_) {
+        return ''
+      }
+    },
+    scheduleNote(row) {
+      const zone = this.localZoneName(row.scheduled_at)
+      const local = zone ? `your local time (${zone})` : 'your local time'
+      return this.isUpcoming(row) ? `${this.relativeTime(row.scheduled_at)} · ${local}` : `Shown in ${local}`
+    },
+    currentDetails() {
+      const allowance = this.historyDialog.allowance || {}
+      return {amount: allowance.amount, currency: allowance.currency, lightning_address: allowance.lightning_address}
+    },
+    describeDetails(details) {
+      return `${details.amount} ${details.currency || 'sats'} to ${details.lightning_address}`
+    },
     occurrenceState(row) {
+      if (this.isUpcoming(row)) return 'Next payment'
       if (row.current) return this.paymentState(this.historyDialog.allowance)
       return {succeeded: 'Paid', failed: 'Failed — automatic retries ended', skipped: 'Skipped'}[row.outcome] || row.outcome
     },
@@ -135,6 +169,7 @@ window.app = Vue.createApp({
       if (row.outcome === 'succeeded') return 'positive'
       if (row.outcome === 'failed' || label === 'Automatic retries ended') return 'negative'
       if (label.startsWith('Retry') || label === 'Awaiting payment confirmation') return 'warning'
+      if (label === 'Next payment') return 'info'
       return 'grey'
     },
     occurrenceActionLabel(row) {
@@ -146,9 +181,11 @@ window.app = Vue.createApp({
       const scheduled = this.formatDatetime(new Date(row.scheduled_at * 1000).toISOString())
       const skipped = row.outcome === 'skipped'
       const action = this.occurrenceActionLabel(row)
+      const changed = Boolean(row.details_changed)
+      const details = changed ? this.currentDetails() : row.details
       Quasar.Dialog.create({
         title: skipped ? 'Pay this skipped occurrence?' : 'Retry this payment?',
-        message: `Pay ${row.details.amount} ${row.details.currency || 'sats'} to ${row.details.lightning_address} for the payment scheduled ${scheduled}? ${skipped ? 'This pays only this skipped occurrence. Confirm only if you have not already paid it separately.' : 'This explicitly retries this one payment.'} The regular schedule is preserved; other missed payments stay skipped. Fiat amounts use the rate when the payment is attempted.`,
+        message: `Pay ${this.describeDetails(details)} for the payment scheduled ${scheduled}? ${changed ? `The allowance has been edited since: this payment was scheduled as ${this.describeDetails(row.details)}. The current details above are used. ` : ''}${skipped ? 'This pays only this skipped occurrence. Confirm only if you have not already paid it separately.' : 'This explicitly retries this one payment.'} The regular schedule is preserved; other missed payments stay skipped. Fiat amounts use the rate when the payment is attempted.`,
         cancel: true, persistent: true, ok: {label: action, color: 'primary'}
       }).onOk(async () => {
         const wallet = this.g.user.wallets.find(wallet => wallet.id === allowance.wallet)
@@ -156,7 +193,7 @@ window.app = Vue.createApp({
         this.retryRequestBusy = true
         try {
           const response = await LNbits.api.request('POST', `/allowance/api/v1/allowance/${allowance.id}/retry`, wallet.adminkey, {
-            scheduled_at: row.scheduled_at, revision: allowance.revision, confirmed: true
+            scheduled_at: row.scheduled_at, revision: allowance.revision, confirmed: true, use_current_details: changed
           })
           Quasar.Notify.create({type: 'positive', message: response.data.message})
           this.getAllowances()

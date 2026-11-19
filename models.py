@@ -211,6 +211,9 @@ class PaymentRetryRequest(BaseModel):
     revision: int
     scheduled_at: int
     confirmed: Literal[True]
+    # Acknowledges paying with the allowance's current details when they differ
+    # from the ones recorded for this occurrence.
+    use_current_details: StrictBool = False
 
 
 class PaymentRetryCancelRequest(BaseModel):

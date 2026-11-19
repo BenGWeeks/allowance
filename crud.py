@@ -437,7 +437,8 @@ async def finish_payment_attempt(
                 "payment_hash, retry_snapshot) "
                 "VALUES (:event, :id, :due, :completed, :outcome, :hash, :snapshot) "
                 "ON CONFLICT (id) DO UPDATE SET completed_at = excluded.completed_at, "
-                "outcome = excluded.outcome, payment_hash = excluded.payment_hash",
+                "outcome = excluded.outcome, payment_hash = excluded.payment_hash, "
+                "retry_snapshot = excluded.retry_snapshot",
                 {
                     "event": f"{allowance.id}:{values['due']}",
                     "id": allowance.id,

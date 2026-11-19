@@ -31,7 +31,7 @@ test(`payment diagnostics ${skipped ? 'pay skipped occurrence' : 'retry failure'
     const path = new URL(request.url()).pathname;
     if (request.method() === 'POST' && path.endsWith('/retry')) {
       retryRequests++;
-      expect(request.postDataJSON()).toEqual({scheduled_at: 1791064800, revision: 0, confirmed: true});
+      expect(request.postDataJSON()).toEqual({scheduled_at: 1791064800, revision: 0, confirmed: true, use_current_details: false});
       record.retry_after = new Date(Date.now() - 1000).toISOString();
       return route.fulfill({status: 202, contentType: 'application/json', body: JSON.stringify({message: 'Retry queued'})});
     }
@@ -73,7 +73,7 @@ test(`payment diagnostics ${skipped ? 'pay skipped occurrence' : 'retry failure'
   await row.screenshot({animations: 'disabled', path: testInfo.outputPath('consistent-action-icons.png')});
   await row.getByRole('button', {name: 'Payment history', exact: true}).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('cell', {name: 'Scheduled payment', exact: true})).toBeVisible();
+  await expect(dialog.getByRole('columnheader', {name: 'Scheduled payment', exact: true})).toBeVisible();
   await expect(dialog.locator('.q-expansion-item')).toHaveCount(0);
   await expect(dialog.getByText('private_address', {exact: false})).not.toBeVisible();
   await page.mouse.move(0, 0);

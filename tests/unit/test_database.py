@@ -689,6 +689,146 @@ class DatabaseTests(unittest.IsolatedAsyncioTestCase):
             await request_retry(current, history, current.revision - 1)
         self.assertEqual((await crud.get_allowance(row.id)).revision, current.revision)
 
+    async def edited_failed_payment_fixture(self):
+        row, now = await self.retry_fixture()
+        following = now + timedelta(days=7)
+        await crud.finish_payment_attempt(row, following, False)
+        failed = await crud.get_allowance(row.id)
+        edited = await crud.update_allowance(
+            CreateAllowanceData(
+                **{**failed.model_dump(), "lightning_address": "new@example.invalid"}
+            )
+        )
+        history = (await crud.get_payment_history(row.id))[0]
+        return edited, history, following
+
+    async def test_edited_payment_retries_only_with_acknowledged_current_details(self):
+        import json
+
+        from lnbits.extensions.allowance.payment_retry import (
+            DETAILS_CHANGED,
+            payment_snapshot,
+            request_retry,
+        )
+
+        edited, history, following = await self.edited_failed_payment_fixture()
+        recorded = json.loads(history["retry_snapshot"])
+        self.assertEqual(recorded["lightning_address"], "recipient@example.invalid")
+        with self.assertRaises(crud.AllowanceConflictError) as refused:
+            await request_retry(edited, history, edited.revision)
+        self.assertEqual(str(refused.exception), DETAILS_CHANGED)
+        unchanged = await crud.get_allowance(edited.id)
+        self.assertEqual(unchanged.revision, edited.revision)
+        self.assertIsNone(unchanged.retry_resume_date)
+
+        await request_retry(edited, history, edited.revision, use_current_details=True)
+        retry = await crud.get_allowance(edited.id)
+        self.assertEqual(retry.lightning_address, "new@example.invalid")
+        self.assertEqual(
+            int(retry.next_payment_date.timestamp()), history["scheduled_at"]
+        )
+        self.assertEqual(retry.retry_resume_date, following)
+        requested = [
+            event
+            for event in await crud.get_payment_logs(edited.id)
+            if event["code"] == "manual_retry_requested"
+        ]
+        self.assertEqual(len(requested), 1)
+        self.assertIn("current payment details", requested[0]["message"])
+        # Details stay locked while the acknowledged retry is in progress.
+        with self.assertRaises(crud.AllowanceConflictError):
+            await crud.update_allowance(
+                CreateAllowanceData(**{**retry.model_dump(), "amount": 50})
+            )
+
+        await crud.finish_payment_attempt(retry, following, True)
+        paid = (await crud.get_payment_history(edited.id))[0]
+        self.assertEqual(paid["outcome"], "succeeded")
+        self.assertEqual(paid["scheduled_at"], history["scheduled_at"])
+        self.assertEqual(paid["retry_snapshot"], payment_snapshot(retry))
+        restored = await crud.get_allowance(edited.id)
+        self.assertEqual(restored.next_payment_date, following)
+        with self.assertRaises(crud.AllowanceConflictError):
+            await request_retry(restored, paid, restored.revision, True)
+
+    async def test_acknowledging_current_details_bypasses_no_other_safeguard(self):
+        from lnbits.extensions.allowance.payment_retry import request_retry
+
+        edited, history, _ = await self.edited_failed_payment_fixture()
+        now = datetime.now(timezone.utc)
+        cases = [
+            (edited.model_copy(update={"active": False}), history),
+            (edited.model_copy(update={"pending_payment_hash": "uncertain"}), history),
+            (edited.model_copy(update={"end_datetime": now}), history),
+            (edited.model_copy(update={"retry_resume_date": now}), history),
+            (edited.model_copy(update={"next_payment_date": now}), history),
+            (edited, {**history, "retry_snapshot": None}),
+            (edited, {**history, "payment_hash": "submitted"}),
+            (edited, {**history, "outcome": "succeeded"}),
+            (edited, {**history, "scheduled_at": int(now.timestamp()) + 3600}),
+        ]
+        for observed, event in cases:
+            with self.assertRaises(crud.AllowanceConflictError):
+                await request_retry(observed, event, edited.revision, True)
+        with self.assertRaises(crud.AllowanceConflictError):
+            await request_retry(edited, history, edited.revision - 1, True)
+        self.assertEqual(
+            (await crud.get_allowance(edited.id)).revision, edited.revision
+        )
+
+    async def test_retry_api_requires_acknowledgement_for_edited_details(self):
+        from types import SimpleNamespace
+
+        import httpx
+        from fastapi import FastAPI
+        from lnbits.extensions.allowance import views_api
+
+        edited, history, _ = await self.edited_failed_payment_fixture()
+        app = FastAPI()
+        app.include_router(views_api.allowance_api_router)
+        wallet = SimpleNamespace(id=edited.wallet)
+        app.dependency_overrides[views_api.require_admin_key] = lambda: wallet
+        app.dependency_overrides[views_api.require_invoice_key] = lambda: wallet
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            url = f"/api/v1/allowance/{edited.id}"
+            rows = (await client.get(url + "/occurrences")).json()
+            upcoming = next(row for row in rows if row.get("current"))
+            self.assertFalse(upcoming["details_changed"])
+            self.assertFalse(upcoming["can_retry"])
+            self.assertEqual(
+                upcoming["retry_block_reason"], "This payment is not due yet."
+            )
+            failed = next(row for row in rows if row["outcome"] == "failed")
+            self.assertTrue(failed["details_changed"])
+            self.assertTrue(failed["can_retry"])
+            self.assertEqual(
+                failed["details"]["lightning_address"], "recipient@example.invalid"
+            )
+            payload = {
+                "scheduled_at": history["scheduled_at"],
+                "revision": edited.revision,
+                "confirmed": True,
+            }
+            response = await client.post(url + "/retry", json=payload)
+            self.assertEqual(response.status_code, 409)
+            self.assertIn("Confirm the current details", response.json()["detail"])
+            response = await client.post(
+                url + "/retry", json={**payload, "use_current_details": "yes"}
+            )
+            self.assertEqual(response.status_code, 422)
+            response = await client.post(
+                url + "/retry", json={**payload, "use_current_details": True}
+            )
+            self.assertEqual(response.status_code, 202)
+            rows = (await client.get(url + "/occurrences")).json()
+            current = next(row for row in rows if row.get("current"))
+            self.assertEqual(current["scheduled_at"], history["scheduled_at"])
+            self.assertEqual(
+                current["details"]["lightning_address"], "new@example.invalid"
+            )
+
     async def test_manual_retry_log_failure_rolls_back_request(self):
         from lnbits.extensions.allowance.payment_retry import request_retry
 

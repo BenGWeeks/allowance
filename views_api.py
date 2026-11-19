@@ -491,7 +491,7 @@ async def api_payment_occurrences(
     import json
 
     from .crud import get_payment_history, get_payment_logs
-    from .payment_retry import payment_snapshot, retry_block_reason
+    from .payment_retry import details_changed, payment_snapshot, retry_block_reason
 
     allowance = await get_allowance(allowance_id)
     if not allowance:
@@ -519,7 +519,14 @@ async def api_payment_occurrences(
         row["details"] = (
             json.loads(row["retry_snapshot"]) if row.get("retry_snapshot") else None
         )
-        row["retry_block_reason"] = retry_block_reason(allowance, row, now)
+        # can_retry assumes the caller confirms the current details when they
+        # differ; details_changed tells it that this confirmation is required.
+        row["details_changed"] = not row.get("current") and details_changed(
+            allowance, row
+        )
+        row["retry_block_reason"] = retry_block_reason(
+            allowance, row, now, use_current_details=True
+        )
         row["can_retry"] = row["retry_block_reason"] is None
         row["events"] = [
             log for log in logs if log["scheduled_at"] == row["scheduled_at"]
@@ -557,7 +564,9 @@ async def api_retry_occurrence(
             raise HTTPException(404, "Recorded payment not found")
         occurrence = dict(saved)
     try:
-        await request_retry(allowance, occurrence, data.revision)
+        await request_retry(
+            allowance, occurrence, data.revision, data.use_current_details
+        )
     except AllowanceConflictError as exc:
         raise HTTPException(409, str(exc)) from None
     return {
