@@ -254,8 +254,9 @@ payment is due or unresolved. Older records without saved details cannot be retr
 through this action. Paid and uncertain submitted payments are never eligible.
 
 An older retry temporarily occupies the worker's current occurrence while retaining
-the regular next-payment date. Completion restores that date, or skips elapsed
-periods to the next anchored date. It never queues other missed payments. Its retry
+the regular next-payment date. Completion always restores that date. If the retry ran
+up to or past it, that regular payment still gets its own attempt, like any overdue
+payment; periods after it that were also missed are skipped. Its retry
 window ends at the earlier of 24 hours or the regular next-payment date. Pause/resume
 remains available, but payment details cannot change while an older retry is active.
 A payment already submitted cannot be cancelled by pausing.
@@ -263,8 +264,8 @@ A payment already submitted cannot be cancelled by pausing.
 **Cancel retry**, shown on the payment being retried, ends an older retry before its
 window closes, for example when the recipient address is wrong and must be edited.
 Nothing is sent, the payment stays recorded as failed or skipped, the regular
-next-payment date is restored and payment details become editable again. It is
-refused while a submitted payment awaits confirmation. A payment whose details were
+next-payment date is restored (even if it has just passed) and payment details
+become editable again. It is refused while a submitted payment awaits confirmation. A payment whose details were
 edited afterwards cannot be retried, because its saved details no longer match.
 
 The owning wallet's admin key is required for

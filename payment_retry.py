@@ -121,10 +121,11 @@ async def cancel_retry(allowance, revision, scheduled_at):
     """End an explicitly requested occurrence retry without sending anything.
 
     The occurrence keeps its recorded failed or skipped outcome and the regular
-    schedule resumes, which makes the payment details editable again.
+    next-payment date is restored, which makes the payment details editable again.
+    A regular date that has already passed is restored too, so it keeps its own
+    attempt like any other overdue payment.
     """
     from .crud import AllowanceConflictError, _append_payment_log, db, transaction
-    from .schedule import next_occurrence
 
     if allowance.pending_payment_hash:
         raise AllowanceConflictError(
@@ -136,23 +137,15 @@ async def cancel_retry(allowance, revision, scheduled_at):
         allowance.next_payment_date.timestamp()
     ):
         raise AllowanceConflictError("Allowance changed. Refresh and try again.")
-    now = datetime.now(timezone.utc)
-    next_date = allowance.retry_resume_date
-    if next_date <= now:
-        next_date = next_occurrence(
-            allowance.start_datetime,
-            allowance.frequency_type,
-            now,
-            allowance.timezone_name,
-        )
-    values = {"id": allowance.id, "revision": revision, "due": scheduled_at}
-    if next_date is None:
-        assignment = "active = false"
-    else:
-        assignment = f"next_payment_date = {db.timestamp_placeholder('next')}"
-        values["next"] = int(next_date.timestamp())
-        if allowance.end_datetime and allowance.end_datetime <= now:
-            assignment += ", active = false"
+    values = {
+        "id": allowance.id,
+        "revision": revision,
+        "due": scheduled_at,
+        "next": int(allowance.retry_resume_date.timestamp()),
+    }
+    assignment = f"next_payment_date = {db.timestamp_placeholder('next')}"
+    if allowance.end_datetime and allowance.end_datetime <= datetime.now(timezone.utc):
+        assignment += ", active = false"
     async with transaction(db) as conn:
         result = await conn.execute(
             f"UPDATE {db.references_schema}maintable SET {assignment}, "
