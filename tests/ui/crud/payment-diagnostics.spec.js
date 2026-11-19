@@ -91,7 +91,7 @@ test(`payment diagnostics ${skipped ? 'pay skipped occurrence' : 'retry failure'
   await dialog.locator('[data-cy="payment-history-card"]').screenshot({animations: 'disabled', path: testInfo.outputPath('payment-diagnostics.png')});
   await dialog.getByRole('button', {name: action, exact: true}).click();
   const confirmation = page.getByRole('dialog').filter({hasText: action + '?'});
-  await expect(confirmation.getByText(/Pay 100 sats to recipient@example.invalid/)).toBeVisible();
+  await expect(confirmation.getByText(/Pay 100 sats to recipient@example.invalid with no message/)).toBeVisible();
   await confirmation.getByRole('button', {name: 'Cancel', exact: true}).click();
   await expect(confirmation).not.toBeVisible();
   expect(retryRequests).toBe(0);

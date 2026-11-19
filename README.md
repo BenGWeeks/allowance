@@ -259,8 +259,9 @@ submitted payments are never eligible.
 A retry is always sent with the allowance's current amount, currency, recipient and
 message. If those were edited after the payment was scheduled, for example to correct
 a wrong address, the details panel and the confirmation show both the recorded and
-the current details, and the retry goes ahead only when the current ones are
-confirmed. History then records the details that were used.
+the current details, including the message, and the retry goes ahead only when the
+current ones are confirmed. When the retry is paid, history records the details that
+were paid; a retry that fails keeps the recorded ones.
 
 An older retry temporarily occupies the worker's current occurrence while retaining
 the regular next-payment date. Completion always restores that date. If the retry ran

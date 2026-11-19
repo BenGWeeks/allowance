@@ -14,13 +14,13 @@ test('show the next payment clearly and retry a failed payment with edited detai
     id: 'synthetic-allowance', wallet: wallet.id, name: 'Weekly allowance', revision: 7,
     lightning_address: 'new@example.invalid', amount: 100, currency: 'sats',
     start_datetime: new Date((due - 4 * week) * 1000).toISOString(), next_payment_date: new Date(next * 1000).toISOString(),
-    frequency_type: 'weekly', active: true, memo: '', end_datetime: null,
+    frequency_type: 'weekly', active: true, memo: 'Pocket money', end_datetime: null,
     timezone_name: 'Europe/London', pending_payment_hash: null,
     last_error: lookupError, last_error_time: new Date((due + 86400) * 1000).toISOString(),
     retry_count: 0, retry_after: null, retry_deadline: null, retry_resume_date: null
   };
-  const recorded = {amount: 100, currency: 'sats', lightning_address: 'old@example.invalid'};
-  const current = {amount: 100, currency: 'sats', lightning_address: record.lightning_address};
+  const recorded = {amount: 100, currency: 'sats', lightning_address: 'old@example.invalid', memo: ''};
+  const current = {amount: 100, currency: 'sats', lightning_address: record.lightning_address, memo: record.memo};
   const events = [{id: 'lookup', recorded_at: due + 60, scheduled_at: due, stage: 'address_lookup', code: 'address_lookup_failed', message: lookupError, retry_at: null}];
   let retryRequests = 0;
   await page.route('**/allowance/api/v1/**', async route => {
@@ -89,15 +89,15 @@ test('show the next payment clearly and retry a failed payment with edited detai
   // The failed payment was scheduled with the old address; retrying pays the current one.
   await dialog.getByRole('row').filter({hasText: 'Failed'}).getByRole('button', {name: /^Details for/}).click();
   await expect(dialog.getByText('old@example.invalid', {exact: true})).toBeVisible();
-  await expect(dialog.locator('[data-cy="details-changed"]')).toHaveText('The allowance has been edited since. Paying this now sends 100 sats to new@example.invalid.');
+  await expect(dialog.locator('[data-cy="details-changed"]')).toHaveText('The allowance has been edited since. Paying this now sends 100 sats to new@example.invalid with the message "Pocket money".');
   await expect(dialog.locator('[data-cy="schedule-note"]')).toHaveText(/^Shown in your local time/);
   await page.mouse.move(0, 0);
   await card.screenshot({animations: 'disabled', path: testInfo.outputPath('edited-payment-details.png')});
   const retry = card.getByRole('button', {name: 'Retry this payment', exact: true});
   await retry.click();
   const confirmation = page.getByRole('dialog').filter({hasText: 'Retry this payment?'});
-  await expect(confirmation.getByText(/Pay 100 sats to new@example\.invalid for the payment scheduled/)).toBeVisible();
-  await expect(confirmation.getByText(/this payment was scheduled as 100 sats to old@example\.invalid\. The current details above are used\./)).toBeVisible();
+  await expect(confirmation.getByText(/Pay 100 sats to new@example\.invalid with the message "Pocket money" for the payment scheduled/)).toBeVisible();
+  await expect(confirmation.getByText(/this payment was scheduled as 100 sats to old@example\.invalid with no message\. The current details above are used\./)).toBeVisible();
   await confirmation.locator('.q-card').screenshot({animations: 'disabled', path: testInfo.outputPath('retry-confirmation.png')});
   await confirmation.getByRole('button', {name: 'Cancel', exact: true}).click();
   await expect(confirmation).not.toBeVisible();

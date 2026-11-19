@@ -123,7 +123,12 @@ window.app = Vue.createApp({
     isUpcoming(row) {
       const allowance = this.historyDialog.allowance
       return Boolean(row && row.current && allowance && allowance.active && !allowance.pending_payment_hash &&
-        row.scheduled_at * 1000 > Date.now())
+        row.scheduled_at * 1000 > Date.now() && !this.endsBefore(row))
+    },
+    endsBefore(row) {
+      // An allowance is finished at its end date, so a later occurrence is never sent.
+      const end = this.historyDialog.allowance && this.historyDialog.allowance.end_datetime
+      return Boolean(row && row.current && end && Date.parse(end) < row.scheduled_at * 1000)
     },
     relativeTime(epochSeconds) {
       const minutes = Math.round((epochSeconds * 1000 - Date.now()) / 60000)
@@ -148,13 +153,15 @@ window.app = Vue.createApp({
     },
     currentDetails() {
       const allowance = this.historyDialog.allowance || {}
-      return {amount: allowance.amount, currency: allowance.currency, lightning_address: allowance.lightning_address}
+      return {amount: allowance.amount, currency: allowance.currency, lightning_address: allowance.lightning_address, memo: allowance.memo}
     },
     describeDetails(details) {
-      return `${details.amount} ${details.currency || 'sats'} to ${details.lightning_address}`
+      return `${details.amount} ${details.currency || 'sats'} to ${details.lightning_address}` +
+        (details.memo ? ` with the message "${details.memo}"` : ' with no message')
     },
     occurrenceState(row) {
       if (this.isUpcoming(row)) return 'Next payment'
+      if (this.endsBefore(row)) return 'Not sent · allowance ends first'
       if (row.current) return this.paymentState(this.historyDialog.allowance)
       return {succeeded: 'Paid', failed: 'Failed — automatic retries ended', skipped: 'Skipped'}[row.outcome] || row.outcome
     },

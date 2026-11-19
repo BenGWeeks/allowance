@@ -18,7 +18,7 @@ def payment_snapshot(allowance: Allowance) -> str:
 
 DETAILS_CHANGED = (
     "Payment details have changed since this payment was scheduled. "
-    "Confirm the current details to pay it."
+    "Reload the page and confirm the current details to pay it."
 )
 
 

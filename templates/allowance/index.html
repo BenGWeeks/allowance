@@ -69,6 +69,8 @@
                 <div><span v-text="selectedHistoryPayment.details.amount"></span> <span v-text="selectedHistoryPayment.details.currency || 'sats'"></span></div>
                 <div class="text-caption text-grey q-mt-sm">Recipient</div>
                 <div v-text="selectedHistoryPayment.details.lightning_address"></div>
+                <div class="text-caption text-grey q-mt-sm">Message</div>
+                <div v-text="selectedHistoryPayment.details.memo || 'None'"></div>
                 <div v-if="selectedHistoryPayment.details_changed" class="text-caption q-mt-sm" data-cy="details-changed">The allowance has been edited since. Paying this now sends <span v-text="describeDetails(currentDetails())"></span>.</div>
               </template>
               <div v-else class="text-caption">Original payment details were not recorded.</div>
