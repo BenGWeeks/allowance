@@ -128,6 +128,18 @@
             "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.2.3/config.json",
             "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.2.3/allowance-1.2.3.zip",
             "hash": "0ce293f59717bde6cf3d87fae1f07508aa14bd69c300bd5c861648848ec2a36c"
+        },
+        {
+            "id": "allowance",
+            "repo": "https://github.com/BenGWeeks/allowance",
+            "name": "Allowance",
+            "version": "1.2.4",
+            "min_lnbits_version": "1.7.0",
+            "short_description": "Retry a failed payment after editing the allowance; clearer next-payment date in history",
+            "icon": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.2.4/static/image/allowance.png",
+            "details_link": "https://raw.githubusercontent.com/BenGWeeks/allowance/v1.2.4/config.json",
+            "archive": "https://github.com/BenGWeeks/allowance/releases/download/v1.2.4/allowance-1.2.4.zip",
+            "hash": "2bcb672b8cdee6c9504dceb018219b52daeac1ac0011ac9dfa8dfde33f457896"
         }
     ]
 }
